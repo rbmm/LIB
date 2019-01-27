@@ -234,7 +234,7 @@ void ZApp::Run()
 
 		DWORD nCount = GetWaitHandles(&pHandles);
 
-		DWORD r = MsgWaitForMultipleObjectsEx(nCount, pHandles, GetTimeout(), QS_ALLINPUT, MWMO_ALERTABLE);
+		DWORD r = MsgWaitForMultipleObjectsEx(nCount, pHandles, GetTimeout(), QS_ALLINPUT, MWMO_ALERTABLE|MWMO_INPUTAVAILABLE);
 
 		if (r == nCount)
 		{
