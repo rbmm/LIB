@@ -2,17 +2,9 @@
 
 #include "winZ.h"
 
-struct WINZ_API CUILayot : LIST_ENTRY
+class WINZ_API CUILayot : LIST_ENTRY
 {
 	int nNumWindows;
-
-	enum 
-	{
-		movAx = 0x01,
-		movBx = 0x02,
-		movAy = 0x10,
-		movBy = 0x20
-	};
 
 	struct ENTRY : LIST_ENTRY, RECT
 	{
@@ -22,7 +14,17 @@ struct WINZ_API CUILayot : LIST_ENTRY
 
 	ENTRY* get(HWND hwnd);
 
+	void remove(ENTRY* entry);
+
 protected:
+
+	enum 
+	{
+		movAx = 0x01,
+		movBx = 0x02,
+		movAy = 0x10,
+		movBy = 0x20
+	};
 
 	CUILayot();
 
@@ -34,11 +36,13 @@ protected:
 
 	BOOL RemoveChild(HWND hwnd);
 
+	BOOL ModifyChild(HWND hwndParent, UINT nCtrlID, ULONG f);
+
 	void Resize(int cx, int cy);
-	
+
 	void Resize(WPARAM wParam, LPARAM lParam);
 
-	void OnParentNotify(HWND hwndParent, WPARAM wParam, LPARAM lParam);
+	void OnParentNotify(HWND hwndParent, WPARAM wParam, LPARAM lParam, int xCenter = 0, int yCenter = 0);
 
 	void Modify2Childs(HWND hwnd1, HWND hwnd2, int d);
 };

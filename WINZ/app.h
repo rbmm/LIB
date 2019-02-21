@@ -140,9 +140,9 @@ struct WINZ_API ZRegistry
 	
 	NTSTATUS LoadRect(PCUNICODE_STRING Name, PRECT prc);
 
-	void SaveWinPos(PCUNICODE_STRING Name, HWND hwnd);
+	BOOL SaveWinPos(PCUNICODE_STRING Name, HWND hwnd);
 
-	void LoadWinPos(PCUNICODE_STRING Name, int& x, int& y, int& width, int& height, DWORD& dwStyle);
+	BOOL LoadWinPos(PCUNICODE_STRING Name, int& x, int& y, int& width, int& height, DWORD& dwStyle);
 };
 
 class WINZ_API ZFont : protected LOGFONT

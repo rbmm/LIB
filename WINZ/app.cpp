@@ -106,7 +106,7 @@ NTSTATUS ZRegistry::LoadRect(PCUNICODE_STRING Name, PRECT prc)
 	return status;
 }
 
-void ZRegistry::SaveWinPos(PCUNICODE_STRING Name, HWND hwnd)
+BOOL ZRegistry::SaveWinPos(PCUNICODE_STRING Name, HWND hwnd)
 {
 	WINDOWPLACEMENT wp = { sizeof(WINDOWPLACEMENT) };
 
@@ -117,17 +117,19 @@ void ZRegistry::SaveWinPos(PCUNICODE_STRING Name, HWND hwnd)
 			wp.rcNormalPosition.top |= 0x80000000;
 		}
 
-		SaveRect(Name, &wp.rcNormalPosition);
+		return 0 <= SaveRect(Name, &wp.rcNormalPosition);
 	}
+
+	return FALSE;
 }
 
-void ZRegistry::LoadWinPos(PCUNICODE_STRING Name, int& x, int& y, int& width, int& height, DWORD& dwStyle)
+BOOL ZRegistry::LoadWinPos(PCUNICODE_STRING Name, int& x, int& y, int& width, int& height, DWORD& dwStyle)
 {
 	RECT rc;
 
 	if (0 > LoadRect(Name, &rc))
 	{
-		return;
+		return FALSE;
 	}
 
 	if (rc.top & 0x80000000)
@@ -145,10 +147,12 @@ void ZRegistry::LoadWinPos(PCUNICODE_STRING Name, int& x, int& y, int& width, in
 		nHeight > cy || rc.top > cy - my || rc.top < 0
 		)
 	{
-		return;
+		return FALSE;
 	}
 
 	x = rc.left, y = rc.top, width = nWidth, height = nHeight;
+	
+	return TRUE;
 }
 
 //////////////////////////////////////////////////////////////////////////

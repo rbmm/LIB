@@ -86,17 +86,57 @@ BOOL CUILayot::AddChild(HWND hwndParent, HWND hwnd, int xCenter, int yCenter)
 	return FALSE;
 }
 
+void CUILayot::remove(ENTRY* entry)
+{
+	RemoveEntryList(entry);
+
+	delete entry;
+
+	--nNumWindows;
+}
+
 BOOL CUILayot::RemoveChild(HWND hwnd)
 {
 	if (ENTRY* entry = get(hwnd))
 	{
-		RemoveEntryList(entry);
-
-		delete entry;
-
-		--nNumWindows;
-
+		remove(entry);
 		return TRUE;
+	}
+
+	return FALSE;
+}
+
+BOOL CUILayot::ModifyChild(HWND hwndParent, UINT nCtrlID, ULONG f)
+{
+	if (HWND hwnd = GetDlgItem(hwndParent, nCtrlID))
+	{
+		if (ENTRY* entry = get(hwnd))
+		{
+			if (f)
+			{
+				RECT rc, rcParent;
+
+				if (!GetClientRect(hwndParent, &rcParent) || !GetWindowRect(hwnd, &rc))
+				{
+					return FALSE;
+				}
+
+				MapWindowPoints(HWND_DESKTOP, hwndParent, (POINT*)&rc, 2);
+
+				entry->f = f;
+
+				entry->left = f & movAx ? rcParent.right - rc.left : rc.left;
+				entry->right = f & movBx ? rcParent.right - rc.right : rc.right;
+				entry->top = f & movAy ? rcParent.bottom - rc.top : rc.top;
+				entry->bottom = f & movBy ? rcParent.bottom - rc.bottom : rc.bottom;
+			}
+			else
+			{
+				remove(entry);
+			}
+
+			return TRUE;
+		}
 	}
 
 	return FALSE;
@@ -232,7 +272,7 @@ void CUILayot::Resize(int cx, int cy)
 						Ay,
 						Bx - Ax,
 						By - Ay,
-						SWP_NOACTIVATE|SWP_NOOWNERZORDER
+						SWP_NOACTIVATE|SWP_NOOWNERZORDER|SWP_NOCOPYBITS
 						);
 				}
 
@@ -243,12 +283,12 @@ void CUILayot::Resize(int cx, int cy)
 	}
 }
 
-void CUILayot::OnParentNotify(HWND hwndParent, WPARAM wParam, LPARAM lParam)
+void CUILayot::OnParentNotify(HWND hwndParent, WPARAM wParam, LPARAM lParam, int xCenter, int yCenter)
 {
 	switch (LOWORD(wParam))
 	{
 	case WM_CREATE:
-		AddChild(hwndParent, (HWND)lParam);
+		AddChild(hwndParent, (HWND)lParam, xCenter, yCenter);
 		break;
 	case WM_DESTROY:
 		RemoveChild((HWND)lParam);
