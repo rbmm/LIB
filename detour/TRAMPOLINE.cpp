@@ -1,7 +1,7 @@
 #include "StdAfx.h"
 #include "LDasm.h"
 _NT_BEGIN
-
+#include <ntintsafe.h>
 #include "trampoline.h"
 
 class Z_DETOUR_REGION 
@@ -14,7 +14,6 @@ class Z_DETOUR_REGION
 	Z_DETOUR_TRAMPOLINE first[];
 
 	static Z_DETOUR_REGION* spRegion;
-	static ULONG gAllocationGranularity;
 
 	~Z_DETOUR_REGION();
 
@@ -43,7 +42,7 @@ class Z_DETOUR_REGION
 		NtFreeVirtualMemory(NtCurrentProcess(), &BaseAddress, &RegionSize, MEM_RELEASE);
 	}
 
-	void* operator new(size_t, PVOID pvTarget);
+	void* operator new(size_t, ULONG_PTR min, ULONG_PTR max);
 
 	static Z_DETOUR_TRAMPOLINE* _alloc(void* pvTarget);
 
@@ -55,6 +54,9 @@ class Z_DETOUR_REGION
 		if (0 > NtQuerySystemInformation(SystemBasicInformation, &sbi, sizeof(sbi), 0)) __debugbreak();
 		return sbi.AllocationGranularity;
 	}
+
+public:
+	static ULONG gAllocationGranularity;
 };
 
 Z_DETOUR_REGION* Z_DETOUR_REGION::spRegion = 0;
@@ -103,80 +105,37 @@ Z_DETOUR_TRAMPOLINE* Z_DETOUR_REGION::alloc()
 	return 0;
 }
 
-void* Z_DETOUR_REGION::operator new(size_t, PVOID pvTarget)
+void* Z_DETOUR_REGION::operator new(size_t, ULONG_PTR min, ULONG_PTR max)
 {
-	ULONG_PTR add = gAllocationGranularity - 1, mask = ~add;
+	ULONG_PTR addr, add = gAllocationGranularity - 1, mask = ~add;
 
-	MEMORY_BASIC_INFORMATION mbi;
-
-	if (0 > NtQueryVirtualMemory(NtCurrentProcess(), pvTarget, MemoryBasicInformation, &mbi, sizeof(mbi), 0) ||
-		mbi.State != MEM_COMMIT)
+	MEMORY_BASIC_INFORMATION mbi; 
+	do 
 	{
-		return 0;
-	}
+		if (0 > NtQueryVirtualMemory(NtCurrentProcess(),
+			(void*)min, MemoryBasicInformation, &mbi, sizeof(mbi), 0)) return NULL;
 
-	PVOID BaseAddress, mbi_BaseAddress = mbi.BaseAddress;
-	SIZE_T mbi_RegionSize = mbi.RegionSize;
-
-	ULONG_PTR lo = (ULONG_PTR)pvTarget > 0x70000000 ? (ULONG_PTR)pvTarget - 0x70000000 : 0;
-
-	for(;;) 
-	{
-		BaseAddress = (PBYTE)((ULONG_PTR)mbi.AllocationBase & mask) - gAllocationGranularity;
-
-		if ((ULONG_PTR)BaseAddress < lo ||
-			0 > NtQueryVirtualMemory(NtCurrentProcess(), BaseAddress, MemoryBasicInformation, &mbi, sizeof(mbi), 0))
-		{
-			break;
-		}
+		min = (UINT_PTR)mbi.BaseAddress + mbi.RegionSize;
 
 		if (mbi.State == MEM_FREE)
 		{
-			if (mbi.RegionSize >= gAllocationGranularity)
+			addr = ((UINT_PTR)mbi.BaseAddress + add) & mask;
+
+			if (addr < min && gAllocationGranularity <= (min - addr))
 			{
 				SIZE_T RegionSize = gAllocationGranularity;
 
-				if (0 <= NtAllocateVirtualMemory(NtCurrentProcess(), &BaseAddress, 0, 
+				if (0 <= NtAllocateVirtualMemory(NtCurrentProcess(), (void**)&addr, 0, 
 					&RegionSize, MEM_COMMIT|MEM_RESERVE, PAGE_EXECUTE_READWRITE))
 				{
-					return BaseAddress;
+					return (PVOID)addr;
 				}
 			}
-
-			mbi.AllocationBase = BaseAddress;
-		}	
-	}
-
-	mbi.BaseAddress = mbi_BaseAddress, mbi.RegionSize = mbi_RegionSize;
-
-	ULONG_PTR hi = (ULONG_PTR)pvTarget > (ULONG_PTR)-(LONG_PTR)0x70000000 ? MAXULONG_PTR : (ULONG_PTR)pvTarget + 0x70000000;
-
-	for(;;) 
-	{
-		BaseAddress = (PVOID)(((ULONG_PTR)mbi.BaseAddress + mbi.RegionSize + add) & mask);
-
-		if ((ULONG_PTR)BaseAddress >= hi ||
-			0 > NtQueryVirtualMemory(NtCurrentProcess(), BaseAddress, MemoryBasicInformation, &mbi, sizeof(mbi), 0))
-		{
-			return 0;
 		}
 
-		if (mbi.State == MEM_FREE)
-		{
-			if (mbi.RegionSize >= gAllocationGranularity)
-			{
-				SIZE_T RegionSize = gAllocationGranularity;
+	} while (min < max);
 
-				if (0 <= NtAllocateVirtualMemory(NtCurrentProcess(), &BaseAddress, 0, 
-					&RegionSize, MEM_COMMIT|MEM_RESERVE, PAGE_EXECUTE_READWRITE))
-				{
-					return BaseAddress;
-				}
-			}
-
-			mbi.BaseAddress = BaseAddress, mbi.RegionSize = gAllocationGranularity;
-		}	
-	}
+	return NULL;
 }
 
 void Z_DETOUR_REGION::_free(Z_DETOUR_TRAMPOLINE* pTramp)
@@ -197,18 +156,64 @@ void Z_DETOUR_REGION::_free(Z_DETOUR_TRAMPOLINE* pTramp)
 	__debugbreak();
 }
 
+void ExpandRange(LONG_PTR a, LONG_PTR b, ULONG_PTR& min, ULONG_PTR& max)
+{
+	ULONG_PTR add = Z_DETOUR_REGION::gAllocationGranularity - 1, mask = ~add;
+	
+	a = (a + 0x80000000) & mask;
+	b = (b + add - 0x80000000) & mask;
+
+	min = 0 > b ? 0 : b;
+	max = 0 > a ? LONG_PTR_MAX : a;
+}
+
+BOOL GetRangeForAddress(PVOID pv, ULONG_PTR& min, ULONG_PTR& max)
+{
+	PVOID hmod;
+	if (hmod = RtlPcToFileHeader(pv, &hmod))
+	{
+		if (PIMAGE_NT_HEADERS pinth = RtlImageNtHeader(hmod))
+		{
+			ExpandRange((LONG_PTR)hmod, (LONG_PTR)hmod + pinth->OptionalHeader.SizeOfImage, min, max);
+			return TRUE;
+		}
+		return FALSE;
+	}
+
+	MEMORY_BASIC_INFORMATION mbi;
+	if (0 <= NtQueryVirtualMemory(NtCurrentProcess(), pv, MemoryBasicInformation, &mbi, sizeof(mbi), 0))
+	{
+		if (mbi.State == MEM_COMMIT)
+		{
+			ExpandRange((LONG_PTR)mbi.AllocationBase, (LONG_PTR)mbi.BaseAddress + mbi.RegionSize, min, max);
+			return TRUE;
+		}
+	}
+
+	return FALSE;
+}
+
 Z_DETOUR_TRAMPOLINE* Z_DETOUR_REGION::_alloc(void* pvTarget)
 {
+	ULONG_PTR min, max, cb;
+
+	if (!GetRangeForAddress(pvTarget, min, max))
+	{
+		return 0;
+	}
+
+	cb = max - min;
+
 	Z_DETOUR_TRAMPOLINE* pTramp;
 
 	Z_DETOUR_REGION* pRegion = spRegion;
 
 	if (pRegion)
 	{
+
 		do 
 		{
-			if ((pvTarget > pRegion && (ULONG_PTR)pvTarget - (ULONG_PTR)pRegion <= 0x70000000) ||
-				(pvTarget <= pRegion && (ULONG_PTR)pRegion - (ULONG_PTR)pvTarget <= 0x70000000))
+			if ((ULONG_PTR)pRegion - min < cb)
 			{
 				if (pTramp = pRegion->alloc())
 				{
@@ -219,7 +224,7 @@ Z_DETOUR_TRAMPOLINE* Z_DETOUR_REGION::_alloc(void* pvTarget)
 		} while (pRegion = pRegion->next);
 	}
 
-	if (pRegion = new(pvTarget) Z_DETOUR_REGION)
+	if (pRegion = new(min, max) Z_DETOUR_REGION)
 	{
 		pTramp = pRegion->alloc();
 		pRegion->Release();
