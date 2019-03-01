@@ -110,36 +110,28 @@ __index:
 	return 0;
 }
 
-PVOID TestJmp(PBYTE pv, HMODULE* phmod)
+PVOID TestJmp(PBYTE pv)
 {
-	if (HMODULE hmod = *phmod)
-	{
 __loop:
-		ldasm_data ld;
-		BYTE len = ldasm( pv, &ld, is_x64 );
+	ldasm_data ld;
+	BYTE len = ldasm( pv, &ld, is_x64 );
 
-		if (((ld.flags & (F_INVALID|F_DISP|F_MODRM|F_IMM)) == (F_DISP|F_MODRM)) &&
-			ld.disp_size == 4 && ld.modrm == 0x25 && ld.opcd_size == 1 && 
-			pv[ld.opcd_offset] == 0xff)
-		{
+	if (((ld.flags & (F_INVALID|F_DISP|F_MODRM|F_IMM)) == (F_DISP|F_MODRM)) &&
+		ld.disp_size == 4 && ld.modrm == 0x25 && ld.opcd_size == 1 && 
+		pv[ld.opcd_offset] == 0xff)
+	{
 #if defined(_M_IX86)
-			void** ppv = *(void***)(pv + ld.disp_offset);
+		void** ppv = *(void***)(pv + ld.disp_offset);
 #elif defined (_M_X64)
-			void** ppv = (void**)(pv + len + (LONG_PTR)*(LONG*)(pv + ld.disp_offset));
+		void** ppv = (void**)(pv + len + (LONG_PTR)*(LONG*)(pv + ld.disp_offset));
 #else
 #error
 #endif
 
-			if (!((ULONG_PTR)ppv & (sizeof(PVOID) - 1)))
-			{
-				PVOID pv2 = *ppv;
-				if (RtlPcToFileHeader(pv2, (void**)&hmod))
-				{
-					*phmod = hmod;
-					pv = (PBYTE)pv2;
-					goto __loop;
-				}
-			}
+		if (!((ULONG_PTR)ppv & (sizeof(PVOID) - 1)))
+		{
+			pv = (PBYTE)*ppv;
+			goto __loop;
 		}
 	}
 
@@ -185,7 +177,7 @@ NTSTATUS TrUnHook(T_HOOK_ENTRY* entry)
 	return STATUS_SUCCESS;
 }
 
-NTSTATUS TrHook(HMODULE hmod, T_HOOK_ENTRY* entry)
+NTSTATUS NTAPI TrHook(HMODULE hmod, T_HOOK_ENTRY* entry)
 {
 	PCSTR funcName = entry->funcName;
 
@@ -221,11 +213,16 @@ NTSTATUS TrHook(HMODULE hmod, T_HOOK_ENTRY* entry)
 		}
 	}
 
-	status = STATUS_UNSUCCESSFUL;
+	return TrHook(pv, entry);
+}
 
-	pv = TestJmp((PBYTE)pv, &hmod);
+NTSTATUS NTAPI TrHook(PVOID pv, T_HOOK_ENTRY* entry)
+{
+	NTSTATUS status = STATUS_UNSUCCESSFUL;
 
-	if (Z_DETOUR_TRAMPOLINE* pTramp = new (hmod) Z_DETOUR_TRAMPOLINE(entry->hook))
+	pv = TestJmp((PBYTE)pv);
+
+	if (Z_DETOUR_TRAMPOLINE* pTramp = new (pv) Z_DETOUR_TRAMPOLINE(entry->hook))
 	{
 		if (pv = pTramp->Init(pv))
 		{
@@ -288,6 +285,27 @@ void NTAPI TrHook(PCUNICODE_STRING DllName, TR_HOOK_DLL* pphDLL[])
 	if (0 <= LdrGetDllHandle(0, 0, DllName, &hmod))
 	{
 		TrHook(hmod, DllName, pphDLL);
+	}
+}
+
+void NTAPI TrHook(TR_HOOK_DLL* pphDLL[])
+{
+	while (TR_HOOK_DLL* phDLL = *pphDLL++)
+	{
+		UNICODE_STRING Name;
+		RtlInitUnicodeString(&Name, phDLL->lpcszDllName);
+
+		HMODULE hmod;
+
+		if (0 <= LdrGetDllHandle(0, 0, &Name, &hmod))
+		{
+			T_HOOK_ENTRY* entry = phDLL->hookV;
+
+			while (entry->hook)
+			{
+				TrHook(hmod, entry++);
+			}
+		}
 	}
 }
 

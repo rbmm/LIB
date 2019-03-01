@@ -156,15 +156,15 @@ void Z_DETOUR_REGION::_free(Z_DETOUR_TRAMPOLINE* pTramp)
 	__debugbreak();
 }
 
-void ExpandRange(LONG_PTR a, LONG_PTR b, ULONG_PTR& min, ULONG_PTR& max)
+void ExpandRange(ULONG_PTR a, ULONG_PTR b, ULONG_PTR& min, ULONG_PTR& max)
 {
-	ULONG_PTR add = Z_DETOUR_REGION::gAllocationGranularity - 1, mask = ~add;
+	ULONG_PTR add = Z_DETOUR_REGION::gAllocationGranularity - 1, mask = ~add, _a, _b;
 	
-	a = (a + 0x80000000) & mask;
-	b = (b + add - 0x80000000) & mask;
+	_b = (a + 0x80000000) & mask;
+	_a = (b + add - 0x80000000) & mask;
 
-	min = 0 > b ? 0 : b;
-	max = 0 > a ? LONG_PTR_MAX : a;
+	min = b < _a ? 0 : _a;
+	max = _b < a ? ULONG_PTR_MAX : _b;
 }
 
 BOOL GetRangeForAddress(PVOID pv, ULONG_PTR& min, ULONG_PTR& max)
@@ -174,7 +174,7 @@ BOOL GetRangeForAddress(PVOID pv, ULONG_PTR& min, ULONG_PTR& max)
 	{
 		if (PIMAGE_NT_HEADERS pinth = RtlImageNtHeader(hmod))
 		{
-			ExpandRange((LONG_PTR)hmod, (LONG_PTR)hmod + pinth->OptionalHeader.SizeOfImage, min, max);
+			ExpandRange((ULONG_PTR)hmod, (ULONG_PTR)hmod + pinth->OptionalHeader.SizeOfImage, min, max);
 			return TRUE;
 		}
 		return FALSE;
@@ -185,7 +185,21 @@ BOOL GetRangeForAddress(PVOID pv, ULONG_PTR& min, ULONG_PTR& max)
 	{
 		if (mbi.State == MEM_COMMIT)
 		{
-			ExpandRange((LONG_PTR)mbi.AllocationBase, (LONG_PTR)mbi.BaseAddress + mbi.RegionSize, min, max);
+			PVOID AllocationBase = mbi.AllocationBase;
+
+			do 
+			{
+				pv = (PBYTE)mbi.BaseAddress + mbi.RegionSize;
+
+				if (0 > NtQueryVirtualMemory(NtCurrentProcess(), pv, MemoryBasicInformation, &mbi, sizeof(mbi), 0))
+				{
+					return FALSE;
+				}
+
+			} while (mbi.State == MEM_COMMIT && mbi.AllocationBase == AllocationBase);
+
+			ExpandRange((ULONG_PTR)AllocationBase, (ULONG_PTR)pv, min, max);
+
 			return TRUE;
 		}
 	}
