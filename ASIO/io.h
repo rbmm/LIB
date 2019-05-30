@@ -4,11 +4,20 @@
 #include "packet.h"
 #include "blockheap.h"
 
+// helper for get complex c++ names for use in asm code
+#if 0
+#define ASM_FUNCTION {__pragma(message(__FUNCDNAME__" proc\r\n" __FUNCDNAME__ " endp"))}
+#define CPP_FUNCTION __pragma(message("extern " __FUNCDNAME__ " : PROC ; "  __FUNCSIG__))
+#else
+#define ASM_FUNCTION
+#define CPP_FUNCTION
+#endif
+
 extern NTSTATUS (NTAPI *fnSetIoCompletionCallback)(HANDLE , LPOVERLAPPED_COMPLETION_ROUTINE , ULONG );
 
-NTSTATUS BindIoCompletionEx(HANDLE hObject, LPOVERLAPPED_COMPLETION_ROUTINE CompletionRoutine);
+NTSTATUS NTAPI BindIoCompletionEx(HANDLE hObject, LPOVERLAPPED_COMPLETION_ROUTINE CompletionRoutine);
 
-NTSTATUS SkipCompletionOnSuccess(HANDLE hObject);
+NTSTATUS NTAPI SkipCompletionOnSuccess(HANDLE hObject);
 
 extern RUNDOWN_REF * g_IoRundown;
 
@@ -129,6 +138,7 @@ class IO_IRP : public OVERLAPPED
 
 	VOID IOCompletionRoutine(DWORD dwErrorCode, ULONG_PTR dwNumberOfBytesTransfered)
 	{
+		CPP_FUNCTION;
 		m_pObj->IOCompletionRoutine(m_packet, m_Code, dwErrorCode, dwNumberOfBytesTransfered, Pointer);
 		delete this;
 	}
@@ -139,10 +149,15 @@ protected:
 
 public:
 
+#ifdef _WINDLL
+	static VOID CALLBACK _IOCompletionRoutine(NTSTATUS status, ULONG_PTR dwNumberOfBytesTransfered, LPOVERLAPPED lpOverlapped)ASM_FUNCTION;
+#else
 	static VOID CALLBACK _IOCompletionRoutine(NTSTATUS status, ULONG_PTR dwNumberOfBytesTransfered, LPOVERLAPPED lpOverlapped)
 	{
 		static_cast<IO_IRP*>(lpOverlapped)->IOCompletionRoutine(RtlNtStatusToDosError(status), dwNumberOfBytesTransfered);
 	}
+#endif
+
 
 	PVOID SetPointer()
 	{
@@ -190,6 +205,7 @@ class NT_IRP : public IO_STATUS_BLOCK
 
 	VOID IOCompletionRoutine(NTSTATUS status, ULONG_PTR dwNumberOfBytesTransfered)
 	{
+		CPP_FUNCTION;
 		m_pObj->IOCompletionRoutine(m_packet, m_Code, status, dwNumberOfBytesTransfered, Pointer);
 		delete this;
 	}
@@ -200,6 +216,15 @@ protected:
 
 public:
 
+#ifdef _WINDLL
+	static VOID NTAPI ApcRoutine (
+		PVOID /*ApcContext*/,
+		PIO_STATUS_BLOCK IoStatusBlock,
+		ULONG /*Reserved*/
+		)ASM_FUNCTION;
+
+	static VOID CALLBACK _IOCompletionRoutine(NTSTATUS status, ULONG_PTR dwNumberOfBytesTransfered, PIO_STATUS_BLOCK iosb)ASM_FUNCTION;
+#else
 	static VOID CALLBACK _IOCompletionRoutine(NTSTATUS status, ULONG_PTR dwNumberOfBytesTransfered, PIO_STATUS_BLOCK iosb)
 	{
 		static_cast<NT_IRP*>(iosb)->IOCompletionRoutine(status, dwNumberOfBytesTransfered);
@@ -213,6 +238,7 @@ public:
 	{
 		static_cast<NT_IRP*>(IoStatusBlock)->IOCompletionRoutine(IoStatusBlock->Status, IoStatusBlock->Information);
 	}
+#endif
 
 	PVOID SetPointer()
 	{
@@ -241,51 +267,86 @@ public:
 };
 
 //////////////////////////////////////////////////////////////////////////
+// RtlTimer
+
+class RtlTimer 
+{
+	HANDLE _hTimer;
+	LONG _dwRef;
+
+#ifdef _WINDLL
+	static VOID CALLBACK _TimerCallback(PVOID pTimer, BOOLEAN /*TimerOrWaitFired*/)ASM_FUNCTION;
+#else
+	static VOID CALLBACK _TimerCallback(PVOID pTimer, BOOLEAN /*TimerOrWaitFired*/)
+	{
+		static_cast<RtlTimer*>(pTimer)->TimerCallback();
+	}
+#endif
+
+protected:
+
+	virtual VOID TimerCallback();
+
+	virtual ~RtlTimer()
+	{
+	}
+
+public:
+
+	RtlTimer() : _hTimer(0), _dwRef(1)
+	{
+	}
+
+	void AddRef()
+	{
+		InterlockedIncrementNoFence(&_dwRef);
+	}
+
+	void Release()
+	{
+		if (!InterlockedDecrement(&_dwRef))
+		{
+			delete this;
+		}
+	}
+
+	void Stop();
+
+	BOOL Set(DWORD dwMilliseconds);
+
+	BOOL IsSet()
+	{
+		return _hTimer != 0;
+	}
+};
+
+//////////////////////////////////////////////////////////////////////////
 // IO_OBJECT_TIMEOUT
 
 class __declspec(novtable) IO_OBJECT_TIMEOUT : public IO_OBJECT
 {
-	struct RtlTimer 
+	class IoTimer : public RtlTimer
 	{
 		IO_OBJECT_TIMEOUT* _pObj;
-		HANDLE _hTimer;
-		LONG _dwRef;
 
-		RtlTimer(IO_OBJECT_TIMEOUT* pObj) : _hTimer(0), _dwRef(1), _pObj(pObj)
-		{
-			pObj->AddRef();
-		}
+		virtual VOID TimerCallback();
 
-		~RtlTimer()
+		~IoTimer()
 		{
 			_pObj->Release();
 		}
 
-		void AddRef()
+	public:
+
+		IoTimer(IO_OBJECT_TIMEOUT* pObj) : _pObj(pObj)
 		{
-			InterlockedIncrementNoFence(&_dwRef);
+			pObj->AddRef();
 		}
-
-		void Release()
-		{
-			if (!InterlockedDecrement(&_dwRef))
-			{
-				delete this;
-			}
-		}
-
-		void Stop();
-
-		BOOL Set(DWORD dwMilliseconds);
-
-		static VOID CALLBACK TimerCallback(RtlTimer* pTimer, BOOLEAN /*TimerOrWaitFired*/);
 	};
 
-	friend RtlTimer;
+	IoTimer* _pTimer;
 
-	RtlTimer* _pTimer;
-
-	void SetNewTimer(RtlTimer* pTimer);
+	void SetNewTimer(IoTimer* pTimer);
 
 protected:
 

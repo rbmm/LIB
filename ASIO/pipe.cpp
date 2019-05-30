@@ -362,6 +362,7 @@ void CPipeEnd::OnReadWriteError(NTSTATUS status)
 	case STATUS_CANCELLED:			// CancelIo[Ex]
 		//break;					// what todo ? let Disconnect
 	case STATUS_PIPE_BROKEN:		// pipe handle has been closed
+	case STATUS_PIPE_CLOSING:
 		Disconnect();				// server must call DisconnectNamedPipe
 		break;
 	case STATUS_PIPE_DISCONNECTED:	// server call DisconnectNamedPipe

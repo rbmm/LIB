@@ -1,57 +1,44 @@
 #pragma once
 
-class CyclicBufer
+class __declspec(novtable) ZRingBuffer
 {
-	union {
-		__int64 _value;
-		double _d;
-		struct {
-			ULONG _begin, _data_size;
-		};
-	};
-	char* _buf;
-protected:
-	static ULONG _buf_size, _dwPageSize;
+	PVOID _BaseAddress;
+	volatile ULONG _ReadOffset, _WriteOffset;
+	ULONG _Size;
+
+	virtual ULONG GetMinWriteBufferSize(){ return 1; }
+
+	virtual ULONG GetMinReadBufferSize(){ return 1; }
+	
+	virtual BOOL IsAdjacentBuffers(){ return FALSE; }
+
+	// Begins an asynchronous read operation
+	virtual void BeginRead(WSABUF* lpBuffers, ULONG dwBufferCount) = 0;
+
+	// Begins an asynchronous write operation
+	virtual void BeginWrite(WSABUF* lpBuffers, ULONG dwBufferCount) = 0;
+
+	void ReadAsync(ULONG ReadOffset, ULONG WriteOffset);
+
+	void WriteAsync(ULONG ReadOffset, ULONG WriteOffset);
+
+	ULONG BuildBuffers(WSABUF wb[2], ULONG from, ULONG to);
 
 public:
 
-	ULONG getBufferSize() { return _buf_size; }
-	ULONG getPageSize() { return _dwPageSize; }
-	ULONG getDataSize() { return _data_size; }
-	ULONG getFreeSpace(){ return _buf_size - _data_size; }
-	PVOID getBuffer() { return _buf; }
+	ZRingBuffer() : _BaseAddress(0), _Size(0) {}
 
-	~CyclicBufer() { if (_buf_size) VirtualFree(_buf, 0, MEM_RELEASE); }
+	void* GetBuffer() { return _BaseAddress; }
 
-	CyclicBufer() : _buf(0), _value(0) { }
+	ULONG GetSize() { return _Size; }
 
-	ULONG Create();
+	// notifies that asynchronous write completed
+	void EndWrite(ULONG NumberOfBytesWrite );
 
-	ULONG GetDataPageCount();
+	// notifies that asynchronous read completed
+	void EndRead(ULONG NumberOfBytesRead );
 
-	ULONG BuildSegmentArray(FILE_SEGMENT_ELEMENT aSegmentArray[], ULONG n);
-
-	ULONG RemoveData(ULONG cb, PULONG pOldData = 0);
-
-	ULONG AddData(ULONG cb, PULONG pOldData = 0);
-
-	ULONG get(WSABUF Buffers[2]);
-
-	void Init() { _value = 0; }
-};
-
-class __declspec(novtable) CyclicBuferEx : public CyclicBufer
-{
-public:
+	void Init(PVOID BaseAddress, ULONG Size);
+	
 	void Start();
-
-	void OnReadEnd(ULONG cb);
-	void OnWriteEnd(ULONG cb);
-	void BeginReadTo();
-	void BeginWriteFrom();
-
-protected:
-	virtual void WriteFrom(PFILE_SEGMENT_ELEMENT SegmentArray, ULONG Length) = 0;
-	virtual void ReadTo(WSABUF* lpBuffers, DWORD dwBufferCount) = 0;
-	virtual ULONG GetReadMinSize() { return 1; }
 };

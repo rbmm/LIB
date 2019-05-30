@@ -110,6 +110,7 @@ CSSLStream::CSSLStream(SharedCred* pCred)
 	dwUpper = 0;
 	m_flags = 0;
 	m_pszTargetName = 0;
+	RtlZeroMemory(static_cast<SecPkgContext_StreamSizes*>(this), sizeof(SecPkgContext_StreamSizes));
 }
 
 CSSLStream::~CSSLStream()
@@ -126,6 +127,7 @@ void CSSLStream::StopSSL()
 		dwLower = 0;
 		dwUpper = 0;
 	}
+	RtlZeroMemory(static_cast<SecPkgContext_StreamSizes*>(this), sizeof(SecPkgContext_StreamSizes));
 }
 
 BOOL CSSLStream::StartSSL()

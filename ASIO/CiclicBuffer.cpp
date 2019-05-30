@@ -4,299 +4,111 @@ _NT_BEGIN
 
 #include "CiclicBuffer.h"
 
-ULONG CyclicBufer::_buf_size, CyclicBufer::_dwPageSize;
-
-void CyclicBuferEx::Start() 
-{ 
-	Init(); 
-	WSABUF wb = { _buf_size, (char*)getBuffer() };
-	ReadTo(&wb, 1);
+void ZRingBuffer::Init(PVOID BaseAddress, ULONG Size)
+{
+	_BaseAddress = BaseAddress, _Size = Size;
+	_ReadOffset = 0, _WriteOffset = 0;
 }
 
-void CyclicBuferEx::OnReadEnd(ULONG cb)
+void ZRingBuffer::Start()
 {
-	ULONG old_data_size, new_data_size = AddData(cb, &old_data_size);
-
-	if (new_data_size >= _dwPageSize && old_data_size < _dwPageSize)
+	if (GetMinReadBufferSize() + GetMinWriteBufferSize() > _Size)
 	{
-		BeginWriteFrom();
+		__debugbreak();
 	}
-
-	if (GetReadMinSize() <= _buf_size - new_data_size)
-	{
-		BeginReadTo();
-	}
+	_ReadOffset = 0, _WriteOffset = 0;
+	WriteAsync(0, 0);
 }
 
-void CyclicBuferEx::OnWriteEnd(ULONG cb)
+void ZRingBuffer::ReadAsync(ULONG ReadOffset, ULONG WriteOffset)
 {
-	ULONG old_data_size, new_data_size = RemoveData(cb, &old_data_size), max_size = _buf_size - GetReadMinSize();
-	
-	if (new_data_size <= max_size && old_data_size > max_size)
+	if (WriteOffset - ReadOffset < GetMinReadBufferSize())
 	{
-		BeginReadTo();
+		return;
 	}
 
-	if (new_data_size >= _dwPageSize)
-	{
-		BeginWriteFrom();
-	}
-}
-
-void CyclicBuferEx::BeginReadTo()
-{
 	WSABUF wb[2];
-	if (ULONG n = get(wb))
+
+	BeginRead(wb, BuildBuffers(wb, ReadOffset, WriteOffset));
+}
+
+void ZRingBuffer::WriteAsync(ULONG ReadOffset, ULONG WriteOffset)
+{
+	ULONG capacity = _Size - 1;
+
+	if (capacity - (WriteOffset - ReadOffset) < GetMinWriteBufferSize())
 	{
-		ReadTo(wb, n);
+		return;
+	}
+
+	WSABUF wb[2];
+
+	BeginWrite(wb, BuildBuffers(wb, WriteOffset, ReadOffset + capacity));
+}
+
+ULONG ZRingBuffer::BuildBuffers(WSABUF wb[2], ULONG from, ULONG to)
+{
+	ULONG Size = _Size;
+
+	if (IsAdjacentBuffers())
+	{
+		wb[0].buf = (char*)_BaseAddress + (from % Size);
+		wb[0].len = to - from;
+		return 1;
+	}
+
+	from %= Size, to %= Size;
+
+	wb[0].buf = (char*)_BaseAddress + from;
+
+	if (from < to)
+	{
+		wb[0].len = to - from;
+		return 1;
 	}
 	else
 	{
-		__debugbreak();
-	}
-}
+		wb[0].len = Size - from;
 
-void CyclicBuferEx::BeginWriteFrom()
-{
-	ULONG n = 1 + _buf_size / _dwPageSize;
-
-	FILE_SEGMENT_ELEMENT* SegmentArray = (FILE_SEGMENT_ELEMENT*)alloca(n * sizeof(FILE_SEGMENT_ELEMENT));
-
-	if (n = BuildSegmentArray(SegmentArray, n))
-	{
-		WriteFrom(SegmentArray, n);
-	}
-	else
-	{
-		__debugbreak();
-	}
-}
-
-//////////////////////////////////////////////////////////////////////////
-//
-ULONG CyclicBufer::Create()
-{
-	if (!_buf_size)
-	{
-		SYSTEM_INFO si;
-		GetNativeSystemInfo(&si);
-		_dwPageSize = si.dwPageSize;
-		_ReadWriteBarrier();
-		_buf_size = si.dwAllocationGranularity;
-	}
-
-	if (_buf = (char*)VirtualAlloc(0, _buf_size, MEM_COMMIT, PAGE_READWRITE))
-	{
-		return NOERROR;
-	}
-
-	return GetLastError();
-}
-
-ULONG CyclicBufer::GetDataPageCount()
-{
-	union {
-		double d;
-		struct {
-			ULONG begin, data_size;
-		};
-	};
-
-	d = _d;
-
-	return data_size / _dwPageSize;
-}
-
-ULONG CyclicBufer::BuildSegmentArray(FILE_SEGMENT_ELEMENT aSegmentArray[], ULONG n)
-{
-	union {
-		double d;
-		struct {
-			ULONG begin, data_size;
-		};
-	};
-
-	d = _d;
-
-	ULONG buf_size = _buf_size, dwBytes = 0;
-	ULONG dwPageSize = _dwPageSize;
-	char* begin_buf = _buf, *buf = begin_buf + begin, *end_buf = begin_buf + buf_size;
-
-	if (ULONG k = data_size / dwPageSize)
-	{
-		if (n < k)
+		if (to)
 		{
-			k = n;
+			wb[1].len = to;
+			wb[1].buf = (char*)_BaseAddress;
+			return 2;
 		}
 
-		do 
-		{
-			dwBytes += dwPageSize;
-
-			aSegmentArray++->Buffer = PtrToPtr64(buf);
-
-			if ((buf += dwPageSize) == end_buf)
-			{
-				buf = begin_buf;
-			}
-		} while (--k);
-
-		aSegmentArray->Buffer = 0;
-	}
-
-	return dwBytes;
-}
-
-ULONG CyclicBufer::RemoveData(ULONG cb, PULONG pOldData)
-{
-	union {
-		__int64 value;
-		double d;
-		struct {
-			ULONG begin, data_size;
-		};
-	};
-
-	union {
-		__int64 value2;
-		double d2;
-		struct {
-			ULONG begin2, data_size2;
-		};
-	};
-
-	union {
-		__int64 new_value;
-		double new_d;
-		struct {
-			ULONG new_begin, new_data_size;
-		};
-	};
-
-	d = _d;
-
-	for (;;)
-	{
-		new_value = value;
-
-		new_data_size -= cb;
-
-		if ((LONG)new_data_size < 0) __debugbreak();
-
-		if ((new_begin += cb) >= _buf_size)
-		{
-			new_begin -= _buf_size;
-		}
-
-		value2 = InterlockedCompareExchange64(&_value, new_value, value);
-
-		if (value2 == value)
-		{
-			if (pOldData)
-			{
-				*pOldData = data_size;
-			}
-			return new_data_size;
-		}
-
-		value = value2;
+		return 1;
 	}
 }
 
-ULONG CyclicBufer::AddData(ULONG cb, PULONG pOldData)
+void ZRingBuffer::EndWrite(ULONG NumberOfBytesWrite )
 {
-	union {
-		__int64 value;
-		double d;
-		struct {
-			ULONG begin, data_size;
-		};
-	};
+	ULONG ReadOffset = _ReadOffset;// memory_order_acquire
+	ULONG WriteOffset_0 = _WriteOffset;
+	ULONG WriteOffset_1 = WriteOffset_0 + NumberOfBytesWrite;
+	_WriteOffset = WriteOffset_1; // memory_order_release
 
-	union {
-		__int64 value2;
-		double d2;
-		struct {
-			ULONG begin2, data_size2;
-		};
-	};
-
-	union {
-		__int64 new_value;
-		double new_d;
-		struct {
-			ULONG new_begin, new_data_size;
-		};
-	};
-
-	d = _d;
-
-	for (;;)
+	if (WriteOffset_0 - ReadOffset < GetMinReadBufferSize())
 	{
-		new_value = value;
-
-		new_data_size += cb;
-
-		if (new_data_size > _buf_size) __debugbreak();
-
-		value2 = InterlockedCompareExchange64(&_value, new_value, value);
-
-		if (value2 == value)
-		{
-			if (pOldData)
-			{
-				*pOldData = data_size;
-			}
-			return new_data_size;
-		}
-
-		value = value2;
+		ReadAsync(ReadOffset, WriteOffset_1);
 	}
+
+	WriteAsync(ReadOffset, WriteOffset_1);
 }
 
-ULONG CyclicBufer::get(WSABUF Buffers[2])
+void ZRingBuffer::EndRead(ULONG NumberOfBytesRead )
 {
-	union {
-		double d;
-		struct {
-			ULONG begin, data_size;
-		};
-	};
+	ULONG WriteOffset = _WriteOffset; // memory_order_acquire 
+	ULONG ReadOffset_0 = _ReadOffset;
+	ULONG ReadOffset_1 = ReadOffset_0 + NumberOfBytesRead;
+	_ReadOffset = ReadOffset_1; // memory_order_release 
 
-	d = _d;
-
-	char* buf = _buf;
-	ULONG buf_size = _buf_size, n;
-
-	if (buf_size - data_size)
+	if ((_Size - 1) - (WriteOffset - ReadOffset_0) < GetMinWriteBufferSize())
 	{
-		ULONG end = begin + data_size;
-
-		if (end < buf_size)
-		{
-			n = 1;
-			Buffers[0].buf = buf + end;
-			Buffers[0].len = buf_size - end;
-
-			if (begin)
-			{
-				n = 2;
-				Buffers[1].buf = buf;
-				Buffers[1].len = begin;
-			}
-		}
-		else
-		{
-			n = 1;
-			end -= buf_size;
-			Buffers[0].buf = buf + end;
-			Buffers[0].len = begin - end;
-		}
-
-		return n;
+		WriteAsync(ReadOffset_1, WriteOffset);
 	}
 
-	return 0;
+	ReadAsync(ReadOffset_1, WriteOffset);
 }
 
 _NT_END

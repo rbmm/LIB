@@ -4,17 +4,14 @@ _NT_BEGIN
 
 #include "io.h"
 
-ULONG IsXPOr2003()
-{
-	static ULONG MajorOsVersion;
-
-	if (!MajorOsVersion)
-	{
-		RtlGetNtVersionNumbers(&MajorOsVersion, 0, 0);
-	}
-
-	return MajorOsVersion < 6;
-}
+#ifdef _WINDLL
+void ReferenceDll()ASM_FUNCTION;
+void DereferenceDll()ASM_FUNCTION;
+#define IOCompletionRoutine(status, dwNumberOfBytesTransfered) IOCompletionRoutine((status), (dwNumberOfBytesTransfered));DereferenceDll()
+#else
+#define ReferenceDll()
+#define DereferenceDll()
+#endif
 
 NTSTATUS (NTAPI *fnSetIoCompletionCallback)(HANDLE , LPOVERLAPPED_COMPLETION_ROUTINE , ULONG ) = 
 	(NTSTATUS (NTAPI *)(HANDLE , LPOVERLAPPED_COMPLETION_ROUTINE , ULONG ))RtlSetIoCompletionCallback;
@@ -66,6 +63,7 @@ IO_IRP::IO_IRP(IO_OBJECT* pObj, DWORD Code, CDataPacket* packet, PVOID Ptr)
 	m_pObj = pObj;
 	pObj->AddRef();
 	if (packet) packet->AddRef();
+	ReferenceDll();
 }
 
 IO_IRP::~IO_IRP()
@@ -78,7 +76,10 @@ void* IO_IRP::operator new(size_t size, size_t cb)
 {
 	if (g_IoRundown->Acquire())
 	{
-		if (PVOID p = ::operator new(size + cb)) return p;
+		if (PVOID p = ::operator new(size + cb)) 
+		{
+			return p;
+		}
 		g_IoRundown->Release();
 	}
 
@@ -164,7 +165,10 @@ void* NT_IRP::operator new(size_t size, size_t cb)
 {
 	if (g_IoRundown->Acquire())
 	{
-		if (PVOID p = ::operator new(size + cb)) return p;
+		if (PVOID p = ::operator new(size + cb)) 
+		{
+			return p;
+		}
 		g_IoRundown->Release();
 	}
 
@@ -180,6 +184,7 @@ void* NT_IRP::operator new(size_t size)
 		{
 			g_IoRundown->Release();
 		}
+		
 		return p;
 	}
 
@@ -202,6 +207,7 @@ NT_IRP::NT_IRP(IO_OBJECT* pObj, DWORD Code, CDataPacket* packet, PVOID Ptr)
 	m_pObj = pObj;
 	pObj->AddRef();
 	if (packet) packet->AddRef();
+	ReferenceDll();
 }
 
 NT_IRP::~NT_IRP()
@@ -211,15 +217,36 @@ NT_IRP::~NT_IRP()
 }
 
 //////////////////////////////////////////////////////////////////////////
-// IO_OBJECT_TIMEOUT
+//
+VOID RtlTimer::TimerCallback()
+{
+	Stop();
+	Release();
+}
 
-void IO_OBJECT_TIMEOUT::RtlTimer::Stop()
+BOOL RtlTimer::Set(DWORD dwMilliseconds)
+{
+	AddRef();
+	ReferenceDll();
+
+	if (CreateTimerQueueTimer(&_hTimer, 0, _TimerCallback, this, dwMilliseconds, 0, WT_EXECUTEINTIMERTHREAD))
+	{
+		return TRUE;
+	}
+
+	DereferenceDll();
+	Release();
+	return FALSE;
+}
+
+void RtlTimer::Stop()
 {
 	if (HANDLE hTimer = InterlockedExchangePointerNoFence(&_hTimer, 0))
 	{
 		if (DeleteTimerQueueTimer(0, hTimer, 0))
 		{
 			// will be no callback, release it reference
+			DereferenceDll();
 			Release();
 		}
 		else
@@ -232,30 +259,20 @@ void IO_OBJECT_TIMEOUT::RtlTimer::Stop()
 	}
 }
 
-BOOL IO_OBJECT_TIMEOUT::RtlTimer::Set(DWORD dwMilliseconds)
-{
-	AddRef();
-	if (CreateTimerQueueTimer(&_hTimer, 0, (WAITORTIMERCALLBACK)TimerCallback, this, dwMilliseconds, 0, WT_EXECUTEDEFAULT))
-	{
-		return TRUE;
-	}
+//////////////////////////////////////////////////////////////////////////
+// IO_OBJECT_TIMEOUT
 
-	Release();
-	return FALSE;
-}
-
-VOID CALLBACK IO_OBJECT_TIMEOUT::RtlTimer::TimerCallback(RtlTimer* pTimer, BOOLEAN /*TimerOrWaitFired*/)
+VOID IO_OBJECT_TIMEOUT::IoTimer::TimerCallback()
 {
-	pTimer->Stop();
-	IO_OBJECT_TIMEOUT* pObj = pTimer->_pObj;
+	IO_OBJECT_TIMEOUT* pObj = _pObj;
 	pObj->SetNewTimer(0);
 	pObj->OnTimeout();
-	pTimer->Release();
+	RtlTimer::TimerCallback();
 }
 
-void IO_OBJECT_TIMEOUT::SetNewTimer(RtlTimer* pTimer)
+void IO_OBJECT_TIMEOUT::SetNewTimer(IoTimer* pTimer)
 {
-	if (pTimer = (RtlTimer*)InterlockedExchangePointer((void**)&_pTimer, pTimer))
+	if (pTimer = (IoTimer*)InterlockedExchangePointer((void**)&_pTimer, pTimer))
 	{
 		pTimer->Stop();
 		pTimer->Release();
@@ -266,7 +283,7 @@ BOOL IO_OBJECT_TIMEOUT::SetTimeout(DWORD dwMilliseconds)
 {
 	BOOL fOk = FALSE;
 
-	if (RtlTimer* pTimer = new RtlTimer(this))
+	if (IoTimer* pTimer = new IoTimer(this))
 	{
 		if (pTimer->Set(dwMilliseconds))
 		{
@@ -276,7 +293,7 @@ BOOL IO_OBJECT_TIMEOUT::SetTimeout(DWORD dwMilliseconds)
 			pTimer->AddRef();
 			SetNewTimer(pTimer);
 
-			if (!pTimer->_hTimer)
+			if (!pTimer->IsSet())
 			{
 				// already fired
 				SetNewTimer(0);

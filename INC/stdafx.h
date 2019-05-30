@@ -4,10 +4,11 @@
 #	error requires C++
 #endif
 
+#define DECLSPEC_DEPRECATED_DDK
+
 #define _CRT_SECURE_NO_DEPRECATE
 #define _CRT_NON_CONFORMING_SWPRINTFS
-#define DECLSPEC_DEPRECATED_DDK
-//#define _INC_SWPRINTF_INL_
+#define _NO_CRT_STDIO_INLINE
 
 #define _NT_BEGIN namespace NT {
 #define _NT_END }
@@ -169,3 +170,6 @@ enum __OBJECT_INFORMATION_CLASS {
 #define ObjectTypesInformation				((OBJECT_INFORMATION_CLASS)ObjectTypesInformation)
 #define ObjectAllTypeInformation			((OBJECT_INFORMATION_CLASS)ObjectAllTypeInformation)
 #define ObjectHandleInformation				((OBJECT_INFORMATION_CLASS)ObjectHandleInformation)
+
+#define swprintf     _swprintf
+#define vswprintf    _vswprintf

@@ -444,6 +444,31 @@ NTDLL ZwWriteFileGather (
 						 __in_opt PULONG Key
 						 );
 
+NTDLL NtReadFileScatter(
+						_In_ HANDLE FileHandle,
+						_In_opt_ HANDLE Event,
+						_In_opt_ PIO_APC_ROUTINE ApcRoutine,
+						_In_opt_ PVOID ApcContext,
+						_Out_ PIO_STATUS_BLOCK IoStatusBlock,
+						_In_ PFILE_SEGMENT_ELEMENT SegmentArray,
+						_In_ ULONG Length,
+						_In_opt_ PLARGE_INTEGER ByteOffset,
+						_In_opt_ PULONG Key
+				  );
+
+NTDLL ZwReadFileScatter(
+						_In_ HANDLE FileHandle,
+						_In_opt_ HANDLE Event,
+						_In_opt_ PIO_APC_ROUTINE ApcRoutine,
+						_In_opt_ PVOID ApcContext,
+						_Out_ PIO_STATUS_BLOCK IoStatusBlock,
+						_In_ PFILE_SEGMENT_ELEMENT SegmentArray,
+						_In_ ULONG Length,
+						_In_opt_ PLARGE_INTEGER ByteOffset,
+						_In_opt_ PULONG Key
+				  );
+
+
 NTDLL
 RtlAdjustPrivilege
 (
