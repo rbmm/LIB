@@ -2,7 +2,7 @@
 
 class __declspec(novtable) ZRingBuffer
 {
-	PVOID _BaseAddress;
+	void* _BaseAddress;
 	volatile ULONG _ReadOffset, _WriteOffset;
 	ULONG _Size;
 
@@ -10,7 +10,7 @@ class __declspec(novtable) ZRingBuffer
 
 	virtual ULONG GetMinReadBufferSize(){ return 1; }
 	
-	virtual BOOL IsAdjacentBuffers(){ return FALSE; }
+	virtual bool IsAdjacentBuffers(){ return false; }
 
 	// Begins an asynchronous read operation
 	virtual void BeginRead(WSABUF* lpBuffers, ULONG dwBufferCount) = 0;
@@ -23,6 +23,16 @@ class __declspec(novtable) ZRingBuffer
 	void WriteAsync(ULONG ReadOffset, ULONG WriteOffset);
 
 	ULONG BuildBuffers(WSABUF wb[2], ULONG from, ULONG to);
+
+	bool CanNotRead(ULONG ReadOffset, ULONG WriteOffset)
+	{
+		return WriteOffset - ReadOffset < GetMinReadBufferSize();
+	}
+
+	bool CanNotWrite(ULONG ReadOffset, ULONG WriteOffset)
+	{
+		return (_Size - 1) - (WriteOffset - ReadOffset) < GetMinWriteBufferSize();
+	}
 
 public:
 
@@ -38,7 +48,7 @@ public:
 	// notifies that asynchronous read completed
 	void EndRead(ULONG NumberOfBytesRead );
 
-	void Init(PVOID BaseAddress, ULONG Size);
+	void Init(void* BaseAddress, ULONG Size);
 	
 	void Start();
 };

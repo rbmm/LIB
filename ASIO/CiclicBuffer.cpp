@@ -4,7 +4,7 @@ _NT_BEGIN
 
 #include "CiclicBuffer.h"
 
-void ZRingBuffer::Init(PVOID BaseAddress, ULONG Size)
+void ZRingBuffer::Init(void* BaseAddress, ULONG Size)
 {
 	_BaseAddress = BaseAddress, _Size = Size;
 	_ReadOffset = 0, _WriteOffset = 0;
@@ -18,32 +18,6 @@ void ZRingBuffer::Start()
 	}
 	_ReadOffset = 0, _WriteOffset = 0;
 	WriteAsync(0, 0);
-}
-
-void ZRingBuffer::ReadAsync(ULONG ReadOffset, ULONG WriteOffset)
-{
-	if (WriteOffset - ReadOffset < GetMinReadBufferSize())
-	{
-		return;
-	}
-
-	WSABUF wb[2];
-
-	BeginRead(wb, BuildBuffers(wb, ReadOffset, WriteOffset));
-}
-
-void ZRingBuffer::WriteAsync(ULONG ReadOffset, ULONG WriteOffset)
-{
-	ULONG capacity = _Size - 1;
-
-	if (capacity - (WriteOffset - ReadOffset) < GetMinWriteBufferSize())
-	{
-		return;
-	}
-
-	WSABUF wb[2];
-
-	BeginWrite(wb, BuildBuffers(wb, WriteOffset, ReadOffset + capacity));
 }
 
 ULONG ZRingBuffer::BuildBuffers(WSABUF wb[2], ULONG from, ULONG to)
@@ -81,6 +55,24 @@ ULONG ZRingBuffer::BuildBuffers(WSABUF wb[2], ULONG from, ULONG to)
 	}
 }
 
+void ZRingBuffer::ReadAsync(ULONG ReadOffset, ULONG WriteOffset)
+{
+	if (!CanNotRead(ReadOffset, WriteOffset))
+	{
+		WSABUF wb[2];
+		BeginRead(wb, BuildBuffers(wb, ReadOffset, WriteOffset));
+	}
+}
+
+void ZRingBuffer::WriteAsync(ULONG ReadOffset, ULONG WriteOffset)
+{
+	if (!CanNotWrite(ReadOffset, WriteOffset))
+	{
+		WSABUF wb[2];
+		BeginWrite(wb, BuildBuffers(wb, WriteOffset, ReadOffset + (_Size - 1)));
+	}
+}
+
 void ZRingBuffer::EndWrite(ULONG NumberOfBytesWrite )
 {
 	ULONG ReadOffset = _ReadOffset;// memory_order_acquire
@@ -88,7 +80,7 @@ void ZRingBuffer::EndWrite(ULONG NumberOfBytesWrite )
 	ULONG WriteOffset_1 = WriteOffset_0 + NumberOfBytesWrite;
 	_WriteOffset = WriteOffset_1; // memory_order_release
 
-	if (WriteOffset_0 - ReadOffset < GetMinReadBufferSize())
+	if (CanNotRead(ReadOffset, WriteOffset_0))
 	{
 		ReadAsync(ReadOffset, WriteOffset_1);
 	}
@@ -103,7 +95,7 @@ void ZRingBuffer::EndRead(ULONG NumberOfBytesRead )
 	ULONG ReadOffset_1 = ReadOffset_0 + NumberOfBytesRead;
 	_ReadOffset = ReadOffset_1; // memory_order_release 
 
-	if ((_Size - 1) - (WriteOffset - ReadOffset_0) < GetMinWriteBufferSize())
+	if (CanNotWrite(ReadOffset_0, WriteOffset))
 	{
 		WriteAsync(ReadOffset_1, WriteOffset);
 	}
