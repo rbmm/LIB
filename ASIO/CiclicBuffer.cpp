@@ -7,16 +7,15 @@ _NT_BEGIN
 void ZRingBuffer::Init(void* BaseAddress, ULONG Size)
 {
 	_BaseAddress = BaseAddress, _Size = Size;
-	_ReadOffset = 0, _WriteOffset = 0;
 }
 
 void ZRingBuffer::Start()
 {
-	if (GetMinReadBufferSize() + GetMinWriteBufferSize() > _Size)
+	if (GetMinReadBufferSize() + GetMinWriteBufferSize() > _Size + 1)
 	{
 		__debugbreak();
 	}
-	_ReadOffset = 0, _WriteOffset = 0;
+	_readOffset = 0, _dataSize = 0, _ioCount = 0;
 	WriteAsync(0, 0);
 }
 
@@ -55,52 +54,128 @@ ULONG ZRingBuffer::BuildBuffers(WSABUF wb[2], ULONG from, ULONG to)
 	}
 }
 
-void ZRingBuffer::ReadAsync(ULONG ReadOffset, ULONG WriteOffset)
+void ZRingBuffer::ReadAsync(ULONG ReadOffset, ULONG DataSize)
 {
-	if (!CanNotRead(ReadOffset, WriteOffset))
+	if (CanRead(DataSize))
 	{
+		StartIo();
+
 		WSABUF wb[2];
-		BeginRead(wb, BuildBuffers(wb, ReadOffset, WriteOffset));
+		if (!BeginRead(wb, BuildBuffers(wb, ReadOffset, ReadOffset + DataSize)))
+		{
+			EndRead(0);
+		}
 	}
 }
 
-void ZRingBuffer::WriteAsync(ULONG ReadOffset, ULONG WriteOffset)
+void ZRingBuffer::WriteAsync(ULONG ReadOffset, ULONG DataSize)
 {
-	if (!CanNotWrite(ReadOffset, WriteOffset))
+	if (CanWrite(DataSize))
 	{
+		StartIo();
+
 		WSABUF wb[2];
-		BeginWrite(wb, BuildBuffers(wb, WriteOffset, ReadOffset + (_Size - 1)));
+		if (!BeginWrite(wb, BuildBuffers(wb, ReadOffset + DataSize, ReadOffset + _Size)))
+		{
+			EndWrite(0);
+		}
 	}
 }
 
 void ZRingBuffer::EndWrite(ULONG NumberOfBytesWrite )
 {
-	ULONG ReadOffset = _ReadOffset;// memory_order_acquire
-	ULONG WriteOffset_0 = _WriteOffset;
-	ULONG WriteOffset_1 = WriteOffset_0 + NumberOfBytesWrite;
-	_WriteOffset = WriteOffset_1; // memory_order_release
-
-	if (CanNotRead(ReadOffset, WriteOffset_0))
+	if (NumberOfBytesWrite)
 	{
-		ReadAsync(ReadOffset, WriteOffset_1);
+		union {
+			double d;
+			__int64 v;
+			struct {
+				ULONG readOffset, dataSize;
+			};
+		};
+
+		union {
+			double d0;
+			__int64 v0;
+			struct {
+				ULONG readOffset0, dataSize0;
+			};
+		};
+
+		union {
+			double d1;
+			__int64 v1;
+			struct {
+				ULONG readOffset1, dataSize1;
+			};
+		};
+
+		d0 = _d;
+
+		do 
+		{
+			readOffset1 = readOffset0;
+			dataSize1 = dataSize0 + NumberOfBytesWrite;
+			v0 = InterlockedCompareExchangeNoFence64(&_v, v1, v = v0);
+		} while (v0 != v);
+
+		if (!CanRead(dataSize0))
+		{
+			ReadAsync(readOffset1, dataSize1);
+		}
+
+		WriteAsync(readOffset1, dataSize1);
 	}
 
-	WriteAsync(ReadOffset, WriteOffset_1);
+	EndIo();
 }
 
 void ZRingBuffer::EndRead(ULONG NumberOfBytesRead )
 {
-	ULONG WriteOffset = _WriteOffset; // memory_order_acquire 
-	ULONG ReadOffset_0 = _ReadOffset;
-	ULONG ReadOffset_1 = ReadOffset_0 + NumberOfBytesRead;
-	_ReadOffset = ReadOffset_1; // memory_order_release 
-
-	if (CanNotWrite(ReadOffset_0, WriteOffset))
+	if (NumberOfBytesRead)
 	{
-		WriteAsync(ReadOffset_1, WriteOffset);
+		union {
+			double d;
+			__int64 v;
+			struct {
+				ULONG readOffset, dataSize;
+			};
+		};
+
+		union {
+			double d0;
+			__int64 v0;
+			struct {
+				ULONG readOffset0, dataSize0;
+			};
+		};
+
+		union {
+			double d1;
+			__int64 v1;
+			struct {
+				ULONG readOffset1, dataSize1;
+			};
+		};
+
+		d0 = _d;
+
+		do 
+		{
+			readOffset1 = (readOffset0 + NumberOfBytesRead) % _Size;
+			dataSize1 = dataSize0 - NumberOfBytesRead;
+			v0 = InterlockedCompareExchangeNoFence64(&_v, v1, v = v0);
+		} while (v0 != v);
+
+		if (!CanWrite(dataSize0))
+		{
+			WriteAsync(readOffset1, dataSize1);
+		}
+
+		ReadAsync(readOffset1, dataSize1);
 	}
 
-	ReadAsync(ReadOffset_1, WriteOffset);
+	EndIo();
 }
 
 _NT_END

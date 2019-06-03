@@ -2,45 +2,65 @@
 
 class __declspec(novtable) ZRingBuffer
 {
+	union {
+		double _d;
+		__int64 _v;
+		struct {
+			ULONG _readOffset, _dataSize;
+		};
+	};
 	void* _BaseAddress;
-	volatile ULONG _ReadOffset, _WriteOffset;
 	ULONG _Size;
+	LONG _ioCount;
 
+	// must always return the same value
+	virtual ULONG GetMinReadBufferSize(){ return 1; }
+
+	// must always return the same value
 	virtual ULONG GetMinWriteBufferSize(){ return 1; }
 
-	virtual ULONG GetMinReadBufferSize(){ return 1; }
-	
-	virtual bool IsAdjacentBuffers(){ return false; }
+	// if the same memory mapped at
+	// [_BaseAddress, _BaseAddress + _Size) and
+	// [_BaseAddress + _Size, _BaseAddress + 2* _Size)
+	virtual bool IsAdjacentBuffers(){ return FALSE; }
 
 	// Begins an asynchronous read operation
-	virtual void BeginRead(WSABUF* lpBuffers, ULONG dwBufferCount) = 0;
+	// return are EndRead will be called
+	virtual bool BeginRead(WSABUF* lpBuffers, ULONG dwBufferCount) = 0;
 
 	// Begins an asynchronous write operation
-	virtual void BeginWrite(WSABUF* lpBuffers, ULONG dwBufferCount) = 0;
+	// return are EndWrite will be called
+	virtual bool BeginWrite(WSABUF* lpBuffers, ULONG dwBufferCount) = 0;
 
-	void ReadAsync(ULONG ReadOffset, ULONG WriteOffset);
+	virtual void OnIoStop() = 0;
 
-	void WriteAsync(ULONG ReadOffset, ULONG WriteOffset);
+	void ReadAsync(ULONG ReadOffset, ULONG DataSize);
+
+	void WriteAsync(ULONG ReadOffset, ULONG DataSize);
 
 	ULONG BuildBuffers(WSABUF wb[2], ULONG from, ULONG to);
 
-	bool CanNotRead(ULONG ReadOffset, ULONG WriteOffset)
+	bool CanRead(ULONG DataSize)
 	{
-		return WriteOffset - ReadOffset < GetMinReadBufferSize();
+		return DataSize >= GetMinReadBufferSize();
 	}
 
-	bool CanNotWrite(ULONG ReadOffset, ULONG WriteOffset)
+	bool CanWrite(ULONG DataSize)
 	{
-		return (_Size - 1) - (WriteOffset - ReadOffset) < GetMinWriteBufferSize();
+		return _Size - DataSize >= GetMinWriteBufferSize();
+	}
+
+	void StartIo()
+	{
+		InterlockedIncrementNoFence(&_ioCount);
+	}
+
+	void EndIo()
+	{
+		if (!InterlockedDecrement(&_ioCount)) OnIoStop();
 	}
 
 public:
-
-	ZRingBuffer() : _BaseAddress(0), _Size(0) {}
-
-	void* GetBuffer() { return _BaseAddress; }
-
-	ULONG GetSize() { return _Size; }
 
 	// notifies that asynchronous write completed
 	void EndWrite(ULONG NumberOfBytesWrite );
@@ -48,7 +68,13 @@ public:
 	// notifies that asynchronous read completed
 	void EndRead(ULONG NumberOfBytesRead );
 
+	ZRingBuffer() : _BaseAddress(0), _Size(0) {}
+
+	void* GetBuffer() { return _BaseAddress; }
+
+	ULONG GetSize() { return _Size; }
+
 	void Init(void* BaseAddress, ULONG Size);
-	
+
 	void Start();
 };
