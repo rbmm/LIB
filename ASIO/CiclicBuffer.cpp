@@ -87,7 +87,6 @@ void ZRingBuffer::EndWrite(ULONG NumberOfBytesWrite )
 	if (NumberOfBytesWrite)
 	{
 		union {
-			double d;
 			__int64 v;
 			struct {
 				ULONG readOffset, dataSize;
@@ -95,7 +94,6 @@ void ZRingBuffer::EndWrite(ULONG NumberOfBytesWrite )
 		};
 
 		union {
-			double d0;
 			__int64 v0;
 			struct {
 				ULONG readOffset0, dataSize0;
@@ -103,20 +101,19 @@ void ZRingBuffer::EndWrite(ULONG NumberOfBytesWrite )
 		};
 
 		union {
-			double d1;
 			__int64 v1;
 			struct {
 				ULONG readOffset1, dataSize1;
 			};
 		};
 
-		d0 = _d;
+		v0 = _v;
 
 		do 
 		{
 			readOffset1 = readOffset0;
 			dataSize1 = dataSize0 + NumberOfBytesWrite;
-			v0 = InterlockedCompareExchangeNoFence64(&_v, v1, v = v0);
+			v0 = _InterlockedCompareExchange64(&_v, v1, v = v0);
 		} while (v0 != v);
 
 		if (!CanRead(dataSize0))
@@ -135,7 +132,6 @@ void ZRingBuffer::EndRead(ULONG NumberOfBytesRead )
 	if (NumberOfBytesRead)
 	{
 		union {
-			double d;
 			__int64 v;
 			struct {
 				ULONG readOffset, dataSize;
@@ -143,7 +139,6 @@ void ZRingBuffer::EndRead(ULONG NumberOfBytesRead )
 		};
 
 		union {
-			double d0;
 			__int64 v0;
 			struct {
 				ULONG readOffset0, dataSize0;
@@ -151,20 +146,19 @@ void ZRingBuffer::EndRead(ULONG NumberOfBytesRead )
 		};
 
 		union {
-			double d1;
 			__int64 v1;
 			struct {
 				ULONG readOffset1, dataSize1;
 			};
 		};
 
-		d0 = _d;
+		v0 = _v;
 
 		do 
 		{
 			readOffset1 = (readOffset0 + NumberOfBytesRead) % _Size;
 			dataSize1 = dataSize0 - NumberOfBytesRead;
-			v0 = InterlockedCompareExchangeNoFence64(&_v, v1, v = v0);
+			v0 = _InterlockedCompareExchange64(&_v, v1, v = v0);
 		} while (v0 != v);
 
 		if (!CanWrite(dataSize0))

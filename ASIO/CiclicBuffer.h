@@ -3,7 +3,6 @@
 class __declspec(novtable) ZRingBuffer
 {
 	union {
-		double _d;
 		__int64 _v;
 		struct {
 			ULONG _readOffset, _dataSize;
@@ -22,7 +21,7 @@ class __declspec(novtable) ZRingBuffer
 	// if the same memory mapped at
 	// [_BaseAddress, _BaseAddress + _Size) and
 	// [_BaseAddress + _Size, _BaseAddress + 2* _Size)
-	virtual bool IsAdjacentBuffers(){ return FALSE; }
+	virtual bool IsAdjacentBuffers(){ return false; }
 
 	// Begins an asynchronous read operation
 	// return are EndRead will be called
