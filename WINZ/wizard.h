@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../winz/window.h"
+#include "window.h"
 
 class CWizPage;
 
