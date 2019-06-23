@@ -1,70 +1,149 @@
-#include "StdAfx.h"
+#include "stdafx.h"
 
 _NT_BEGIN
 
-#include "wizard.h"
+#include "Wizard.h"
 
-CWizardChildDlg::CWizardChildDlg(HWND hwndParent)
+void CWizFrame::OnCancel(HWND hwndDlg)
 {
-	_hwndParent = hwndParent;
+	EndDialog(hwndDlg, IDCANCEL);
 }
 
-void CWizardChildDlg::Navigate(HWND hwndDlg, UINT uCmd)
+void CWizFrame::DoInstall()
 {
-	if (HWND hwnd = GetWindow(hwndDlg, uCmd))
+}
+
+void CWizFrame::SetStatusText(PCWSTR /*lpCaption*/, PCWSTR /*lpText*/)
+{
+}
+
+void* CWizFrame::GetPageData(int /*iPage*/)
+{
+	return 0;
+}
+
+void CWizFrame::SetActivePage(CWizPage* pActivePage)
+{
+	if (_pActivePage)
+	{
+		_pActivePage->Release();
+	}
+
+	_pActivePage = pActivePage;
+
+	pActivePage->AddRef();
+}
+
+void CWizFrame::OnInitDialog(HWND /*hwndDlg*/)
+{
+}
+
+INT_PTR CWizFrame::DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
+{
+	switch (uMsg)
+	{
+	case WM_DESTROY:
+		if (_pActivePage)
+		{
+			_pActivePage->Release();
+			_pActivePage = 0;
+		}
+		break;
+
+	case WM_INITDIALOG:
+		_pActivePage = 0;
+		OnInitDialog(hwndDlg);
+		break;
+
+	case WM_COMMAND:
+		switch (wParam)
+		{
+		case IDCANCEL:
+			OnCancel(hwndDlg);
+			break;
+		default:
+			if (_pActivePage)
+			{
+				_pActivePage->OnFrameBtnClicked(wParam, (HWND)lParam);
+			}
+		}
+		break;
+	}
+	return ZDlg::DialogProc(hwndDlg, uMsg, wParam, lParam);
+}
+
+void CWizPage::SwitchToWindow(HWND hwnd)
+{
+	if (hwnd)
 	{
 		ShowWindow(hwnd, SW_SHOW);
-		ShowWindow(hwndDlg, SW_HIDE);
+		ShowWindow(getHWND(), SW_HIDE);
 		SetFocus(hwnd);
 	}
 }
 
-INT_PTR CWizardChildDlg::DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
+void CWizPage::GoBack()
 {
-	switch(uMsg)
+	SwitchToWindow(GW_HWNDPREV);
+}
+
+void CWizPage::GoNext()
+{
+	SwitchToWindow(GW_HWNDNEXT);
+}
+
+void CWizPage::OnFrameBtnClicked(WPARAM cmd, HWND /*hwndCtrl*/)
+{
+	switch (cmd)
 	{
+	case IDABORT:
+		GoBack();
+		break;
+	case IDOK:
+		GoNext();
+		break;
+	}
+}
+
+void CWizPage::OnInitDialog(HWND /*hwndDlg*/)
+{
+}
+
+void CWizPage::OnActivate(HWND /*hwndDlg*/, WPARAM /*bActivate*/)
+{
+}
+
+INT_PTR CWizPage::DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
+{
+	switch (uMsg)
+	{
+	case WM_INITDIALOG:
+		_pFrame = (CWizFrame*)lParam;
+		_pFrame->AddRef();
+		OnInitDialog(hwndDlg);
+		break;
+
 	case WM_SHOWWINDOW:
-		if (wParam && !lParam)
+		if (!lParam)
 		{
-			SendMessage(_hwndParent, WM_USER + WM_SHOWWINDOW, 0, (LPARAM)hwndDlg);
-			OnShow(hwndDlg);
+			if (wParam)
+			{
+				_pFrame->SetActivePage(this);
+			}
+			OnActivate(hwndDlg, wParam);
 		}
 		break;
-	case WM_COMMAND:
-		switch(wParam)
+
+	case WM_DESTROY:
+		if (_pFrame)
 		{
-		case IDCANCEL:
-			Navigate(hwndDlg, GW_HWNDPREV);
-			break;
-		case IDOK:
-			Navigate(hwndDlg, GW_HWNDNEXT);
-			break;
+			_pFrame->Release();
+			_pFrame = 0;
 		}
 		break;
 	}
 
 	return ZDlg::DialogProc(hwndDlg, uMsg, wParam, lParam);
-}
-
-void CWizardChildDlg::OnShow(HWND /*hwndDlg*/)
-{
-
-}
-
-HWND CWizardChildDlg::_create(CWizardChildDlg* (*createObject)(HWND), HINSTANCE hInstance, LPCWSTR lpTemplateName, HWND hWndParent, LPARAM dwInitParam)
-{
-	HWND hwnd = 0;
-	if (CWizardChildDlg* p = createObject(hWndParent))
-	{
-		hwnd = p->Create(hInstance, lpTemplateName, hWndParent, dwInitParam);
-		p->Release();
-	}
-	return hwnd;
-}
-
-HWND CWizardChildDlg::_create(CWizardChildDlg* (*createObject)(HWND), LPCWSTR lpTemplateName, HWND hWndParent)
-{
-	return _create(createObject, (HINSTANCE)&__ImageBase, lpTemplateName, hWndParent, 0);
 }
 
 _NT_END

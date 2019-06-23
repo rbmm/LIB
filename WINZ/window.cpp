@@ -123,6 +123,7 @@ LRESULT CALLBACK ZWnd::__WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM 
 	SetWindowLongPtr(hwnd, 0, (LONG_PTR)pv);
 	SetWindowLongPtr(hwnd, GWLP_WNDPROC, (LONG_PTR)_WindowProc);
 	reinterpret_cast<ZWnd*>(pv)->AddRef();
+	reinterpret_cast<ZWnd*>(pv)->_hWnd = hwnd;
 	return reinterpret_cast<ZWnd*>(pv)->WindowProc(hwnd, uMsg, wParam, lParam);
 }
 
@@ -145,7 +146,6 @@ LRESULT ZWnd::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 	switch (uMsg)
 	{
 	case WM_NCCREATE:
-		_hWnd = hwnd;
 		if (((LPCREATESTRUCT)lParam)->style & WS_MAXIMIZE)
 		{
 			ShowWindow(hwnd, SW_HIDE);
@@ -225,6 +225,8 @@ INT_PTR CALLBACK ZDlg::__DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPAR
 	SetWindowLongPtr(hwndDlg, DWLP_USER, (LONG_PTR)pv);
 	SetWindowLongPtr(hwndDlg, DWLP_DLGPROC, (LONG_PTR)_DialogProc);
 	reinterpret_cast<ZDlg*>(pv)->AddRef();
+	reinterpret_cast<ZDlg*>(pv)->_hWnd = hwndDlg;
+
 	return reinterpret_cast<ZDlg*>(pv)->DialogProc(hwndDlg, uMsg, wParam, lParam);
 }
 
@@ -237,13 +239,10 @@ INT_PTR CALLBACK ZDlg::_DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARA
 	return r;
 }
 
-INT_PTR ZDlg::DialogProc(HWND hwndDlg, UINT uMsg, WPARAM /*wParam*/, LPARAM /*lParam*/)
+INT_PTR ZDlg::DialogProc(HWND /*hwndDlg*/, UINT uMsg, WPARAM /*wParam*/, LPARAM /*lParam*/)
 {
 	switch (uMsg)
 	{
-	case WM_INITDIALOG:
-		_hWnd = hwndDlg;
-		break;
 	case WM_NCDESTROY:
 		_hWnd = 0;
 		Release();
