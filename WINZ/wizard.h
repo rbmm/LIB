@@ -10,7 +10,7 @@ class __declspec(novtable) CWizFrame : public ZDlg
 
 	CWizPage* _pActivePage;
 
-	virtual void OnInitDialog(HWND hwndDlg);
+	virtual BOOL OnInitDialog(HWND hwndDlg);
 
 	virtual void DoInstall();
 
@@ -35,7 +35,7 @@ class __declspec(novtable) CWizPage : public ZDlg
 
 	CWizFrame* _pFrame;
 
-	virtual void OnInitDialog(HWND hwndDlg);
+	virtual BOOL OnInitDialog(HWND hwndDlg);
 
 	virtual void OnActivate(HWND hwndDlg, WPARAM bActivate);
 

@@ -5,7 +5,7 @@ _NT_BEGIN
 #include "SSL.h"
 #define DbgPrint echo(/)echo(/)
 
-SECURITY_STATUS SharedCred::Acquire(ULONG fCredentialUse, PCCERT_CONTEXT pCertContext, ULONG dwFlags)
+SECURITY_STATUS SharedCred::Acquire(ULONG fCredentialUse, PCCERT_CONTEXT pCertContext, ULONG dwFlags, ULONG grbitEnabledProtocols)
 {
 	SCHANNEL_CRED sc = { SCHANNEL_CRED_VERSION };
 
@@ -16,6 +16,7 @@ SECURITY_STATUS SharedCred::Acquire(ULONG fCredentialUse, PCCERT_CONTEXT pCertCo
 	}
 
 	sc.dwFlags = dwFlags;
+	sc.grbitEnabledProtocols = grbitEnabledProtocols;
 
 	NTSTATUS status = AcquireCredentialsHandleW(0, UNISP_NAME, fCredentialUse, 0, &sc, 0, 0, &m_hCred, 0);
 
@@ -31,7 +32,7 @@ void CSSLStream::OnEncryptDecryptError(HRESULT )
 {
 }
 
-PCCERT_CONTEXT CSSLStream::GetUserCert()
+PCCERT_CONTEXT CryptUIDlgGetUserCert()
 {
 	typedef PCCERT_CONTEXT (WINAPI * CRYPTUIDLGSELECTCERTIFICATEFROMSTORE)(
 		_In_     HCERTSTORE hCertStore,
@@ -51,7 +52,7 @@ PCCERT_CONTEXT CSSLStream::GetUserCert()
 		{
 			if (PVOID pv = GetProcAddress(hmod, "CryptUIDlgSelectCertificateFromStore"))
 			{
-				_InterlockedCompareExchangePointer((void**)&CryptUIDlgSelectCertificateFromStore, pv, 0);
+				InterlockedCompareExchangePointerNoFence((void**)&CryptUIDlgSelectCertificateFromStore, pv, 0);
 			}
 		}
 
@@ -70,6 +71,11 @@ PCCERT_CONTEXT CSSLStream::GetUserCert()
 
 		return pCertContext;
 	}
+	return 0;
+}
+
+PCCERT_CONTEXT CSSLStream::GetUserCert()
+{
 	return 0;
 }
 

@@ -34,14 +34,43 @@ void CWizFrame::SetActivePage(CWizPage* pActivePage)
 	pActivePage->AddRef();
 }
 
-void CWizFrame::OnInitDialog(HWND /*hwndDlg*/)
+BOOL CWizFrame::OnInitDialog(HWND /*hwndDlg*/)
 {
+	return TRUE;
 }
 
 INT_PTR CWizFrame::DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
 	switch (uMsg)
 	{
+	case WM_CTLCOLORSTATIC:
+		switch (GetDlgCtrlID((HWND)lParam))
+		{
+		case IDC_STATIC-1:
+		case IDC_STATIC-2:
+			return FALSE;
+		}
+		SetTextColor((HDC)wParam, (INT_PTR)GetSysColor(COLOR_WINDOWTEXT));
+		SetBkMode((HDC)wParam, TRANSPARENT);
+		[[fallthrough]];
+
+	case WM_CTLCOLORDLG:
+		return (INT_PTR)GetSysColorBrush(COLOR_WINDOW);
+
+	case WM_PAINT:
+		PAINTSTRUCT ps;
+		if (BeginPaint(hwndDlg, &ps))
+		{
+			RECT rc;
+			GetWindowRect(GetDlgItem(hwndDlg, IDC_STATIC-1), &rc);
+			ScreenToClient(hwndDlg, 1+(PPOINT)&rc);
+			GetClientRect(hwndDlg, &ps.rcPaint);
+			ps.rcPaint.top = rc.bottom;
+			FillRect(ps.hdc, &ps.rcPaint, GetSysColorBrush(COLOR_MENU));
+			EndPaint(hwndDlg, &ps);
+		}
+		return TRUE;
+
 	case WM_DESTROY:
 		if (_pActivePage)
 		{
@@ -52,8 +81,7 @@ INT_PTR CWizFrame::DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lPa
 
 	case WM_INITDIALOG:
 		_pActivePage = 0;
-		OnInitDialog(hwndDlg);
-		break;
+		return OnInitDialog(hwndDlg);
 
 	case WM_COMMAND:
 		switch (wParam)
@@ -69,6 +97,7 @@ INT_PTR CWizFrame::DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lPa
 		}
 		break;
 	}
+
 	return ZDlg::DialogProc(hwndDlg, uMsg, wParam, lParam);
 }
 
@@ -105,8 +134,9 @@ void CWizPage::OnFrameBtnClicked(WPARAM cmd, HWND /*hwndCtrl*/)
 	}
 }
 
-void CWizPage::OnInitDialog(HWND /*hwndDlg*/)
+BOOL CWizPage::OnInitDialog(HWND /*hwndDlg*/)
 {
+	return TRUE;
 }
 
 void CWizPage::OnActivate(HWND /*hwndDlg*/, WPARAM /*bActivate*/)
@@ -120,8 +150,10 @@ INT_PTR CWizPage::DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lPar
 	case WM_INITDIALOG:
 		_pFrame = (CWizFrame*)lParam;
 		_pFrame->AddRef();
-		OnInitDialog(hwndDlg);
-		break;
+		return OnInitDialog(hwndDlg);
+
+	case WM_SETFOCUS:
+		return TRUE;
 
 	case WM_SHOWWINDOW:
 		if (!lParam)

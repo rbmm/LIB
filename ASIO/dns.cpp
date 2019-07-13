@@ -5,6 +5,8 @@ _NT_BEGIN
 #include "socket.h"
 #define DbgPrint /##/
 
+extern volatile UCHAR guz;
+
 class CDnsSocket;
 
 class CDnsTask : public IO_OBJECT_TIMEOUT
@@ -67,6 +69,7 @@ public:
 class CDnsSocket : public CUdpEndpoint
 {
 	CDnsTask* _pTask;
+	//ULONG _DnsServerIp;
 
 	virtual void OnRecv(PSTR Buffer, ULONG cbTransferred);
 	virtual void OnRecv(PSTR Buffer, ULONG cbTransferred, CDataPacket* /*packet*/, SOCKADDR_IN* addr);
@@ -123,6 +126,113 @@ void CDnsTask::DecRecvCount()
 	}
 }
 
+ULONG FillDnsServerList(ULONG MaxCount, ULONG IPs[])
+{
+	HANDLE hKey;
+	STATIC_OBJECT_ATTRIBUTES(soa, "\\registry\\MACHINE\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces");
+	UNICODE_STRING ObjectName;
+	OBJECT_ATTRIBUTES oa = { sizeof(oa), 0, &ObjectName, OBJ_CASE_INSENSITIVE };
+
+	ULONG m = 0;
+
+	NTSTATUS status;
+
+	if (0 <= (status = ZwOpenKey(&oa.RootDirectory, KEY_READ, &soa)))
+	{
+		PVOID stack = alloca(guz);
+		union {
+			PVOID buf;
+			PKEY_BASIC_INFORMATION pkni;
+			PKEY_VALUE_PARTIAL_INFORMATION pkvpi;
+		};
+		ULONG cb = 0, rcb = 0x100, Index = 0;
+		do 
+		{
+			do 
+			{
+				if (cb < rcb) 
+				{
+					cb = RtlPointerToOffset(buf = alloca(rcb - cb), stack);
+				}
+
+				if (0 <= (status = ZwEnumerateKey(oa.RootDirectory, Index, KeyBasicInformation, buf, cb, &rcb)))
+				{
+					ObjectName.Buffer = pkni->Name;
+					ObjectName.MaximumLength = ObjectName.Length = (USHORT)pkni->NameLength;
+
+					if (0 <= ZwOpenKey(&hKey, KEY_READ, &oa))
+					{
+						STATIC_UNICODE_STRING_(NameServer);
+						STATIC_UNICODE_STRING_(DhcpNameServer);
+						NTSTATUS ss;
+						PCUNICODE_STRING aa[] = { &NameServer, &DhcpNameServer }, ValueName;
+						ULONG n = RTL_NUMBER_OF(aa);
+
+						do 
+						{
+							ValueName = aa[--n];
+
+							do 
+							{
+								if (cb < rcb) 
+								{
+									cb = RtlPointerToOffset(buf = alloca(rcb - cb), stack);
+								}
+
+								if (0 <= (ss = ZwQueryValueKey(hKey, ValueName, KeyValuePartialInformation, buf, cb, &rcb)))
+								{
+									ULONG DataLength = pkvpi->DataLength;
+									union {
+										PWSTR psz;
+										PBYTE Data;
+									};
+									Data = pkvpi->Data;
+									if (pkvpi->Type == REG_SZ && 
+										DataLength > sizeof(WCHAR) && 
+										!(DataLength & (sizeof(WCHAR) - 1)) &&
+										!*(WCHAR*)(Data + DataLength - sizeof(WCHAR)))
+									{
+										ULONG ip;
+
+										for (;;)
+										{
+											while (*psz == ' ') psz++;
+
+											if (!*psz || 0 > RtlIpv4StringToAddressW(psz, TRUE, psz, ip))
+											{
+												break;
+											}
+
+											*IPs++ = ip;
+											if (++m, !--MaxCount)
+											{
+												NtClose(hKey);
+												goto __0;
+											}
+										}
+									}
+								}
+
+							} while (ss == STATUS_BUFFER_OVERFLOW);
+
+						} while (n);
+
+						NtClose(hKey);
+					}
+				}
+
+			} while (status == STATUS_BUFFER_OVERFLOW);
+
+			Index++;
+
+		} while (status != STATUS_NO_MORE_ENTRIES);
+__0:
+		NtClose(oa.RootDirectory);
+	}
+
+	return m;
+}
+
 void CDnsTask::DnsToIp(PCSTR Dns, DWORD dwMilliseconds)
 {
 	static ULONG seed;
@@ -146,12 +256,12 @@ void CDnsTask::DnsToIp(PCSTR Dns, DWORD dwMilliseconds)
 		IP(208, 67, 220, 222),
 	};
 
-	ULONG DnsServerAddresses[2] = { 
+	ULONG DnsServerAddresses[16] = { 
 		DnsServerAddressesGroup1[i % RTL_NUMBER_OF(DnsServerAddressesGroup1)],
 		DnsServerAddressesGroup2[i % RTL_NUMBER_OF(DnsServerAddressesGroup2)],
 	};
 
-	if (ULONG n = Create( RTL_NUMBER_OF(DnsServerAddresses)))
+	if (ULONG n = Create(2 + FillDnsServerList(RTL_NUMBER_OF(DnsServerAddresses) - 2, DnsServerAddresses + 2)))
 	{
 		if (SetTimeout(dwMilliseconds))
 		{
@@ -173,6 +283,8 @@ void CDnsTask::DnsToIp(PCSTR Dns, DWORD dwMilliseconds)
 
 				if (CDataPacket* packet = new(1024) CDataPacket)
 				{
+					DbgPrint("-->%08x\n", DnsServerAddresses[n]);
+
 					if (!pSock->RecvFrom(packet) && pSock->Start(Dns, DnsServerAddresses[n]))
 					{
 						fOk = TRUE;
@@ -276,6 +388,7 @@ void CDnsSocket::OnRecv(PSTR Buffer, ULONG cbTransferred)
 			ULONG ip;
 			memcpy(&ip, Buffer, sizeof(DWORD));
 
+			DbgPrint("[%08x]->%08x\n", _DnsServerIp, ip);
 			_pTask->OnIp(ip);
 			return;
 		}
@@ -291,7 +404,7 @@ void CDnsSocket::OnRecv(PSTR Buffer, ULONG cbTransferred, CDataPacket* /*packet*
 
 BOOL CDnsSocket::Start(PCSTR Dns, DWORD ip)
 {
-	if (strlen(Dns) > 256) return FALSE;
+	//_DnsServerIp = ip;//$$$
 
 	if (CDataPacket* packet = new(1024) CDataPacket)
 	{
@@ -342,6 +455,12 @@ void CSocketObject::DnsToIp(PCSTR Dns)
 	if (0 <= RtlIpv4StringToAddressA(Dns, TRUE, c, ip))
 	{
 		OnIp(ip);
+		return;
+	}
+
+	if (strlen(Dns) > 256)
+	{
+		OnIp(0);
 		return;
 	}
 

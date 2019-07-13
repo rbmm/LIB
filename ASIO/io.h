@@ -1,17 +1,9 @@
 #pragma once
 
 #include "../inc/rundown.h"
+#include "../inc/asmfunc.h"
 #include "packet.h"
 #include "blockheap.h"
-
-// helper for get complex c++ names for use in asm code
-#if 0
-#define ASM_FUNCTION {__pragma(message(__FUNCDNAME__" proc\r\n" __FUNCDNAME__ " endp"))}
-#define CPP_FUNCTION __pragma(message("extern " __FUNCDNAME__ " : PROC ; "  __FUNCSIG__))
-#else
-#define ASM_FUNCTION
-#define CPP_FUNCTION
-#endif
 
 extern NTSTATUS (NTAPI *fnSetIoCompletionCallback)(HANDLE , LPOVERLAPPED_COMPLETION_ROUTINE , ULONG );
 

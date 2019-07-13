@@ -1,5 +1,8 @@
 #pragma once
 
+#define IDC_STATIC_1      (IDC_STATIC-1)
+#define IDC_STATIC_2      (IDC_STATIC-2)
+
 #define IDC_PROGRESS64						10064
 #define IDC_PROGRESS63						10063
 #define IDC_PROGRESS62						10062

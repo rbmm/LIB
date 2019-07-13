@@ -36,7 +36,7 @@ public:
 		m_dwRef = 1;
 	}
 
-	SECURITY_STATUS Acquire(ULONG fCredentialUse, PCCERT_CONTEXT pCertContext = 0, ULONG dwFlags = 0);
+	SECURITY_STATUS Acquire(ULONG fCredentialUse, PCCERT_CONTEXT pCertContext = 0, ULONG dwFlags = 0, ULONG grbitEnabledProtocols = 0);
 };
 
 class __declspec(novtable) CSSLStream : CtxtHandle, SecPkgContext_StreamSizes
@@ -185,3 +185,5 @@ protected:
 	/************************************************************************/
 
 };
+
+PCCERT_CONTEXT CryptUIDlgGetUserCert();

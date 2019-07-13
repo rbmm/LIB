@@ -15,6 +15,7 @@ extern IMAGE_DOS_HEADER __ImageBase;
 }
 
 typedef int (__cdecl * QSORTFN) (const void *, const void *);
+typedef int (__cdecl * QSORTFN_S)(void *, const void *, const void *);
 
 #ifndef _NTDRIVER_
 
