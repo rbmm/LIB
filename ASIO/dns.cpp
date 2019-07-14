@@ -7,6 +7,120 @@ _NT_BEGIN
 
 extern volatile UCHAR guz;
 
+//////////////////////////////////////////////////////////////////////////
+void ALS(PSRWLOCK SRWLock);
+void ALE(PSRWLOCK SRWLock);
+void RLS(PSRWLOCK SRWLock);
+void RLE(PSRWLOCK SRWLock);
+
+void (WINAPI*AcqSRWLockShared)(PSRWLOCK SRWLock) = ALS;
+void (WINAPI*RelSRWLockShared)(PSRWLOCK SRWLock) = RLS;
+void (WINAPI*AcqSRWLockExclusive)(PSRWLOCK SRWLock) = ALE;
+void (WINAPI*RelSRWLockExclusive)(PSRWLOCK SRWLock) = RLE;
+
+void WINAPI dummy_xp(PSRWLOCK)
+{
+}
+
+void ALS(PSRWLOCK SRWLock)
+{
+	if (PVOID pv = GetProcAddress(GetModuleHandle(L"kernel32"), "AcquireSRWLockShared"))
+	{
+		AcqSRWLockShared = (void (WINAPI*)(PSRWLOCK))pv;
+		AcqSRWLockShared(SRWLock);
+	}
+	else
+	{
+		AcqSRWLockShared = dummy_xp;
+	}
+}
+
+void ALE(PSRWLOCK SRWLock)
+{
+	if (PVOID pv = GetProcAddress(GetModuleHandle(L"kernel32"), "AcquireSRWLockExclusive"))
+	{
+		AcqSRWLockExclusive = (void (WINAPI*)(PSRWLOCK))pv;
+		AcqSRWLockExclusive(SRWLock);
+	}
+	else
+	{
+		AcqSRWLockExclusive = dummy_xp;
+	}
+}
+
+void RLS(PSRWLOCK SRWLock)
+{
+	if (PVOID pv = GetProcAddress(GetModuleHandle(L"kernel32"), "ReleaseSRWLockShared"))
+	{
+		RelSRWLockShared = (void (WINAPI*)(PSRWLOCK))pv;
+		RelSRWLockShared(SRWLock);
+	}
+	else
+	{
+		RelSRWLockShared = dummy_xp;
+	}
+}
+
+void RLE(PSRWLOCK SRWLock)
+{
+	if (PVOID pv = GetProcAddress(GetModuleHandle(L"kernel32"), "ReleaseSRWLockExclusive"))
+	{
+		RelSRWLockExclusive = (void (WINAPI*)(PSRWLOCK))pv;
+		RelSRWLockExclusive(SRWLock);
+	}
+	else
+	{
+		RelSRWLockExclusive = dummy_xp;
+	}
+}
+
+DWORD HashString(PCSTR lpsz, DWORD hash = 0)
+{
+	while (char c = *lpsz++) hash = hash * 33 ^ c;
+	return hash;
+}
+
+struct DnsCache 
+{
+	struct CRC_IP_TIME { ULONG crc, ip, time, n; };
+
+	inline static CRC_IP_TIME g_ip_cache[64] = {};
+	inline static SRWLOCK g_icl = SRWLOCK_INIT;
+
+	static ULONG get(PCSTR name, ULONG& rcrc);
+	static void set(ULONG crc, ULONG ip);
+};
+
+ULONG DnsCache::get(PCSTR name, ULONG& rcrc)
+{
+	ULONG crc = HashString(name);
+
+	rcrc = crc;
+
+	CRC_IP_TIME* p = &g_ip_cache[crc & (RTL_NUMBER_OF(g_ip_cache) - 1)];
+
+	ULONG time = GetTickCount();
+
+	ULONG ip = 0;
+	AcqSRWLockShared(&g_icl);
+	if (p->crc == crc && time < p->time) ip = p->ip;
+	RelSRWLockShared(&g_icl);
+
+	return ip;
+}
+
+void DnsCache::set(ULONG crc, ULONG ip)
+{
+	CRC_IP_TIME* p = &g_ip_cache[crc & (RTL_NUMBER_OF(g_ip_cache) - 1)];
+
+	ULONG time = GetTickCount() + 1000*100;// 100 sec
+
+	AcqSRWLockExclusive(&g_icl);
+	p->crc = crc, p->time = time, p->ip = ip, p->n++;
+	RelSRWLockExclusive(&g_icl);
+}
+
+//////////////////////////////////////////////////////////////////////////
 class CDnsSocket;
 
 class CDnsTask : public IO_OBJECT_TIMEOUT
@@ -63,12 +177,13 @@ public:
 		_pEndp->AddRef();
 	}
 
-	void DnsToIp(PCSTR Dns, DWORD dwMilliseconds = 3000);
+	void DnsToIp(PCSTR Dns, ULONG crc, DWORD dwMilliseconds = 3000);
 };
 
 class CDnsSocket : public CUdpEndpoint
 {
 	CDnsTask* _pTask;
+	ULONG _crc;
 	//ULONG _DnsServerIp;
 
 	virtual void OnRecv(PSTR Buffer, ULONG cbTransferred);
@@ -82,7 +197,7 @@ class CDnsSocket : public CUdpEndpoint
 
 public:
 
-	BOOL Start(PCSTR Dns, DWORD ip);
+	BOOL Start(PCSTR Dns, DWORD DnsServerIp, ULONG crc);
 
 	CDnsSocket(CDnsTask* pTask) : _pTask(pTask)
 	{
@@ -126,6 +241,24 @@ void CDnsTask::DecRecvCount()
 	}
 }
 
+LONGLONG GetBootTime()
+{
+	static LONGLONG BootTime;
+	if (!BootTime)
+	{
+		SYSTEM_TIMEOFDAY_INFORMATION sti;
+		if (0 <= NtQuerySystemInformation(SystemTimeOfDayInformation, &sti, sizeof(sti), 0))
+		{
+			BootTime = sti.BootTime.QuadPart;
+		}
+		else
+		{
+			BootTime = 1;
+		}
+	}
+	return BootTime;
+}
+
 ULONG FillDnsServerList(ULONG MaxCount, ULONG IPs[])
 {
 	HANDLE hKey;
@@ -146,17 +279,22 @@ ULONG FillDnsServerList(ULONG MaxCount, ULONG IPs[])
 			PKEY_VALUE_PARTIAL_INFORMATION pkvpi;
 		};
 		ULONG cb = 0, rcb = 0x100, Index = 0;
+
+		LONGLONG BootTime = GetBootTime();
+
 		do 
 		{
 			do 
 			{
-				if (cb < rcb) 
-				{
-					cb = RtlPointerToOffset(buf = alloca(rcb - cb), stack);
-				}
+				if (cb < rcb) cb = RtlPointerToOffset(buf = alloca(rcb - cb), stack);
 
 				if (0 <= (status = ZwEnumerateKey(oa.RootDirectory, Index, KeyBasicInformation, buf, cb, &rcb)))
 				{
+					if (pkni->LastWriteTime.QuadPart < BootTime)
+					{
+						goto __nextIndex;
+					}
+
 					ObjectName.Buffer = pkni->Name;
 					ObjectName.MaximumLength = ObjectName.Length = (USHORT)pkni->NameLength;
 
@@ -165,7 +303,7 @@ ULONG FillDnsServerList(ULONG MaxCount, ULONG IPs[])
 						STATIC_UNICODE_STRING_(NameServer);
 						STATIC_UNICODE_STRING_(DhcpNameServer);
 						NTSTATUS ss;
-						PCUNICODE_STRING aa[] = { &NameServer, &DhcpNameServer }, ValueName;
+						PCUNICODE_STRING aa[] = { &DhcpNameServer, &NameServer }, ValueName;
 						ULONG n = RTL_NUMBER_OF(aa);
 
 						do 
@@ -174,10 +312,7 @@ ULONG FillDnsServerList(ULONG MaxCount, ULONG IPs[])
 
 							do 
 							{
-								if (cb < rcb) 
-								{
-									cb = RtlPointerToOffset(buf = alloca(rcb - cb), stack);
-								}
+								if (cb < rcb) cb = RtlPointerToOffset(buf = alloca(rcb - cb), stack);
 
 								if (0 <= (ss = ZwQueryValueKey(hKey, ValueName, KeyValuePartialInformation, buf, cb, &rcb)))
 								{
@@ -203,11 +338,12 @@ ULONG FillDnsServerList(ULONG MaxCount, ULONG IPs[])
 												break;
 											}
 
+											n = 0;// not look for DhcpNameServer if found NameServer
 											*IPs++ = ip;
 											if (++m, !--MaxCount)
 											{
 												NtClose(hKey);
-												goto __0;
+												goto __exit;
 											}
 										}
 									}
@@ -223,17 +359,18 @@ ULONG FillDnsServerList(ULONG MaxCount, ULONG IPs[])
 
 			} while (status == STATUS_BUFFER_OVERFLOW);
 
+__nextIndex:
 			Index++;
 
 		} while (status != STATUS_NO_MORE_ENTRIES);
-__0:
+__exit:
 		NtClose(oa.RootDirectory);
 	}
 
 	return m;
 }
 
-void CDnsTask::DnsToIp(PCSTR Dns, DWORD dwMilliseconds)
+void CDnsTask::DnsToIp(PCSTR Dns, ULONG crc, DWORD dwMilliseconds)
 {
 	static ULONG seed;
 
@@ -285,7 +422,7 @@ void CDnsTask::DnsToIp(PCSTR Dns, DWORD dwMilliseconds)
 				{
 					DbgPrint("-->%08x\n", DnsServerAddresses[n]);
 
-					if (!pSock->RecvFrom(packet) && pSock->Start(Dns, DnsServerAddresses[n]))
+					if (!pSock->RecvFrom(packet) && pSock->Start(Dns, DnsServerAddresses[n], crc))
 					{
 						fOk = TRUE;
 					}
@@ -383,14 +520,18 @@ void CDnsSocket::OnRecv(PSTR Buffer, ULONG cbTransferred)
 		x.len = _byteswap_ushort(x.len);
 		if (cbTransferred < x.len) return;
 		cbTransferred -= x.len;
-		if (x.type==0x100 && x.cls == 0x100 && x.len == sizeof(DWORD))
+		if (x.type == 0x100 && x.cls == 0x100 && x.len == sizeof(DWORD))
 		{
 			ULONG ip;
 			memcpy(&ip, Buffer, sizeof(DWORD));
 
-			DbgPrint("[%08x]->%08x\n", _DnsServerIp, ip);
-			_pTask->OnIp(ip);
-			return;
+			if (ip)
+			{
+				//DbgPrint("[%08x]->%08x\n", _DnsServerIp, ip);
+				_pTask->OnIp(ip);
+				DnsCache::set(_crc, ip);
+				return;
+			}
 		}
 		Buffer += x.len;
 	}
@@ -402,9 +543,10 @@ void CDnsSocket::OnRecv(PSTR Buffer, ULONG cbTransferred, CDataPacket* /*packet*
 	_pTask->DecRecvCount();
 }
 
-BOOL CDnsSocket::Start(PCSTR Dns, DWORD ip)
+BOOL CDnsSocket::Start(PCSTR Dns, DWORD DnsServerIp, ULONG crc)
 {
 	//_DnsServerIp = ip;//$$$
+	_crc = crc;
 
 	if (CDataPacket* packet = new(1024) CDataPacket)
 	{
@@ -436,7 +578,7 @@ mm:
 
 		packet->setDataSize(RtlPointerToOffset(__lpsz, lpsz) + sizeof(bb2));
 
-		ULONG err = SendTo(ip, 0x3500, packet);
+		ULONG err = SendTo(DnsServerIp, 0x3500, packet);
 
 		packet->Release();
 
@@ -450,9 +592,9 @@ mm:
 
 void CSocketObject::DnsToIp(PCSTR Dns)
 {
-	DWORD ip;
+	ULONG crc, ip;
 	PSTR c;
-	if (0 <= RtlIpv4StringToAddressA(Dns, TRUE, c, ip))
+	if (0 <= RtlIpv4StringToAddressA(Dns, TRUE, c, ip) || (ip = DnsCache::get(Dns, crc)))
 	{
 		OnIp(ip);
 		return;
@@ -466,7 +608,7 @@ void CSocketObject::DnsToIp(PCSTR Dns)
 
 	if (CDnsTask* pTask = new CDnsTask(this))
 	{
-		pTask->DnsToIp(Dns);
+		pTask->DnsToIp(Dns, crc);
 		pTask->Release();
 	}
 	else
