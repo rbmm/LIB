@@ -5,7 +5,7 @@ _NT_BEGIN
 #include "socket.h"
 #define DbgPrint /##/
 
-extern volatile UCHAR guz;
+static volatile UCHAR guz;
 
 //////////////////////////////////////////////////////////////////////////
 void ALS(PSRWLOCK SRWLock);

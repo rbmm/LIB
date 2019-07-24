@@ -1,4 +1,5 @@
 // helper for get complex c++ names for use in asm code
+#pragma once
 #ifdef _PRINT_CPP_NAMES_
 
 #define ASM_FUNCTION {__pragma(message(__FUNCDNAME__" proc\r\n" __FUNCDNAME__ " endp"))}
