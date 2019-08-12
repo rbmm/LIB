@@ -94,12 +94,12 @@ inline ULONG BOOL_TO_ERROR(BOOL f)
 #undef _freea
 #endif
 
-#define _malloca(size) ((size) < PAGE_SIZE ? alloca(size) : LocalAlloc(0, size))
+#define _malloca(size) ((size) < PAGE_SIZE ? alloca(size) : new BYTE[size])
 
 inline void _freea(PVOID pv)
 {
 	PNT_TIB tib = (PNT_TIB)NtCurrentTeb();
-	if (pv < tib->StackLimit || tib->StackBase <= pv) LocalFree(pv);
+	if (pv < tib->StackLimit || tib->StackBase <= pv) delete [] pv;
 }
 
 ////////////////////////////////////////////////////////////////
