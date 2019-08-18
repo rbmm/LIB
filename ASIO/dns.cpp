@@ -184,7 +184,6 @@ class CDnsSocket : public CUdpEndpoint
 {
 	CDnsTask* _pTask;
 	ULONG _crc;
-	//ULONG _DnsServerIp;
 
 	virtual void OnRecv(PSTR Buffer, ULONG cbTransferred);
 	virtual void OnRecv(PSTR Buffer, ULONG cbTransferred, CDataPacket* /*packet*/, SOCKADDR_IN* addr);
@@ -481,7 +480,6 @@ ULONG CDnsTask::Create(ULONG n)
 			_n = m;
 			return m;
 		}
-
 	}
 
 	return 0;
@@ -516,7 +514,7 @@ void CDnsSocket::OnRecv(PSTR Buffer, ULONG cbTransferred)
 	{
 		if (cbTransferred < sizeof(DNS_RR)) return;
 		memcpy(&x, Buffer, sizeof(x));
-		cbTransferred -= sizeof DNS_RR, Buffer += sizeof (DNS_RR);
+		cbTransferred -= sizeof (DNS_RR), Buffer += sizeof (DNS_RR);
 		x.len = _byteswap_ushort(x.len);
 		if (cbTransferred < x.len) return;
 		cbTransferred -= x.len;
@@ -528,8 +526,8 @@ void CDnsSocket::OnRecv(PSTR Buffer, ULONG cbTransferred)
 			if (ip)
 			{
 				//DbgPrint("[%08x]->%08x\n", _DnsServerIp, ip);
-				_pTask->OnIp(ip);
 				DnsCache::set(_crc, ip);
+				_pTask->OnIp(ip);
 				return;
 			}
 		}
