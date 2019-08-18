@@ -1,16 +1,8 @@
 #pragma once
 
-#if 0
-#define __ASM_FUNCTION __pragma(message(__FUNCDNAME__" proc\r\n" __FUNCDNAME__ " endp"))
-#define _ASM_FUNCTION {__ASM_FUNCTION;}
-#define ASM_FUNCTION {__ASM_FUNCTION;return 0;}
-#define CPP_FUNCTION __pragma(message("extern " __FUNCDNAME__ " : PROC ; "  __FUNCSIG__))
-#else
-#define _ASM_FUNCTION
-#define ASM_FUNCTION
-#define CPP_FUNCTION
-#endif
-//
+//#define _PRINT_CPP_NAMES_
+#include "../inc/asmfunc.h"
+
 #define DBG_PRINT
 
 #ifndef DBG_PRINT
@@ -205,7 +197,7 @@ class __declspec(novtable) IO_OBJECT_TIMEOUT : public IO_OBJECT
 
 		static VOID NTAPI OnDpc(PKDPC Dpc, PVOID , PVOID , PVOID );
 
-		static VOID NTAPI _OnWorkItem(PVOID This)_ASM_FUNCTION;//asm
+		static VOID NTAPI _OnWorkItem(PVOID This)ASM_FUNCTION;//asm
 		static VOID NTAPI OnWorkItem(PVOID This);
 
 		~RtlTimer()

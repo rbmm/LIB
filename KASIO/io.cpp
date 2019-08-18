@@ -4,13 +4,11 @@ _NT_BEGIN
 
 #include "../inc/initterm.h"
 #include "io.h"
-
+#undef DbgPrint
 //////////////////////////////////////////////////////////////////////////
 //
 
-LONG g_nIoThreads;
 PKQUEUE g_Queue;
-LIST_ENTRY gRundownEntry;
 
 PLARGE_INTEGER g_ptimeout = &g_timeout;
 
@@ -188,6 +186,8 @@ void IoThread()
 		ptimeout = 0;
 	}
 
+	DbgPrint("IoThread(%p) begin(%p)\n", KeGetCurrentThread(), ptimeout);//$$$
+
 	for (;;)
 	{
 		union {
@@ -204,23 +204,8 @@ void IoThread()
 		case STATUS_ALERTED:
 			continue;
 		case STATUS_ABANDONED:
-			__debugbreak();
-		}
-
-		if (entry == &gRundownEntry)
-		{
 			DbgPrint("IoThread(%p) end\n", KeGetCurrentThread());//$$$
-
-			if (!InterlockedDecrement(&g_nIoThreads))
-			{
-				if (entry = KeRundownQueue(g_Queue))
-				{
-					DbgPrint("===== KeRundownQueue = %p\n", entry);
-					__debugbreak();
-				}
-				ObfDereferenceObject(g_Queue);
-				DbgPrint("===== IoPoolStoped =====\n");
-			}
+			ObfDereferenceObject(g_Queue);
 			return;
 		}
 
@@ -234,8 +219,6 @@ void IoThread()
 NTSTATUS InitIo(PDRIVER_OBJECT DriverObject)
 {
 	initterm();
-
-	ObfReferenceObject(DriverObject);
 
 	HANDLE hIOCP;
 	NTSTATUS status = ZwCreateIoCompletion(&hIOCP, IO_COMPLETION_ALL_ACCESS, 0, 0);
@@ -255,7 +238,7 @@ NTSTATUS InitIo(PDRIVER_OBJECT DriverObject)
 
 	KeInitializeQueue(g_Queue, 0);
 
-	ULONG Count = g_Queue->MaximumCount;
+	ULONG Count = g_Queue->MaximumCount, nIoThreads = 0;
 
 	DbgPrint("g_Queue=%p, %x\n", g_Queue, Count);
 
@@ -264,24 +247,24 @@ NTSTATUS InitIo(PDRIVER_OBJECT DriverObject)
 	do 
 	{
 		ObfReferenceObject(DriverObject);
+		ObfReferenceObject(g_Queue);
 		HANDLE hThread;
 		if (0 > PsCreateSystemThread(&hThread, 0, 0, 0, 0, ThreadStartThunk, IoThread)) 
 		{
+			ObfDereferenceObject(g_Queue);
 			ObfDereferenceObject(DriverObject);
 		}
 		else
 		{
-			g_nIoThreads++;
+			nIoThreads++;
 			NtClose(hThread);
 		}
 	} while (--Count);
 
-	if (g_nIoThreads)
+	if (nIoThreads)
 	{
 		return STATUS_SUCCESS;
 	}
-
-	ObfDereferenceObject(g_Queue);
 
 	g_IoRundown->BeginRundown();
 
@@ -292,35 +275,19 @@ LONG gnPackets;
 
 class DRIVER_RUNDOWN : public RUNDOWN_REF
 {
-	static void WorkerRoutine(PDEVICE_OBJECT , PVOID Context)
-	{
-		DbgPrint("........%x........\n", gnPackets);
-		IoFreeWorkItem((PIO_WORKITEM)Context);
-		ObfDereferenceObject(g_DriverObject);//
-
-		static LARGE_INTEGER Interval = { (ULONG)-10000000, -1 };// 1 sec
-		KeDelayExecutionThread(KernelMode, FALSE, &Interval);
-		DbgPrint("~~~~~~~~~~~~~~\n");
-	}
-
 	virtual void RundownCompleted()
 	{
 		DbgPrint("RundownCompleted\n");
 
 		destroyterm();
 
-		if (LONG nIoThreads = g_nIoThreads) 
+		if (PLIST_ENTRY entry = KeRundownQueue(g_Queue))
 		{
-			do 
-			{
-				KeInsertQueue(g_Queue, &gRundownEntry);
-			} while (--nIoThreads);
+			DbgPrint("===== KeRundownQueue = %p\n", entry);
+			__debugbreak();
 		}
 
-		if (PIO_WORKITEM IoWorkItem = IoAllocateWorkItem((PDEVICE_OBJECT)g_DriverObject))
-		{
-			IoQueueWorkItem(IoWorkItem, WorkerRoutine, DelayedWorkQueue, IoWorkItem);
-		}
+		ObfDereferenceObject(g_Queue);
 	}
 } grr;
 

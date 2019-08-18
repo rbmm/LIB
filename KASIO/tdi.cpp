@@ -779,5 +779,5 @@ void CTcpEndpoint::IOCompletionRoutine(CDataPacket* packet, DWORD Code, NTSTATUS
 	// DISCONNECT, SEND, RECV
 	UnlockConnection();
 }
-showmacro(DbgPrint)
+
 _NT_END
