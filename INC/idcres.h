@@ -1,8 +1,27 @@
 #pragma once
 
+#ifndef __AFXRES_H__
+
+#define AFX_IDW_CONTROLBAR_FIRST        0xE800
+#define AFX_IDW_CONTROLBAR_LAST         0xE8FF
+
+#define AFX_IDW_TOOLBAR                 0xE800  // main Toolbar for window
+#define AFX_IDW_STATUS_BAR              0xE801  // Status bar window
+#define AFX_IDW_PREVIEW_BAR             0xE802  // PrintPreview Dialog Bar
+#define AFX_IDW_RESIZE_BAR              0xE803  // OLE in-place resize bar
+#define AFX_IDW_REBAR                   0xE804  // COMCTL32 "rebar" Bar
+#define AFX_IDW_DIALOGBAR               0xE805  // CDialogBar
+#define AFX_IDW_MENUBAR                 0xE806  // CMFCMenuBar
+
+#define AFX_IDM_WINDOW_FIRST            0xE130
+#define AFX_IDM_WINDOW_LAST             0xE13F
+#define AFX_IDM_FIRST_MDICHILD          0xFF00  // window list starts here
+
 #ifndef IDC_STATIC
 #define IDC_STATIC      (-1)
 #endif
+
+#endif // __AFXRES_H__
 
 #define IDC_STATIC_1      (IDC_STATIC-1)
 #define IDC_STATIC_2      (IDC_STATIC-2)

@@ -18,12 +18,12 @@ public:
 
 	void AddRef()
 	{
-		_InterlockedIncrement(&m_dwRef);
+		InterlockedIncrementNoFence(&m_dwRef);
 	}
 
 	void Release()
 	{
-		if (!_InterlockedDecrement(&m_dwRef))
+		if (!InterlockedDecrement(&m_dwRef))
 		{
 			delete this;
 		}
@@ -56,7 +56,7 @@ private:
 
 	SECURITY_STATUS ProcessSecurityContext(PSTR& rbuf, DWORD& rcb);
 
-	virtual void OnEncryptDecryptError(HRESULT );
+	virtual void OnEncryptDecryptError(SECURITY_STATUS );
 
 	virtual PCCERT_CONTEXT GetUserCert();
 

@@ -17,5 +17,4 @@
 #include <olectl.h>
 #include <DispEx.h>
 #include <objsafe.h>
-
 #pragma init_seg(lib)

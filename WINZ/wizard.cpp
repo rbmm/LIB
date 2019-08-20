@@ -2,6 +2,7 @@
 
 _NT_BEGIN
 
+#include "../inc/idcres.h"
 #include "Wizard.h"
 
 void CWizFrame::OnCancel(HWND hwndDlg)

@@ -2,6 +2,7 @@
 
 _NT_BEGIN
 
+#include "../inc/idcres.h"
 #include "ctrl.h"
 
 void ZToolBar::SetBrush(HBRUSH hbr)

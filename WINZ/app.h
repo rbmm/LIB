@@ -22,7 +22,7 @@ extern "C"
 
 #define LP(str) RTL_NUMBER_OF(str) - 1, str
 
-class WINZ_API __declspec(novtable) ZTranslateMsg : LIST_ENTRY
+class WINZ_API __declspec(novtable) ZTranslateMsg : public LIST_ENTRY
 {
 public:
 	virtual BOOL PreTranslateMessage(PMSG lpMsg) = 0;
@@ -34,7 +34,7 @@ public:
 	void Remove();
 };
 
-class WINZ_API __declspec(novtable) ZIdle : LIST_ENTRY
+class WINZ_API __declspec(novtable) ZIdle : public LIST_ENTRY
 {
 public:
 	virtual void OnIdle() = 0;
@@ -46,7 +46,7 @@ public:
 	void Remove();
 };
 
-class WINZ_API __declspec(novtable) ZFontNotify : LIST_ENTRY
+class WINZ_API __declspec(novtable) ZFontNotify : public LIST_ENTRY
 {
 public:
 	virtual void OnNewFont(HFONT hFont) = 0;

@@ -1,7 +1,5 @@
 #pragma once
 
-#include "afxres.h"
-
 #define WINZ_API
 
 #if 0

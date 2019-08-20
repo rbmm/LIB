@@ -18,14 +18,15 @@ SECURITY_STATUS SharedCred::Acquire(ULONG fCredentialUse, PCCERT_CONTEXT pCertCo
 	sc.dwFlags = dwFlags;
 	sc.grbitEnabledProtocols = grbitEnabledProtocols;
 
-	NTSTATUS status = AcquireCredentialsHandleW(0, UNISP_NAME, fCredentialUse, 0, &sc, 0, 0, &m_hCred, 0);
+	SECURITY_STATUS ss = AcquireCredentialsHandleW(0, const_cast<PWSTR>(UNISP_NAME), fCredentialUse, 0, &sc, 0, 0, &m_hCred, 0);
 
-	if (0 > status) 
+	if (0 > ss) 
 	{
-		DbgPrint("\r\n%p>%s(%p)=%x\r\n", this, __FUNCTION__, pCertContext, status);
+		m_hCred.dwLower = 0, m_hCred.dwUpper = 0;
+		DbgPrint("\r\n%p>%s(%p)=%x\r\n", this, __FUNCTION__, pCertContext, ss);
 	}
 
-	return status;
+	return ss;
 }
 
 void CSSLStream::OnEncryptDecryptError(HRESULT )
@@ -300,11 +301,11 @@ __save_and_exit:
 
 		SecBufferDesc sbd = { SECBUFFER_VERSION, 4, sb };
 
-		HRESULT hr = ::DecryptMessage(this, &sbd, 0, 0);
+		SECURITY_STATUS ss = ::DecryptMessage(this, &sbd, 0, 0);
 
-		DbgPrint("%u:DecryptMessage(%x)=%x, (%x,%x)(%x,%x)(%x,%x)(%x,%x)\n", IsServer(), cb, hr, sb[0].BufferType, sb[0].cbBuffer, sb[1].BufferType, sb[1].cbBuffer,sb[2].BufferType, sb[2].cbBuffer, sb[3].BufferType, sb[3].cbBuffer);
+		DbgPrint("%u:DecryptMessage(%x)=%x, (%x,%x)(%x,%x)(%x,%x)(%x,%x)\n", IsServer(), cb, ss, sb[0].BufferType, sb[0].cbBuffer, sb[1].BufferType, sb[1].cbBuffer,sb[2].BufferType, sb[2].cbBuffer, sb[3].BufferType, sb[3].cbBuffer);
 
-		switch(hr)
+		switch(ss)
 		{
 		case SEC_I_CONTEXT_EXPIRED:
 			DbgPrint("\r\n%p>Shutdown %u\r\n", this, IsServer());
@@ -318,7 +319,7 @@ __save_and_exit:
 		case SEC_E_INCOMPLETE_MESSAGE:
 			goto __save_and_exit;
 
-		case STATUS_SUCCESS:
+		case SEC_E_OK:
 			if (
 				sb[0].BufferType == SECBUFFER_STREAM_HEADER &&
 				sb[1].BufferType == SECBUFFER_DATA && sb[1].cbBuffer &&
@@ -341,7 +342,7 @@ __save_and_exit:
 			return TRUE;
 
 		default:
-			OnEncryptDecryptError(hr);
+			OnEncryptDecryptError(ss);
 			return FALSE;
 		}
 	}

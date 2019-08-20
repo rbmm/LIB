@@ -2,7 +2,7 @@
 
 #include "document.h"
 
-class WINZ_API Z_INTERFACE("E9B9E2B2-BF48-49f7-BE99-77BCDD674CA0") ZView : LIST_ENTRY
+class WINZ_API Z_INTERFACE("E9B9E2B2-BF48-49f7-BE99-77BCDD674CA0") ZView : public LIST_ENTRY
 {
 protected:
 	ZDocument* _pDocument;

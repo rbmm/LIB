@@ -722,7 +722,7 @@ void CTcpEndpoint::IOCompletionRoutine(CDataPacket* packet, DWORD Code, NTSTATUS
 	default: __debugbreak();
 	case recv:
 		dwNumberOfBytesTransfered && (f = OnRecv((PSTR)Pointer, (ULONG)dwNumberOfBytesTransfered))
-			? 0 < f && Recv() : Disconnect(dwError);
+			? 0 < f && Recv() : (Disconnect(dwError),0);
 		break;
 
 	case send:
@@ -776,7 +776,7 @@ void CTcpEndpoint::IOCompletionRoutine(CDataPacket* packet, DWORD Code, NTSTATUS
 				}
 			}
 
-			f ? 0 < f && Recv() : Disconnect();
+			f ? 0 < f && Recv() : (Disconnect(),0);
 		}
 
 		return;

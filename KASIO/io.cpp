@@ -4,7 +4,7 @@ _NT_BEGIN
 
 #include "../inc/initterm.h"
 #include "io.h"
-#undef DbgPrint
+
 //////////////////////////////////////////////////////////////////////////
 //
 
@@ -176,6 +176,9 @@ NTSTATUS IO_OBJECT::SendIrp(PDEVICE_OBJECT DeviceObject, PIRP Irp)
 	return status;
 }
 
+#pragma push_macro("DbgPrint")
+#undef DbgPrint
+
 void IoThread()
 {
 	// only single iothread use g_ptimeout
@@ -271,8 +274,6 @@ NTSTATUS InitIo(PDRIVER_OBJECT DriverObject)
 	return STATUS_UNSUCCESSFUL;
 }
 
-LONG gnPackets;
-
 class DRIVER_RUNDOWN : public RUNDOWN_REF
 {
 	virtual void RundownCompleted()
@@ -292,6 +293,8 @@ class DRIVER_RUNDOWN : public RUNDOWN_REF
 } grr;
 
 RUNDOWN_REF * g_IoRundown = &grr;
+
+#pragma pop_macro("DbgPrint")
 
 //////////////////////////////////////////////////////////////////////////
 // IO_OBJECT

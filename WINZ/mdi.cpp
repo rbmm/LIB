@@ -1,7 +1,7 @@
 #include "stdafx.h"
 
 _NT_BEGIN
-
+#include "../inc/idcres.h"
 #include "mdi.h"
 #include "view.h"
 

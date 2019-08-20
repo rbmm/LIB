@@ -3,7 +3,7 @@
 //#define _PRINT_CPP_NAMES_
 #include "../inc/asmfunc.h"
 
-#define DBG_PRINT
+//#define DBG_PRINT
 
 #ifndef DBG_PRINT
 

@@ -2,6 +2,10 @@
 
 #include "winZ.h"
 
+#ifndef AFX_IDW_TOOLBAR
+#define AFX_IDW_TOOLBAR  0xE800
+#endif
+
 class WINZ_API ZToolBar
 {
 	HWND _hwnd;

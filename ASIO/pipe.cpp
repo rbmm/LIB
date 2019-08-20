@@ -385,7 +385,7 @@ void CPipeEnd::IOCompletionRoutine(CDataPacket* packet, DWORD Code, NTSTATUS sta
 		switch(status) 
 		{
 		case STATUS_SUCCESS:
-			(f = OnRead(Pointer, (ULONG)dwNumberOfBytesTransfered)) ? 0 < f && Read() : Disconnect();
+			(f = OnRead(Pointer, (ULONG)dwNumberOfBytesTransfered)) ? 0 < f && Read() : (Disconnect(), 0);
 			break;
 		default: OnReadWriteError(status);
 		}
@@ -422,7 +422,7 @@ void CPipeEnd::IOCompletionRoutine(CDataPacket* packet, DWORD Code, NTSTATUS sta
 		case STATUS_PIPE_CONNECTED: // client already connected
 		case STATUS_PIPE_CLOSING:	// client already connected and disconnected
 			m_connectionLock.Init();
-			(f = OnConnect(STATUS_SUCCESS)) ? 0 < f && Read() : Disconnect();
+			(f = OnConnect(STATUS_SUCCESS)) ? 0 < f && Read() : (Disconnect(), 0);
 			break;
 		//case STATUS_CANCELLED:			// CancelIo[Ex]
 		//case STATUS_INVALID_HANDLE:		// we close handle before ConnectNamedPipe call  
