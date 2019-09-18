@@ -4,7 +4,10 @@
 
 class MailSlot : public IO_OBJECT
 {
+	void OnWrite(NTSTATUS status);
+
 protected:
+	
 	enum { opRead = 'rrrr', opWrite = 'wwww' };
 
 	virtual void IOCompletionRoutine(CDataPacket* packet, DWORD Code, NTSTATUS status, ULONG_PTR dwNumberOfBytesTransfered, PVOID Pointer);
@@ -17,11 +20,20 @@ protected:
 	{
 	}
 
-	virtual void OnRead(NTSTATUS /*status*/, PVOID /*buf*/, ULONG /*dwNumberOfBytesTransfered*/, CDataPacket* /*packet*/)
+	virtual void OnRead(PVOID /*buf*/, ULONG /*dwNumberOfBytesTransfered*/, CDataPacket* /*packet*/)
 	{
 	}
 
-	virtual void OnWrite(NTSTATUS status, PVOID /*buf*/, ULONG /*dwNumberOfBytesTransfered*/);
+	virtual void FreeAfterWrite(PVOID /*buf*/)
+	{
+	}
+
+	virtual void OnBufferTooSmall(ULONG NextSize);
+	
+	virtual bool IsSizeOk(ULONG /*NextSize*/)
+	{
+		return true;
+	}
 
 public:
 	NTSTATUS Read(CDataPacket* packet);

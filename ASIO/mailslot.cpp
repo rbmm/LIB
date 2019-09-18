@@ -9,16 +9,60 @@ void MailSlot::IOCompletionRoutine(CDataPacket* packet, DWORD Code, NTSTATUS sta
 	switch (Code)
 	{
 	case opRead:
-		OnRead(status, Pointer, (ULONG)dwNumberOfBytesTransfered, packet);
+		if (status == STATUS_BUFFER_TOO_SMALL)
+		{
+			ULONG NextSize = 0;
+			HANDLE hFile;
+			status = STATUS_INVALID_HANDLE;
+			if (LockHandle(hFile))
+			{
+				if (GetMailslotInfo(hFile, 0, &NextSize, 0, 0))
+				{
+					status = STATUS_SUCCESS;
+				}
+				else
+				{
+					status = RtlGetLastNtStatus();
+				}
+				UnlockHandle();
+			}
+
+			if (status == STATUS_SUCCESS)
+			{
+				OnBufferTooSmall(NextSize);
+				break;
+			}
+		}
+
+		if (0 > status)
+		{
+			OnError(status);
+			break;
+		}
+
+		OnRead(Pointer, (ULONG)dwNumberOfBytesTransfered, packet);
 		break;
 	case opWrite:
-		OnWrite(status, Pointer, (ULONG)dwNumberOfBytesTransfered);
+		FreeAfterWrite(Pointer);
+		OnWrite(status);
 		break;
 	default: __debugbreak();
 	}
 }
 
-void MailSlot::OnWrite(NTSTATUS status, PVOID /*buf*/, ULONG /*dwNumberOfBytesTransfered*/)
+void MailSlot::OnBufferTooSmall(ULONG NextSize)
+{
+	if (IsSizeOk(NextSize))
+	{
+		if (CDataPacket* packet = new(NextSize) CDataPacket)
+		{
+			Read(packet);
+			packet->Release();
+		}
+	}
+}
+
+void MailSlot::OnWrite(NTSTATUS status)
 {
 	if (0 > status)
 	{
