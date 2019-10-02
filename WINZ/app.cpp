@@ -730,7 +730,7 @@ _ZGLOBALS::~_ZGLOBALS()
 {
 	if (!IsListEmpty(&_docListHead) || !IsListEmpty(&_fontListHead) || App || Reg || MainFrame || hwndMain || Font)
 	{
-		DbgBreak();
+		__debugbreak();
 	}
 }
 
