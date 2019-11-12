@@ -1,6 +1,7 @@
 #pragma once
 
 #include <mswsock.h>
+#include <ws2ipdef.h>
 
 #include "io.h"
 
@@ -37,6 +38,7 @@ public:
 	ULONG Create(int af, int type, int protocol);
 
 	ULONG CreateAddress(USHORT port, ULONG ip = 0);
+	ULONG CreateAddress(_In_reads_bytes_(namelen) const struct sockaddr * name, _In_ int namelen);
 };
 
 class CUdpEndpoint : public CSocketObject
@@ -60,6 +62,7 @@ protected:
 public:
 
 	ULONG Create(WORD Port, ULONG ip = 0);
+	ULONG Create(PSOCKADDR Address, DWORD AddressLength);
 	ULONG RecvFrom(CDataPacket* packet);
 	ULONG SendTo(PSOCKADDR Address, DWORD AddressLength, CDataPacket* packet);	
 	ULONG SendTo(ULONG IpAddr, USHORT Port, CDataPacket* packet);	
@@ -83,6 +86,7 @@ protected:
 	union {
 		ULONG			m_dwReceiveDataLength;
 		sockaddr_in		m_RemoteSockaddr;
+		sockaddr_in6	m_RemoteSockaddr6;
 	};
 
 	enum {
@@ -126,7 +130,7 @@ public:
 	ULONG Recv();// usually not call it direct !
 	ULONG Recv(WSABUF* lpBuffers, DWORD dwBufferCount, PVOID buf);// usually not call it direct !
 
-	ULONG Create(DWORD BufferSize);
+	ULONG Create(DWORD BufferSize, int af = AF_INET);
 	ULONG Listen(ULONG dwReceiveDataLength = 0);
 	
 	ULONG Connect(ULONG IpAddr, USHORT Port);

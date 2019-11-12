@@ -119,50 +119,58 @@ ULONG CSocketObject::Create(int af, int type, int protocol)
 
 ULONG CSocketObject::CreateAddress(USHORT port, ULONG ip)
 {
-	if (ULONG err = Create(AF_INET, SOCK_STREAM, IPPROTO_TCP))
-	{
-		return err;
-	}
-
 	sockaddr_in asi = { AF_INET, port };
 
 	asi.sin_addr.S_un.S_addr = ip;
 
-	ULONG err = ERROR_INVALID_HANDLE;
+	return CreateAddress((sockaddr*)&asi, sizeof(asi));
+}
 
-	SOCKET socket;
-	if (LockSocket(socket))
+ULONG CSocketObject::CreateAddress(_In_reads_bytes_(namelen) const struct sockaddr * name, _In_ int namelen)
+{
+	ULONG err = Create(name->sa_family, SOCK_STREAM, IPPROTO_TCP);
+
+	if (err == NOERROR)
 	{
-		err = WSA_ERROR(bind(socket, (sockaddr*)&asi, sizeof(asi)) || listen(socket, 0));
-		UnlockSocket();
+		err = ERROR_INVALID_HANDLE;
+
+		SOCKET socket;
+		if (LockSocket(socket))
+		{
+			err = WSA_ERROR(bind(socket, name, namelen) || listen(socket, 0));
+			UnlockSocket();
+		}
 	}
 
 	return err;
 }
-
 //////////////////////////////////////////////////////////////////////////
 // CUdpEndpoint
 
 ULONG CUdpEndpoint::Create(WORD port, ULONG ip)
 {
-	if (ULONG err = CSocketObject::Create(AF_INET, SOCK_DGRAM, IPPROTO_UDP))
-	{
-		return err;
-	}
-	
 	sockaddr_in asi = { AF_INET, port };
 
 	asi.sin_addr.S_un.S_addr = ip;
 
-	ULONG err = ERROR_INVALID_HANDLE;
+	return Create((sockaddr*)&asi, sizeof(asi));
+}
 
-	SOCKET socket;
-	if (LockSocket(socket))
+ULONG CUdpEndpoint::Create(PSOCKADDR Address, DWORD AddressLength)
+{
+	ULONG err = CSocketObject::Create(Address->sa_family, SOCK_DGRAM, IPPROTO_UDP);
+
+	if (err == NOERROR)
 	{
-		err = WSA_ERROR(bind(socket, (sockaddr*)&asi, sizeof(asi)));
-		UnlockSocket();
-	}
+		err = ERROR_INVALID_HANDLE;
 
+		SOCKET socket;
+		if (LockSocket(socket))
+		{
+			err = WSA_ERROR(bind(socket, Address, AddressLength));
+			UnlockSocket();
+		}
+	}
 	return err;
 }
 
@@ -346,11 +354,11 @@ void CTcpEndpoint::Disconnect(DWORD dwErrorReason)
 	}
 }
 
-ULONG CTcpEndpoint::Create(DWORD BufferSize)
+ULONG CTcpEndpoint::Create(DWORD BufferSize, int af)
 {
 	if (BufferSize && !(m_packet = new(BufferSize) CDataPacket)) return ERROR_NO_SYSTEM_RESOURCES;
 
-	if (ULONG err = CSocketObject::Create(AF_INET, SOCK_STREAM, IPPROTO_TCP))
+	if (ULONG err = CSocketObject::Create(af, SOCK_STREAM, IPPROTO_TCP))
 	{
 		return err;
 	}
@@ -397,20 +405,20 @@ void CTcpEndpoint::GetSockaddrs(PVOID buf)
 	PSOCKADDR LocalSockaddr, RemoteSockaddr;
 	INT LocalSockaddrLength, RemoteSockaddrLength;
 
-	GetAcceptExSockaddrs(buf, m_dwReceiveDataLength, sizeof(sockaddr_in) + 16, sizeof(sockaddr_in) + 16, 
+	GetAcceptExSockaddrs(buf, m_dwReceiveDataLength, sizeof(sockaddr_in6) + 16, sizeof(sockaddr_in6) + 16, 
 		&LocalSockaddr, &LocalSockaddrLength, &RemoteSockaddr, &RemoteSockaddrLength);
 
 	m_RemoteSockaddr.sin_family = AF_UNSPEC;
 
-	if (RemoteSockaddrLength <= sizeof(m_RemoteSockaddr))
+	if (RemoteSockaddrLength <= sizeof(m_RemoteSockaddr6))
 	{
-		memcpy(&m_RemoteSockaddr, RemoteSockaddr, RemoteSockaddrLength);
+		memcpy(&m_RemoteSockaddr6, RemoteSockaddr, RemoteSockaddrLength);
 	}
 }
 
 ULONG CTcpEndpoint::Listen(ULONG dwReceiveDataLength)
 {
-	ULONG cb = m_packet->getBufferSize(), cbNeed = 2*(sizeof(sockaddr_in) + 16) + dwReceiveDataLength;
+	ULONG cb = m_packet->getBufferSize(), cbNeed = 2*(sizeof(sockaddr_in6) + 16) + dwReceiveDataLength;
 
 	if (cb < cbNeed || cbNeed < dwReceiveDataLength)
 	{
@@ -438,7 +446,7 @@ ULONG CTcpEndpoint::Listen(ULONG dwReceiveDataLength)
 			if (m_pAddress->LockSocket(address))
 			{
 				err = BOOL_TO_ERR(AcceptEx(address, socket, 
-					buf, dwReceiveDataLength, sizeof(sockaddr_in) + 16, sizeof(sockaddr_in) + 16, &dwBytes, Irp));
+					buf, dwReceiveDataLength, sizeof(sockaddr_in6) + 16, sizeof(sockaddr_in6) + 16, &dwBytes, Irp));
 
 				m_pAddress->UnlockSocket();
 			}
