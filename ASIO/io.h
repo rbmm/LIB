@@ -126,13 +126,21 @@ class IO_IRP : public OVERLAPPED
 	CDataPacket* m_packet;
 	PVOID Pointer;
 	DWORD m_Code;
+	LONG m_dwRefCount;
 	PVOID m_buf[];
+
+	void Release()
+	{
+		if (!InterlockedDecrement(&m_dwRefCount)) delete this;
+	}
+
+	DWORD CheckErrorCodeNR(DWORD dwErrorCode, BOOL bSkippedOnSynchronous);
 
 	VOID IOCompletionRoutine(DWORD dwErrorCode, ULONG_PTR dwNumberOfBytesTransfered)
 	{
 		CPP_FUNCTION;
 		m_pObj->IOCompletionRoutine(m_packet, m_Code, dwErrorCode, dwNumberOfBytesTransfered, Pointer);
-		delete this;
+		Release();
 	}
 
 protected:
@@ -146,10 +154,10 @@ public:
 #else
 	static VOID CALLBACK _IOCompletionRoutine(NTSTATUS status, ULONG_PTR dwNumberOfBytesTransfered, LPOVERLAPPED lpOverlapped)
 	{
+		// we must pass IO_IRP pointer in place lpOverlapped in I/O call
 		static_cast<IO_IRP*>(lpOverlapped)->IOCompletionRoutine(RtlNtStatusToDosError(status), dwNumberOfBytesTransfered);
 	}
 #endif
-
 
 	PVOID SetPointer()
 	{
@@ -163,12 +171,17 @@ public:
 
 	IO_IRP(IO_OBJECT* pObj, DWORD Code, CDataPacket* packet, PVOID Ptr = 0);
 
-	DWORD CheckError(BOOL fOk, BOOL bSkippedOnSuccess = FALSE)
+	DWORD CheckError(BOOL fOk, BOOL bSkippedOnSynchronous = FALSE)
 	{
-		return CheckErrorCode(fOk ? NOERROR : GetLastError(), bSkippedOnSuccess);
+		return CheckErrorCode(fOk ? NOERROR : GetLastError(), bSkippedOnSynchronous);
 	}
 
-	DWORD CheckErrorCode(DWORD dwErrorCode, BOOL bSkippedOnSuccess = FALSE);
+	DWORD CheckErrorCode(DWORD dwErrorCode, BOOL bSkippedOnSynchronous = FALSE)
+	{
+		dwErrorCode = CheckErrorCodeNR(dwErrorCode, bSkippedOnSynchronous);
+		Release();
+		return dwErrorCode;
+	}
 
 	void* operator new(size_t size);
 
@@ -192,15 +205,23 @@ class NT_IRP : public IO_STATUS_BLOCK
 	IO_OBJECT* m_pObj;
 	CDataPacket* m_packet;
 	PVOID Pointer;
+	LONG m_dwRefCount;
 	DWORD m_Code;
 	PVOID m_buf[];
+
+	void Release()
+	{
+		if (!InterlockedDecrement(&m_dwRefCount)) delete this;
+	}
 
 	VOID IOCompletionRoutine(NTSTATUS status, ULONG_PTR dwNumberOfBytesTransfered)
 	{
 		CPP_FUNCTION;
 		m_pObj->IOCompletionRoutine(m_packet, m_Code, status, dwNumberOfBytesTransfered, Pointer);
-		delete this;
+		Release();
 	}
+
+	NTSTATUS CheckNtStatusNR(NTSTATUS status, BOOL bSkippedOnSynchronous);
 
 protected:
 
@@ -215,11 +236,12 @@ public:
 		ULONG /*Reserved*/
 		)ASM_FUNCTION;
 
-	static VOID CALLBACK _IOCompletionRoutine(NTSTATUS status, ULONG_PTR dwNumberOfBytesTransfered, PIO_STATUS_BLOCK iosb)ASM_FUNCTION;
+	static VOID CALLBACK _IOCompletionRoutine(NTSTATUS status, ULONG_PTR dwNumberOfBytesTransfered, PVOID ApcContext)ASM_FUNCTION;
 #else
-	static VOID CALLBACK _IOCompletionRoutine(NTSTATUS status, ULONG_PTR dwNumberOfBytesTransfered, PIO_STATUS_BLOCK iosb)
+	static VOID CALLBACK _IOCompletionRoutine(NTSTATUS status, ULONG_PTR dwNumberOfBytesTransfered, PVOID ApcContext)
 	{
-		static_cast<NT_IRP*>(iosb)->IOCompletionRoutine(status, dwNumberOfBytesTransfered);
+		// we must pass NT_IRP pointer in place ApcContext in I/O call
+		reinterpret_cast<NT_IRP*>(ApcContext)->IOCompletionRoutine(status, dwNumberOfBytesTransfered);
 	}
 
 	static VOID NTAPI ApcRoutine (
@@ -244,7 +266,12 @@ public:
 
 	NT_IRP(IO_OBJECT* pObj, DWORD Code, CDataPacket* packet, PVOID Ptr = 0);
 
-	NTSTATUS CheckNtStatus(NTSTATUS status, BOOL bSkippedOnSuccess = FALSE);
+	NTSTATUS CheckNtStatus(NTSTATUS status, BOOL bSkippedOnSynchronous = FALSE)
+	{
+		status = CheckNtStatusNR(status, bSkippedOnSynchronous);
+		Release();
+		return status;
+	}
 
 	void* operator new(size_t size, size_t cb);
 

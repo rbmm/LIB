@@ -1,6 +1,7 @@
 #include "stdafx.h"
 
 _NT_BEGIN
+//#define _PRINT_CPP_NAMES_
 
 #include "io.h"
 
@@ -52,10 +53,10 @@ void* IO_OBJECT::operator new(size_t cb)
 
 BLOCK_HEAP IO_IRP::s_bh;
 
-IO_IRP::IO_IRP(IO_OBJECT* pObj, DWORD Code, CDataPacket* packet, PVOID Ptr)
+IO_IRP::IO_IRP(IO_OBJECT* pObj, DWORD Code, CDataPacket* packet, PVOID Ptr) : m_dwRefCount(2)
 {
-	Internal = MAXULONG_PTR;
-	InternalHigh = MAXULONG_PTR;
+	Internal = STATUS_PENDING;
+	InternalHigh = 0;
 	Pointer = Ptr;
 	hEvent = 0;
 	m_Code = Code;
@@ -107,21 +108,21 @@ void IO_IRP::operator delete(PVOID p)
 	g_IoRundown->Release();
 }
 
-DWORD IO_IRP::CheckErrorCode(DWORD dwErrorCode, BOOL bSkippedOnSuccess)
+DWORD IO_IRP::CheckErrorCodeNR(DWORD dwErrorCode, BOOL bSkippedOnSynchronous)
 {
-	switch (dwErrorCode)
+	if (dwErrorCode == ERROR_IO_PENDING)
 	{
-	case NOERROR:
-		if (bSkippedOnSuccess)
-		{
-			IOCompletionRoutine(NOERROR, InternalHigh);
-		}
-		// read comment in CheckNtStatus
-	case ERROR_IO_PENDING:
 		return NOERROR;
 	}
 
-	IOCompletionRoutine(dwErrorCode, 0);
+	// I/O already completed. I/O must not be completed with STATUS_PENDING
+
+	if (Internal == STATUS_PENDING || bSkippedOnSynchronous)
+	{
+		IOCompletionRoutine(dwErrorCode, InternalHigh);
+	}
+
+	// handle possible error in IOCompletionRoutine
 	return NOERROR;
 }
 
@@ -130,34 +131,21 @@ DWORD IO_IRP::CheckErrorCode(DWORD dwErrorCode, BOOL bSkippedOnSuccess)
 
 BLOCK_HEAP NT_IRP::s_bh;
 
-NTSTATUS NT_IRP::CheckNtStatus(NTSTATUS status, BOOL bSkippedOnSuccess)
+NTSTATUS NT_IRP::CheckNtStatusNR(NTSTATUS status, BOOL bSkippedOnSynchronous)
 {
 	if (status == STATUS_PENDING)
 	{
 		return STATUS_PENDING;
 	}
 
-	if (bSkippedOnSuccess)
+	// I/O already completed. I/O must not be completed with STATUS_PENDING
+
+	if (Status == STATUS_PENDING || bSkippedOnSynchronous)
 	{
-		IOCompletionRoutine(status, NT_ERROR(status) ? 0 : Information);
-	}
-	else
-	{
-		if (NT_ERROR(status))
-		{
-			IOCompletionRoutine(status, 0);
-		}
-		// if NT_WARNING(status) (status in range [0x80000000, 0xc0000000) )
-		// 1) if status from io-manager (say STATUS_DATATYPE_MISALIGNMENT) :
-		// will be NO completion and iosb.Status not modified
-		// 2) if status from driver (say STATUS_NO_MORE_FILES) : 
-		// will be completion and iosb.Status == status
-		// check iosb.Status ? but irp (iosb) can be already free and modified (in case 2.))
-		// add ref semantic to irp for xp support and rare case
-		// however error from io-manager only in case we do wrong api call (aligment)
-		// assume than no this case will be and will be completion
+		IOCompletionRoutine(status, Information);
 	}
 
+	// handle possible error in IOCompletionRoutine
 	return 0;
 }
 
@@ -197,10 +185,10 @@ void NT_IRP::operator delete(PVOID p)
 	g_IoRundown->Release();
 }
 
-NT_IRP::NT_IRP(IO_OBJECT* pObj, DWORD Code, CDataPacket* packet, PVOID Ptr)
+NT_IRP::NT_IRP(IO_OBJECT* pObj, DWORD Code, CDataPacket* packet, PVOID Ptr) : m_dwRefCount(2)
 {
-	Status = -1;
-	Information = MAXULONG_PTR;
+	Status = STATUS_PENDING;
+	Information = 0;
 	Pointer = Ptr;
 	m_Code = Code;
 	m_packet = packet;

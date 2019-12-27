@@ -58,18 +58,18 @@ extern ?IOCompletionRoutine@NT_IRP@NT@@AEAAXJ_K@Z : PROC
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;VOID CALLBACK _IOCompletionRoutine(NTSTATUS status, ULONG_PTR dwNumberOfBytesTransfered, PIO_STATUS_BLOCK iosb)
+;VOID CALLBACK _IOCompletionRoutine(NTSTATUS status, ULONG_PTR dwNumberOfBytesTransfered, PVOID ApcContext)
 ;{
-;	static_cast<NT_IRP*>(iosb)->IOCompletionRoutine(status, dwNumberOfBytesTransfered);
+;	reinterpret_cast<NT_IRP*>(ApcContext)->IOCompletionRoutine(status, dwNumberOfBytesTransfered);
 ;}
 
-?_IOCompletionRoutine@NT_IRP@NT@@SAXJ_KPEAU_IO_STATUS_BLOCK@2@@Z proc
+?_IOCompletionRoutine@NT_IRP@NT@@SAXJ_KPEAX@Z proc
 	sub rsp,28h
 	xchg r8,rcx
 	xchg r8,rdx
 	call ?IOCompletionRoutine@NT_IRP@NT@@AEAAXJ_K@Z
 	jmp ?CommonCbRet?
-?_IOCompletionRoutine@NT_IRP@NT@@SAXJ_KPEAU_IO_STATUS_BLOCK@2@@Z endp
+?_IOCompletionRoutine@NT_IRP@NT@@SAXJ_KPEAX@Z endp
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

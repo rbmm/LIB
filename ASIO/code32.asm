@@ -82,17 +82,17 @@ extern ?IOCompletionRoutine@NT_IRP@NT@@AAEXJK@Z : PROC
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;VOID CALLBACK _IOCompletionRoutine(NTSTATUS status, ULONG_PTR dwNumberOfBytesTransfered, PIO_STATUS_BLOCK iosb)
+;VOID CALLBACK _IOCompletionRoutine(NTSTATUS status, ULONG_PTR dwNumberOfBytesTransfered, PVOID ApcContext)
 ;{
-;	static_cast<NT_IRP*>(iosb)->IOCompletionRoutine(status, dwNumberOfBytesTransfered);
+;	reinterpret_cast<NT_IRP*>(ApcContext)->IOCompletionRoutine(status, dwNumberOfBytesTransfered);
 ;}
 
-?_IOCompletionRoutine@NT_IRP@NT@@SGXJKPAU_IO_STATUS_BLOCK@2@@Z proc
+?_IOCompletionRoutine@NT_IRP@NT@@SGXJKPAX@Z proc
 	pop ecx
 	xchg ecx,[esp + 8]
 	call ?IOCompletionRoutine@NT_IRP@NT@@AAEXJK@Z
 	jmp ?DereferenceDll@NT@@YGXXZ	
-?_IOCompletionRoutine@NT_IRP@NT@@SGXJKPAU_IO_STATUS_BLOCK@2@@Z endp
+?_IOCompletionRoutine@NT_IRP@NT@@SGXJKPAX@Z endp
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;VOID CALLBACK _TimerCallback(PVOID pTimer, BOOLEAN /*TimerOrWaitFired*/)
