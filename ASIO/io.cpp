@@ -53,7 +53,7 @@ void* IO_OBJECT::operator new(size_t cb)
 
 BLOCK_HEAP IO_IRP::s_bh;
 
-IO_IRP::IO_IRP(IO_OBJECT* pObj, DWORD Code, CDataPacket* packet, PVOID Ptr) : m_dwRefCount(2)
+IO_IRP::IO_IRP(IO_OBJECT* pObj, DWORD Code, CDataPacket* packet, PVOID Ptr)
 {
 	Internal = STATUS_PENDING;
 	InternalHigh = 0;
@@ -108,19 +108,18 @@ void IO_IRP::operator delete(PVOID p)
 	g_IoRundown->Release();
 }
 
-DWORD IO_IRP::CheckErrorCodeNR(DWORD dwErrorCode, BOOL bSkippedOnSynchronous)
+DWORD IO_IRP::CheckErrorCode(DWORD dwErrorCode, BOOL bSkippedOnSynchronous)
 {
-	if (dwErrorCode == ERROR_IO_PENDING)
+	switch (dwErrorCode)
 	{
-		return NOERROR;
+	case NOERROR:
+		if (!bSkippedOnSynchronous)
+		{
+	case ERROR_IO_PENDING:
+			return NOERROR;
+		}
 	}
-
-	// I/O already completed. I/O must not be completed with STATUS_PENDING
-
-	if (Internal == STATUS_PENDING || bSkippedOnSynchronous)
-	{
-		IOCompletionRoutine(dwErrorCode, InternalHigh);
-	}
+	IOCompletionRoutine(dwErrorCode, InternalHigh);
 
 	// handle possible error in IOCompletionRoutine
 	return NOERROR;
@@ -131,16 +130,14 @@ DWORD IO_IRP::CheckErrorCodeNR(DWORD dwErrorCode, BOOL bSkippedOnSynchronous)
 
 BLOCK_HEAP NT_IRP::s_bh;
 
-NTSTATUS NT_IRP::CheckNtStatusNR(NTSTATUS status, BOOL bSkippedOnSynchronous)
+NTSTATUS NT_IRP::CheckNtStatus(NTSTATUS status, BOOL bSkippedOnSynchronous)
 {
 	if (status == STATUS_PENDING)
 	{
 		return STATUS_PENDING;
 	}
 
-	// I/O already completed. I/O must not be completed with STATUS_PENDING
-
-	if (Status == STATUS_PENDING || bSkippedOnSynchronous)
+	if (NT_ERROR(status) || bSkippedOnSynchronous)
 	{
 		IOCompletionRoutine(status, Information);
 	}
@@ -185,7 +182,7 @@ void NT_IRP::operator delete(PVOID p)
 	g_IoRundown->Release();
 }
 
-NT_IRP::NT_IRP(IO_OBJECT* pObj, DWORD Code, CDataPacket* packet, PVOID Ptr) : m_dwRefCount(2)
+NT_IRP::NT_IRP(IO_OBJECT* pObj, DWORD Code, CDataPacket* packet, PVOID Ptr)
 {
 	Status = STATUS_PENDING;
 	Information = 0;

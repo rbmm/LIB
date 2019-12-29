@@ -126,21 +126,13 @@ class IO_IRP : public OVERLAPPED
 	CDataPacket* m_packet;
 	PVOID Pointer;
 	DWORD m_Code;
-	LONG m_dwRefCount;
 	PVOID m_buf[];
-
-	void Release()
-	{
-		if (!InterlockedDecrement(&m_dwRefCount)) delete this;
-	}
-
-	DWORD CheckErrorCodeNR(DWORD dwErrorCode, BOOL bSkippedOnSynchronous);
 
 	VOID IOCompletionRoutine(DWORD dwErrorCode, ULONG_PTR dwNumberOfBytesTransfered)
 	{
 		CPP_FUNCTION;
 		m_pObj->IOCompletionRoutine(m_packet, m_Code, dwErrorCode, dwNumberOfBytesTransfered, Pointer);
-		Release();
+		delete this;
 	}
 
 protected:
@@ -176,12 +168,7 @@ public:
 		return CheckErrorCode(fOk ? NOERROR : GetLastError(), bSkippedOnSynchronous);
 	}
 
-	DWORD CheckErrorCode(DWORD dwErrorCode, BOOL bSkippedOnSynchronous = FALSE)
-	{
-		dwErrorCode = CheckErrorCodeNR(dwErrorCode, bSkippedOnSynchronous);
-		Release();
-		return dwErrorCode;
-	}
+	DWORD CheckErrorCode(DWORD dwErrorCode, BOOL bSkippedOnSynchronous = FALSE);
 
 	void* operator new(size_t size);
 
@@ -205,23 +192,15 @@ class NT_IRP : public IO_STATUS_BLOCK
 	IO_OBJECT* m_pObj;
 	CDataPacket* m_packet;
 	PVOID Pointer;
-	LONG m_dwRefCount;
 	DWORD m_Code;
 	PVOID m_buf[];
-
-	void Release()
-	{
-		if (!InterlockedDecrement(&m_dwRefCount)) delete this;
-	}
 
 	VOID IOCompletionRoutine(NTSTATUS status, ULONG_PTR dwNumberOfBytesTransfered)
 	{
 		CPP_FUNCTION;
 		m_pObj->IOCompletionRoutine(m_packet, m_Code, status, dwNumberOfBytesTransfered, Pointer);
-		Release();
+		delete this;
 	}
-
-	NTSTATUS CheckNtStatusNR(NTSTATUS status, BOOL bSkippedOnSynchronous);
 
 protected:
 
@@ -266,12 +245,7 @@ public:
 
 	NT_IRP(IO_OBJECT* pObj, DWORD Code, CDataPacket* packet, PVOID Ptr = 0);
 
-	NTSTATUS CheckNtStatus(NTSTATUS status, BOOL bSkippedOnSynchronous = FALSE)
-	{
-		status = CheckNtStatusNR(status, bSkippedOnSynchronous);
-		Release();
-		return status;
-	}
+	NTSTATUS CheckNtStatus(NTSTATUS status, BOOL bSkippedOnSynchronous = FALSE);
 
 	void* operator new(size_t size, size_t cb);
 
