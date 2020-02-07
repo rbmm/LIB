@@ -9,17 +9,15 @@ class ZMDIChildFrame;
 class WINZ_API Z_INTERFACE("DE58B1DD-2F00-4c9a-9F82-F0EF96AA03B2") ZMDIFrameWnd : public ZSDIFrameWnd, public ZTabBar
 {
 	friend ZMDIChildFrame;
-private:
+protected:
 
 	void OnCreateChild(HWND hwnd);
 
 	void OnDestroyChild(HWND hwnd);
 
-	virtual void OnIdle();
-
 	virtual BOOL CreateClient(HWND hwnd, int x, int y, int nWidth, int nHeight);
 
-protected:
+	virtual void OnIdle();
 
 	HWND _hwndMDI;
 	BOOLEAN _bChildChanged, _bClientEdge;
