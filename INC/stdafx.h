@@ -27,8 +27,6 @@ _NT_END
 #include <tchar.h>
 #include <wchar.h>
 #include <string.h>
-#include <malloc.h>
-#include <crtdbg.h>
 
 #define _INC_MMSYSTEM  /* Prevent inclusion of mmsystem.h in windows.h */
 
@@ -88,7 +86,7 @@ typedef KRUNDOWN_ROUTINE *PKRUNDOWN_ROUTINE;
 
 #else // !defined(_X86_)
 
-extern "C" {
+EXTERN_C_START
 
 __declspec(dllimport)
 PSLIST_ENTRY
@@ -100,7 +98,7 @@ PSLIST_ENTRY
 __fastcall
 InterlockedPushEntrySList (PSLIST_HEADER ListHead,PSLIST_ENTRY ListEntry);
 
-}
+EXTERN_C_END
 
 #define InterlockedFlushSList(Head) \
 	ExInterlockedFlushSList(Head)
@@ -110,14 +108,6 @@ InterlockedPushEntrySList (PSLIST_HEADER ListHead,PSLIST_ENTRY ListEntry);
 #endif//NOWINBASEINTERLOCK
 
 #include <ntifs.h>
-
-#ifdef _X86_
-#include "x86plat.h"
-#endif
-
-#ifdef _AMD64_
-#include "amd64plat.h"
-#endif
 
 #include "ntpebteb.h"
 #include "sysinfo.h"

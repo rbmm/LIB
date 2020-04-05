@@ -1,17 +1,7 @@
 #pragma once
 
-#define _EXTERN_C_BEGIN extern "C" {
-#define _EXTERN_C_END }
-
-template<typename T> inline T* offset_ptr(T* ptr, int offset)
-{
-	return (T*)((LPBYTE)ptr + offset);
-}
-
 extern "C" {
-	
 extern IMAGE_DOS_HEADER __ImageBase;
-	
 }
 
 typedef int (__cdecl * QSORTFN) (const void *, const void *);
@@ -65,22 +55,10 @@ RtlInterlockedCompareExchange64 (
 #define SetArbitraryUserPointer(p) __writefsdword(FIELD_OFFSET(NT_TIB, ArbitraryUserPointer), (DWORD_PTR)(p))
 #endif
 
-/////////////////////////////////////////////////////////////
-// error messages
-
-#define FormatStatus(err, module, status) FormatMessage(\
-	FORMAT_MESSAGE_IGNORE_INSERTS|FORMAT_MESSAGE_FROM_HMODULE,\
-GetModuleHandleW(L ## # module),status, 0, err, RTL_NUMBER_OF(err), 0)
-
-#define FormatWin32Status(err, status) FormatStatus(err, kernel32.dll, status)
-#define FormatNTStatus(err, status) FormatStatus(err, ntdll.dll, status)
-
-#define FormatStatusEx(err, status) \
-{ if (!FormatNTStatus(err, status)) FormatWin32Status(err, status); }
-
-#define FormatLastNTStatus(err) FormatNTStatus(err, RtlGetLastNtStatus())
-
 //////////////////////////////////////////////////////////////////////////
+#define Get_Err(err, fn) err = (fn ? NOERROR : GetLastError())
+#define No_Err(err, fn) NOERROR == (Get_Err(err, fn))
+#define No_Err_V(err, q, p, fn) NOERROR == (err = ((p = fn) == q ? GetLastError() : NOERROR))
 
 inline ULONG BOOL_TO_ERROR(BOOL f)
 {
@@ -163,38 +141,6 @@ private:
 	UNICODE_STRING mus;
 };
 
-#ifdef _OBJBASE_H_
-
-struct SZ_GUID
-{
-	WCHAR sz[39];
-	
-	SZ_GUID(REFGUID rguid){ StringFromGUID2(rguid, sz, 39); }
-};
-
-#endif
-
-#define zx_(i, t, v, s, e) __rcb = i; do if (__cb < __rcb) stack = alloca(__rcb - __cb), __cb = RtlPointerToOffset(stack, _stack), v = (t*)stack; while (s == (status = e))
-#define zx(i, t, v, s, e) iv(t, v), zx_(i, t, v, s, e)
-#define iv(t, v) t* v = 0; __cb = 0
-#define iz() volatile static char label(z);iz_(label(z))
-#define iz_(s) LPVOID _stack = alloca(s), stack = _stack;DWORD __cb, __rcb
-#define ez() NTSTATUS status;iz()
-#define ez_() NTSTATUS status;iz_()
-
-#define DoAdjustBuffer(type, buf, cb, rcb) do { AdjustBuffer(type, buf, cb, rcb)
-
-#define AdjustBuffer(type, buf, cb, rcb)\
-	if ((int)cb < (int)rcb) buf = (type*)alloca(rcb - cb), cb = rcb
-
-#define WhileBufferSmall(status) } while (STATUS_BUFFER_SMALL(status))
-#define WhileErrorStatus(status, err) } while ((status) == (err))
-
-#define STATUS_BUFFER_SMALL(status) \
-((status == STATUS_BUFFER_OVERFLOW) ||\
-(status == STATUS_BUFFER_TOO_SMALL) ||\
-(status == STATUS_INFO_LENGTH_MISMATCH))
-
 #include "mini_yvals.h"
 
 #define _makeachar(x) #@x
@@ -203,73 +149,9 @@ struct SZ_GUID
 #define makewchar(x) _makewchar(x)
 #define echo(x) x
 #define label(x) echo(x)##__LINE__
-#define __C_ASSERT__ label(assert)
-#define callmacro(macro, x) macro x
-#define callmacro1(macro, x) macro(x)
-#define callmacro2(macro, x, y) macro(x, y)
-#define callmacro3(macro, x, y, z) macro(x, y, z)
 #define showmacro(x) __pragma(message(__FILE__ _CRT_STRINGIZE((__LINE__): \nmacro\t)#x" expand to\n" _CRT_STRINGIZE(x)))
-#define addlib(x) comment(linker, _CRT_STRINGIZE(/defaultlib:x.lib))
-#define _showmacro(x) __pragma(message(__FILE__ _CRT_STRINGIZE((__LINE__): \nmacro\t)#x" expand to\n" x))
-
-#define ALIASPROC(proc_name) extern "C" __declspec(naked) void __stdcall proc_name() {}
-#define EXTERN_ALIASPROC(proc_name) extern "C" { void __stdcall proc_name(); }
-
-#ifdef IsEqualIID
-#undef IsEqualIID
-#endif
-#define IsEqualIID(rguid1, rguid2) (!memcmp(&(rguid1), &(rguid2), sizeof(IID)))
-
-#define NEXT_ITEM_(type, item, offset) \
-((type*)((LPBYTE)(item) + (INT_PTR)(offset)))
-
-#define NEXT_ITEM(type, item, offset) \
-(item = NEXT_ITEM_(type, item, offset))
-
-#define lenof(str) (sizeof(str) - sizeof(str[0]))
-#define symof(str) ((sizeof(str) / sizeof(str[0]) - 1))
-
-#define RtlEqualStr(sz, csz) (RtlEqualMemory(sz, csz, sizeof(csz) - sizeof(csz[0])))
-
-#define ZWNUM(func)  (*(PULONG)(PBYTE(func)+1))
-
-#define SYSCALL(func) \
-	_pKeServiceDescriptorTable->ntoskrnl.ServiceTable \
-[*(PULONG)(PBYTE(func)+1)]
-
-#define GetZwIndex(name) (*(PULONG)((char*)Zw##name+1))
-#define ZwIndex(name) Zw##name##Index
-#define DeclareZwIndex(name) ULONG ZwIndex(name)=GetZwIndex(name);
-
-#ifndef SAFE_RELEASE
-#define SAFE_RELEASE(p) if (p) (p)->Release(), (p) = 0
-#endif
 
 #define IID_PPV(pItf) __uuidof(*pItf),(void**)&pItf
-
-#define CUNISTR(x) CUnicodeString(L ## # x)
-
-#define ZERO_INIT_FROM_FILD(x) \
-RtlZeroMemory(&x,sizeof *this - ((PUCHAR)&x - (PUCHAR)this));
-
-#define ZERO_INIT_FILDS(fild1,fild2) \
-RtlZeroMemory(&fild1,(PUCHAR)(&fild2+1)-(PUCHAR)&fild1);
-
-#ifdef ROUND_TO_SIZE
-#undef ROUND_TO_SIZE
-#endif
-
-#define _ROUND_TO_SIZE(length, align_1) ((((ULONG_PTR)(length)) + align_1) & ~align_1)
-#define ROUND_TO_SIZE(length, align) _ROUND_TO_SIZE(length, ((ULONG_PTR)(align) - 1))
-#define ROUND_TO_TYPE(n, type) ROUND_TO_SIZE((n) * sizeof(type), __alignof(type))
-#define TYPE_ALIGN(Buffer, type) ((type*)ROUND_TO_SIZE(Buffer, __alignof(type)))
-
-#define RectToPointSize(rc) rc.left, (rc).top, (rc).right - (rc).left, (rc).bottom - (rc).top
-#define PointSizeToRect(rc, x, y, cx, cy) \
-((rc).left = x, (rc).top = y, (rc).right = (x) + (cx), (rc).bottom = (y) + (cy))
-
-#define StringEnd(sz) (&sz[RTL_NUMBER_OF(sz)])
-#define RemainingLen(sz, lpsz) (StringEnd(sz) - (lpsz))
 
 #define RTL_CONSTANT_STRINGA(s) { sizeof( s ) - sizeof( (s)[0] ), sizeof( s ), const_cast<PSTR>(s) }
 #define RTL_CONSTANT_STRINGW_(s) { sizeof( s ) - sizeof( (s)[0] ), sizeof( s ), const_cast<PWSTR>(s) }
@@ -298,33 +180,5 @@ static const ANSI_STRING name = RTL_CONSTANT_STRINGA(label(__))
 #define STATIC_OBJECT_ATTRIBUTES_EX(oa, name, a, sd, sqs)\
 	STATIC_UNICODE_STRING(label(m), name);\
 	static OBJECT_ATTRIBUTES oa = { sizeof(oa), 0, const_cast<PUNICODE_STRING>(&label(m)), a, sd, sqs }
-
-#define DISTANCE(p, q) (LPBYTE(q) - LPBYTE(p))
-
-#define ADRIVER_KEY(x) echo("\\Registry\\Machine\\System\\CurrentControlSet\\Services\\"L)x
-
-#define STATIC_DRIVER_KEY(u, x) STATIC_UNICODE_STRING(u, ADRIVER_KEY(x))
-#define LOADDRIVER(x) ZwLoadDriver(&CUnicodeString(echo(L)ADRIVER_KEY(x)))
-#define UNLOADDRIVER(x) ZwUnloadDriver(&CUnicodeString(echo(L)ADRIVER_KEY(x)))
-
-#define OPENPORTS() \
-ZwSetInformationProcess(NtCurrentProcess(), ProcessUserModeIOPL, 0, 0);
-
-#define RtlCreateThreadEx(hProcess,bSuspend,pfn,arg,hThread,cid)\
-	RtlCreateUserThread(hProcess,0,bSuspend,0,\
-	KERNEL_STACK_SIZE,0,pfn,(void*)(arg),hThread,cid)
-
-#define RtlCreateThread(pfn,p,h) \
-	RtlCreateThreadEx(NtCurrentProcess(),0,pfn,p,h,0)
-
-//////////////////////////////////////////////////////////////
-// Inrange
-
-#define INRANGE(base, address, size) ((DWORD_PTR)(address) - (DWORD_PTR)(base) < (DWORD_PTR)(size))
-
-#define INRANGE_SIZE(lpA, lpB, sizeB, sizeA) \
-	(((DWORD_PTR)(lpB) - (DWORD_PTR)(lpA) < (DWORD_PTR)(sizeA)) &&\
-	((DWORD_PTR)(sizeB) <= (DWORD_PTR)(sizeA) - (DWORD_PTR)(lpB) + (DWORD_PTR)(lpA)))
-
 
 #pragma warning(default : 4005)
