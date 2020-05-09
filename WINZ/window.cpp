@@ -120,7 +120,7 @@ namespace {
 LRESULT CALLBACK ZWnd::__WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
 	PVOID pv = TlsGetValue(getTlsIndex());
-	SetWindowLongPtr(hwnd, 0, (LONG_PTR)pv);
+	SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR)pv);
 	SetWindowLongPtr(hwnd, GWLP_WNDPROC, (LONG_PTR)_WindowProc);
 	reinterpret_cast<ZWnd*>(pv)->AddRef();
 	reinterpret_cast<ZWnd*>(pv)->_hWnd = hwnd;
@@ -129,7 +129,7 @@ LRESULT CALLBACK ZWnd::__WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM 
 
 LRESULT CALLBACK ZWnd::_WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
-	ZWnd* p = (ZWnd*)GetWindowLongPtrW(hwnd, 0);
+	ZWnd* p = (ZWnd*)GetWindowLongPtrW(hwnd, GWLP_USERDATA);
 	p->AddRef();
 	LRESULT r = p->WindowProc(hwnd, uMsg, wParam, lParam);
 	p->Release();
@@ -164,7 +164,7 @@ HWND ZWnd::Create( DWORD dwExStyle, LPCTSTR lpWindowName, DWORD dwStyle, int x, 
 {
 	if (!ga)
 	{
-		WNDCLASS wndcls = { 0, __WindowProc, 0, sizeof(PVOID), (HINSTANCE)&__ImageBase, 0, CCursorCashe::GetCursor(CCursorCashe::ARROW), 0, 0, szwndcls };
+		WNDCLASS wndcls = { 0, __WindowProc, 0, 0, (HINSTANCE)&__ImageBase, 0, CCursorCashe::GetCursor(CCursorCashe::ARROW), 0, 0, szwndcls };
 		if (ATOM a = RegisterClass(&wndcls))
 		{
 			ga = a;
@@ -184,7 +184,7 @@ ZWnd* ZWnd::FromHWND(HWND hwnd)
 {
 	if (_WindowProc == (PVOID)GetWindowLongPtrW(hwnd, GWLP_WNDPROC))
 	{
-		ZWnd* p = (ZWnd*)GetWindowLongPtrW(hwnd, 0);
+		ZWnd* p = (ZWnd*)GetWindowLongPtrW(hwnd, GWLP_USERDATA);
 		p->AddRef();
 		return p;
 	}
