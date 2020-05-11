@@ -117,7 +117,7 @@ namespace {
 	}
 };
 
-LRESULT CALLBACK ZWnd::__WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+LRESULT CALLBACK ZWnd::StartWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
 	PVOID pv = TlsGetValue(getTlsIndex());
 	SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR)pv);
@@ -164,7 +164,7 @@ HWND ZWnd::Create( DWORD dwExStyle, LPCTSTR lpWindowName, DWORD dwStyle, int x, 
 {
 	if (!ga)
 	{
-		WNDCLASS wndcls = { 0, __WindowProc, 0, 0, (HINSTANCE)&__ImageBase, 0, CCursorCashe::GetCursor(CCursorCashe::ARROW), 0, 0, szwndcls };
+		WNDCLASS wndcls = { 0, StartWindowProc, 0, 0, (HINSTANCE)&__ImageBase, 0, CCursorCashe::GetCursor(CCursorCashe::ARROW), 0, 0, szwndcls };
 		if (ATOM a = RegisterClass(&wndcls))
 		{
 			ga = a;
@@ -219,7 +219,7 @@ HRESULT ZWnd::QI(REFIID riid, void **ppvObject)
 //////////////////////////////////////////////////////////////////////////
 // ZDlg
 
-INT_PTR CALLBACK ZDlg::__DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
+INT_PTR CALLBACK ZDlg::StartDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
 	PVOID pv = TlsGetValue(getTlsIndex());
 	SetWindowLongPtr(hwndDlg, DWLP_USER, (LONG_PTR)pv);
@@ -254,12 +254,12 @@ INT_PTR ZDlg::DialogProc(HWND /*hwndDlg*/, UINT uMsg, WPARAM /*wParam*/, LPARAM 
 
 HWND ZDlg::Create(HINSTANCE hInstance, LPCWSTR lpTemplateName, HWND hWndParent, LPARAM dwInitParam)
 {
-	return SetThis(this) ? CreateDialogParam(hInstance, lpTemplateName, hWndParent, __DialogProc, dwInitParam) : NULL;
+	return SetThis(this) ? CreateDialogParam(hInstance, lpTemplateName, hWndParent, StartDialogProc, dwInitParam) : NULL;
 }
 
 INT_PTR ZDlg::DoModal(HINSTANCE hInstance, LPCWSTR lpTemplateName, HWND hWndParent, LPARAM dwInitParam)
 {
-	return SetThis(this) ? DialogBoxParam(hInstance, lpTemplateName, hWndParent, __DialogProc, dwInitParam) : -1;
+	return SetThis(this) ? DialogBoxParam(hInstance, lpTemplateName, hWndParent, StartDialogProc, dwInitParam) : -1;
 }
 
 BOOL ZDlg::IsDialog(HWND hwnd)
