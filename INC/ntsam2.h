@@ -117,7 +117,7 @@ SamRidToSid(
 NTSTATUS
 NTAPI
 SamConnect(
-    _In_opt_ PUNICODE_STRING ServerName,
+    _In_opt_ PCUNICODE_STRING ServerName,
     _Out_ PSAM_HANDLE ServerHandle,
     _In_ ACCESS_MASK DesiredAccess,
     _In_ POBJECT_ATTRIBUTES ObjectAttributes
@@ -405,7 +405,7 @@ NTSTATUS
 NTAPI
 SamLookupDomainInSamServer(
     _In_ SAM_HANDLE ServerHandle,
-    _In_ PUNICODE_STRING Name,
+    _In_ PCUNICODE_STRING Name,
     _Outptr_ PSID *DomainId
     );
 
@@ -573,7 +573,7 @@ NTSTATUS
 NTAPI
 SamCreateGroupInDomain(
     _In_ SAM_HANDLE DomainHandle,
-    _In_ PUNICODE_STRING AccountName,
+    _In_ PCUNICODE_STRING AccountName,
     _In_ ACCESS_MASK DesiredAccess,
     _Out_ PSAM_HANDLE GroupHandle,
     _Out_ PULONG RelativeId
@@ -733,7 +733,7 @@ NTSTATUS
 NTAPI
 SamCreateAliasInDomain(
     _In_ SAM_HANDLE DomainHandle,
-    _In_ PUNICODE_STRING AccountName,
+    _In_ PCUNICODE_STRING AccountName,
     _In_ ACCESS_MASK DesiredAccess,
     _Out_ PSAM_HANDLE AliasHandle,
     _Out_ PULONG RelativeId

@@ -7,8 +7,9 @@ enum RundownState {
 };
 
 template<typename T>
-class RundownProtection
+class RundownProtection_NC
 {
+protected:
 	LONG _Value;
 
 public:
@@ -46,7 +47,7 @@ public:
 
 	void Rundown_l()
 	{
-		_interlockedbittestandreset(&_Value, 31);
+		InterlockedBitTestAndResetNoFence(&_Value, 31);
 	}
 
 	void Rundown()
@@ -58,12 +59,18 @@ public:
 		}
 	}
 
-	RundownProtection(RundownState Value = v_complete) : _Value(Value)
-	{
-	}
-
 	void Init()
 	{
 		_Value = v_init;
+	}
+};
+
+template<typename T, RundownState V = v_init>
+class RundownProtection : public RundownProtection_NC<T>
+{
+public:
+	RundownProtection() 
+	{
+		_Value = V;
 	}
 };

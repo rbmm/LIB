@@ -41,7 +41,7 @@ extern RUNDOWN_REF * g_IoRundown;
 #define LockDriver() ObfReferenceObject(g_DriverObject)
 #define UnlockDriver() ObfDereferenceObject(g_DriverObject)
 
-_EXTERN_C_BEGIN
+EXTERN_C_START
 
 NTKERNELAPI VOID FASTCALL ExfAcquirePushLockShared(PEX_PUSH_LOCK PushLock);
 NTKERNELAPI VOID FASTCALL ExfAcquirePushLockExclusive(PEX_PUSH_LOCK PushLock);
@@ -52,7 +52,7 @@ extern PDRIVER_OBJECT g_DriverObject;
 extern LARGE_INTEGER g_timeout;// optional
 void NTAPI OnTimeout();// optional
 
-_EXTERN_C_END
+EXTERN_C_END
 
 __forceinline void AcquirePushLockShared(PEX_PUSH_LOCK PushLock )
 {

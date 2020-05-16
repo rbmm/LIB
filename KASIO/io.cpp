@@ -12,7 +12,7 @@ PKQUEUE g_Queue;
 
 PLARGE_INTEGER g_ptimeout = &g_timeout;
 
-_EXTERN_C_BEGIN
+EXTERN_C_START
 
 void CALLBACK ThreadStartThunk(void* );
 
@@ -22,7 +22,7 @@ void NTAPI altOnTimeout()
 {
 }
 
-_EXTERN_C_END
+EXTERN_C_END
 
 #ifdef _WIN64
 #pragma comment(linker, "/alternatename:g_timeout=g_alttimeout")
