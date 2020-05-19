@@ -36,6 +36,8 @@ public:
 		m_dwRef = 1;
 	}
 
+	// SCHANNEL_CRED::dwFlags
+	// SCHANNEL_CRED::grbitEnabledProtocols
 	SECURITY_STATUS Acquire(ULONG fCredentialUse, PCCERT_CONTEXT pCertContext = 0, ULONG dwFlags = 0, ULONG grbitEnabledProtocols = 0);
 };
 
@@ -106,8 +108,16 @@ public:
 
 	SECURITY_STATUS QueryContext(ULONG ulAttribute, PVOID pBuffer)
 	{
-		return ::QueryContextAttributes(this, ulAttribute, pBuffer);
+		return QueryContextAttributesW(this, ulAttribute, pBuffer);
 	}
+
+	BOOL StartSSL(PSTR buf = 0, DWORD cb = 0);
+
+	void StopSSL();
+
+	SECURITY_STATUS Shutdown();
+
+	SECURITY_STATUS Renegotiate();
 
 protected:
 
@@ -115,17 +125,9 @@ protected:
 
 	~CSSLStream();
 
-	BOOL StartSSL();
-
 	void FreeCredentials();
 
-	void StopSSL();
-
 	BOOL OnData(PSTR Buffer, ULONG cbTransferred);
-
-	SECURITY_STATUS Shutdown();
-
-	SECURITY_STATUS Renegotiate();
 };
 
 class __declspec(novtable) CSSLEndpoint : public CSSLStream, public CTcpEndpoint
@@ -144,11 +146,6 @@ protected:
 	virtual CDataPacket* get_packet()
 	{
 		return m_packet;
-	}
-
-	virtual void OnRenegotiateError()
-	{
-		Disconnect();
 	}
 
 	virtual void OnShutdown()

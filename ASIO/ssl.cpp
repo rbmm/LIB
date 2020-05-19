@@ -17,8 +17,8 @@ SECURITY_STATUS SharedCred::Acquire(ULONG fCredentialUse, PCCERT_CONTEXT pCertCo
 
 	sc.dwFlags = dwFlags;
 	sc.grbitEnabledProtocols = grbitEnabledProtocols;
-
-	SECURITY_STATUS ss = AcquireCredentialsHandleW(0, const_cast<PWSTR>(UNISP_NAME), fCredentialUse, 0, &sc, 0, 0, &m_hCred, 0);
+	//UNISP_NAME
+	SECURITY_STATUS ss = AcquireCredentialsHandleW(0, const_cast<PWSTR>(SCHANNEL_NAME), fCredentialUse, 0, &sc, 0, 0, &m_hCred, 0);
 
 	if (0 > ss) 
 	{
@@ -137,15 +137,13 @@ void CSSLStream::StopSSL()
 	RtlZeroMemory(static_cast<SecPkgContext_StreamSizes*>(this), sizeof(SecPkgContext_StreamSizes));
 }
 
-BOOL CSSLStream::StartSSL()
+BOOL CSSLStream::StartSSL(PSTR buf, DWORD cb)
 {
 	m_cbSavedData = 0;
 
 	_bittestandset(&m_flags, f_Handshake);
 
-	DWORD cb = 0;
-	PSTR buf = 0;
-	return IsServer() ? TRUE : ProcessSecurityContext(buf, cb) == SEC_I_CONTINUE_NEEDED;
+	return IsServer() && !cb ? TRUE : ProcessSecurityContext(buf, cb) == SEC_I_CONTINUE_NEEDED;
 }
 
 SECURITY_STATUS CSSLStream::ProcessSecurityContext(PSTR& rbuf, DWORD& rcb)
@@ -314,7 +312,19 @@ __save_and_exit:
 
 		case SEC_I_RENEGOTIATE:
 			DbgPrint("\r\n%p>SEC_I_RENEGOTIATE %u\r\n", this, IsServer());
-			return OnRenegotiate() ? StartSSL() : FALSE;
+			if (sb[0].BufferType == SECBUFFER_STREAM_HEADER &&
+				sb[1].BufferType == SECBUFFER_DATA && !sb[1].cbBuffer &&
+				sb[2].BufferType == SECBUFFER_STREAM_TRAILER)
+			{
+				switch (sb[3].BufferType)
+				{
+				case SECBUFFER_EMPTY:
+					sb[3].cbBuffer = 0;
+				case SECBUFFER_EXTRA:
+					return OnRenegotiate() ? StartSSL((PSTR)sb[3].pvBuffer, sb[3].cbBuffer) : FALSE;
+				}
+			}
+			return FALSE;
 
 		case SEC_E_INCOMPLETE_MESSAGE:
 			goto __save_and_exit;
