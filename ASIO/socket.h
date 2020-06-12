@@ -10,6 +10,7 @@
 struct SOCKADDR_IN_EX : SOCKADDR_IN
 {
 	INT Fromlen;
+	CHAR align[16 - sizeof(INT)];
 };
 
 class CSocketObject : public IO_OBJECT_TIMEOUT
