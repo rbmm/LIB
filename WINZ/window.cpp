@@ -117,14 +117,18 @@ namespace {
 	}
 };
 
+LRESULT ZWnd::MStartWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+{
+	SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR)this);
+	SetWindowLongPtr(hwnd, GWLP_WNDPROC, (LONG_PTR)_WindowProc);
+	AddRef();
+	_hWnd = hwnd;
+	return WindowProc(hwnd, uMsg, wParam, lParam);
+}
+
 LRESULT CALLBACK ZWnd::StartWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
-	PVOID pv = TlsGetValue(getTlsIndex());
-	SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR)pv);
-	SetWindowLongPtr(hwnd, GWLP_WNDPROC, (LONG_PTR)_WindowProc);
-	reinterpret_cast<ZWnd*>(pv)->AddRef();
-	reinterpret_cast<ZWnd*>(pv)->_hWnd = hwnd;
-	return reinterpret_cast<ZWnd*>(pv)->WindowProc(hwnd, uMsg, wParam, lParam);
+	return reinterpret_cast<ZWnd*>(TlsGetValue(getTlsIndex()))->MStartWindowProc(hwnd, uMsg, wParam, lParam);
 }
 
 LRESULT CALLBACK ZWnd::_WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)

@@ -22,6 +22,8 @@ class WINZ_API Z_INTERFACE("8E9D9C1D-763E-4ad0-8C68-C2D6F232BB45") ZWnd : public
 
 protected:
 
+	LRESULT MStartWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+
 	virtual LRESULT WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
 	virtual LRESULT DefWinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
