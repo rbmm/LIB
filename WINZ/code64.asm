@@ -1,19 +1,12 @@
 _TEXT segment 'CODE'
 
 strnchr proc
-	jrcxz @@1
-	push rdi
-	mov al,r8b
-	mov rdi,rdx
+	xchg rdi,rdx
+	mov rax,r8
 	repne scasb
-	sete al
-	movzx rax,al
-	neg rax
-	and rax,rdi
-	pop rdi
-	ret
-@@1:
-	xor rax,rax
+	mov rax,rdi
+	cmovne rax,rcx
+	mov rdi,rdx
 	ret
 strnchr endp
 
@@ -42,10 +35,8 @@ strnstr proc
 	mov rdi,rdx
 	jmp @@1
 @@2:
-	sete al
-	movzx rax,al
-	neg rax
-	and rax,rdi
+	mov rax,rdi
+	cmovne rax,rcx
 	pop rsi
 	pop rdi
 	ret
@@ -55,19 +46,12 @@ strnstr proc
 strnstr endp
 
 wtrnchr proc
-	jrcxz @@1
-	push rdi
-	mov ax,r8w
-	mov rdi,rdx
+	xchg rdi,rdx
+	mov rax,r8
 	repne scasw
-	sete al
-	movzx rax,al
-	neg rax
-	and rax,rdi
-	pop rdi
-	ret
-@@1:
-	xor rax,rax
+	mov rax,rdi
+	cmovne rax,rcx
+	mov rdi,rdx
 	ret
 wtrnchr endp
 
@@ -97,10 +81,8 @@ wtrnstr proc
 	mov rdi,rdx
 	jmp @@1
 @@2:
-	sete al
-	movzx rax,al
-	neg rax
-	and rax,rdi
+	mov rax,rdi
+	cmovne rax,rcx
 	pop rsi
 	pop rdi
 	ret
@@ -113,11 +95,8 @@ findWORD proc
 	xchg rdi,rdx
 	mov rax,r8
 	repne scasw
-	sete al
-	movzx rax,al
-	neg rax
-	lea rdi,[rdi-2]
-	and rax,rdi
+	lea rax, [rdi-2]
+	cmovne rax, rcx
 	mov rdi,rdx
 	ret
 findWORD endp
@@ -126,11 +105,8 @@ findDWORD proc
 	xchg rdi,rdx
 	mov rax,r8
 	repne scasd
-	sete al
-	movzx rax,al
-	neg rax
-	lea rdi,[rdi-4]
-	and rax,rdi
+	lea rax, [rdi-4]
+	cmovne rax, rcx
 	mov rdi,rdx
 	ret
 findDWORD endp
@@ -139,11 +115,8 @@ findPVOID proc
 	xchg rdi,rdx
 	mov rax,r8
 	repne scasq
-	sete al
-	movzx rax,al
-	neg rax
-	lea rdi,[rdi-8]
-	and rax,rdi
+	lea rax, [rdi-8]
+	cmovne rax, rcx
 	mov rdi,rdx
 	ret
 findPVOID endp

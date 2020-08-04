@@ -10,11 +10,8 @@ public @findPVOID@12
 	xchg edi,edx
 	mov eax,[esp + 4]
 	repne scasd
-	sete al
-	movzx eax,al
-	neg eax
-	lea edi,[edi-4]
-	and eax,edi
+	lea eax,[edi-4]
+	cmovne eax,ecx
 	mov edi,edx
 	ret 4
 @findDWORD@12 endp
@@ -23,11 +20,8 @@ public @findPVOID@12
 	xchg edi,edx
 	mov eax,[esp + 4]
 	repne scasw
-	sete al
-	movzx eax,al
-	neg eax
-	lea edi,[edi-2]
-	and eax,edi
+	lea eax,[edi-2]
+	cmovne eax,ecx
 	mov edi,edx
 	ret 4
 @findWORD@12 endp
@@ -61,10 +55,8 @@ public @findPVOID@12
 	mov edi,edx
 	jmp @@1
 @@2:
-	sete al
-	movzx eax,al
-	neg eax
-	and eax,edi
+	mov eax,edi
+	cmovne eax,ecx
 	pop ebp
 	pop ebx
 	pop esi
@@ -76,36 +68,22 @@ public @findPVOID@12
 @strnstr@16 endp
 
 @strnchr@12 proc
-	jecxz @@1
 	mov al,[esp + 4]
-	push edi
-	mov edi,edx
+	xchg edi,edx
 	repne scasb
-	sete al
-	movzx eax,al
-	neg eax
-	and eax,edi	
-	pop edi
-	ret 4
-@@1:
-	xor eax,eax
+	mov eax,edi
+	cmovne eax,ecx
+	mov edi,edx
 	ret 4
 @strnchr@12 endp
 
 @wtrnchr@12 proc
-	jecxz @@1
 	mov ax,[esp + 4]
-	push edi
-	mov edi,edx
+	xchg edi,edx
 	repne scasw
-	sete al
-	movzx eax,al
-	neg eax
-	and eax,edi	
-	pop edi
-	ret 4
-@@1:
-	xor eax,eax
+	mov eax,edi
+	cmovne eax,ecx
+	mov edi,edx
 	ret 4
 @wtrnchr@12 endp
 
@@ -139,10 +117,8 @@ public @findPVOID@12
 	mov edi,edx
 	jmp @@1
 @@2:
-	sete al
-	movzx eax,al
-	neg eax
-	and eax,edi
+	mov eax,edi
+	cmovne eax,ecx
 	pop ebp
 	pop ebx
 	pop esi
