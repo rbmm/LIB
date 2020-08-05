@@ -2,25 +2,7 @@
 
 #include "../inc/rtlframe.h"
 #include "winZ.h"
-
-extern "C"
-{
-	WINZ_API PVOID* __fastcall findPVOID(SIZE_T, PVOID*, PVOID);
-	WINZ_API DWORD* __fastcall findDWORD(SIZE_T, DWORD*, DWORD);
-	WINZ_API WORD* __fastcall findWORD(SIZE_T, WORD*, WORD);
-
-	WINZ_API PWSTR __fastcall wtrnstr(SIZE_T n1, const void* str1, SIZE_T n2, const void* str2);
-	WINZ_API PWSTR __fastcall wtrnchr(SIZE_T n1, const void* str1, WCHAR c);
-	WINZ_API PSTR __fastcall strnstr(SIZE_T n1, const void* str1, SIZE_T n2, const void* str2);
-	WINZ_API PSTR __fastcall strnchr(SIZE_T n1, const void* str1, char c);
-}
-
-#define _strnstr(a, b, x) strnstr(RtlPointerToOffset(a, b), a, sizeof(x) - 1, x)
-#define _strnstrL(a, b, x) strnstr(RtlPointerToOffset(a, b), a, strlen(x), x)
-#define _strnchr(a, b, c) strnchr(RtlPointerToOffset(a, b), a, c)
-#define _strnstrS(a, b, s, x) strnstr(RtlPointerToOffset(a, b), a, s, x)
-
-#define LP(str) RTL_NUMBER_OF(str) - 1, str
+#include "str.h"
 
 class WINZ_API __declspec(novtable) ZTranslateMsg : public LIST_ENTRY
 {

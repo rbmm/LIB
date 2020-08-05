@@ -2,11 +2,9 @@
 
 _TEXT segment
 
-@findPVOID@12:
-
-public @findPVOID@12
-
-@findDWORD@12 proc
+?findPVOID@NT@@YIPAPAXKPAPAXPAX@Z proc
+?findDWORD@NT@@YIPAKKPAKK@Z proc
+	jecxz @retz4
 	xchg edi,edx
 	mov eax,[esp + 4]
 	repne scasd
@@ -14,9 +12,11 @@ public @findPVOID@12
 	cmovne eax,ecx
 	mov edi,edx
 	ret 4
-@findDWORD@12 endp
+?findDWORD@NT@@YIPAKKPAKK@Z endp
+?findPVOID@NT@@YIPAPAXKPAPAXPAX@Z endp
 
-@findWORD@12 proc
+?findWORD@NT@@YIPAGKPAGG@Z proc
+	jecxz @retz4
 	xchg edi,edx
 	mov eax,[esp + 4]
 	repne scasw
@@ -24,12 +24,39 @@ public @findPVOID@12
 	cmovne eax,ecx
 	mov edi,edx
 	ret 4
-@findWORD@12 endp
+?findWORD@NT@@YIPAGKPAGG@Z endp
 
-@strnstr@16 proc
-	jecxz @@3
+@retz4 proc
+	xor eax,eax
+	ret 4
+@retz4 endp
+
+?strnchr@NT@@YIPADKPBXD@Z proc
+	jecxz @retz4
+	mov al,[esp + 4]
+	xchg edi,edx
+	repne scasb
+	mov eax,edi
+	cmovne eax,ecx
+	mov edi,edx
+	ret 4
+?strnchr@NT@@YIPADKPBXD@Z endp
+
+?wtrnchr@NT@@YIPA_WKPBX_W@Z proc
+	jecxz @retz4
+	mov ax,[esp + 4]
+	xchg edi,edx
+	repne scasw
+	mov eax,edi
+	cmovne eax,ecx
+	mov edi,edx
+	ret 4
+?wtrnchr@NT@@YIPA_WKPBX_W@Z endp
+
+?strnstr@NT@@YIPADKPBXK0@Z proc
+	jecxz @retz8
 	cmp ecx,[esp + 4]
-	jb @@3
+	jb @retz8
 	push edi
 	push esi
 	push ebx
@@ -62,35 +89,17 @@ public @findPVOID@12
 	pop esi
 	pop edi
 	ret 8
-@@3:
+?strnstr@NT@@YIPADKPBXK0@Z endp
+
+@retz8 proc
 	xor eax,eax
-	ret 8
-@strnstr@16 endp
-
-@strnchr@12 proc
-	mov al,[esp + 4]
-	xchg edi,edx
-	repne scasb
-	mov eax,edi
-	cmovne eax,ecx
-	mov edi,edx
 	ret 4
-@strnchr@12 endp
+@retz8 endp
 
-@wtrnchr@12 proc
-	mov ax,[esp + 4]
-	xchg edi,edx
-	repne scasw
-	mov eax,edi
-	cmovne eax,ecx
-	mov edi,edx
-	ret 4
-@wtrnchr@12 endp
-
-@wtrnstr@16 proc
-	jecxz @@3
+?wtrnstr@NT@@YIPA_WKPBXK0@Z proc
+	jecxz @retz8
 	cmp ecx,[esp + 4]
-	jb @@3
+	jb @retz8
 	push edi
 	push esi
 	push ebx
@@ -124,10 +133,7 @@ public @findPVOID@12
 	pop esi
 	pop edi
 	ret 8
-@@3:
-	xor eax,eax
-	ret 8
-@wtrnstr@16 endp
+?wtrnstr@NT@@YIPA_WKPBXK0@Z endp
 
 EXTERN ?_WindowProc@ZSubClass@NT@@AAEJPAUHWND__@@IIJ@Z:PROC ; NT::ZSubClass::_WindowProc
 

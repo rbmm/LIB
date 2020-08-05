@@ -1,19 +1,69 @@
 _TEXT segment 'CODE'
 
-strnchr proc
+?findWORD@NT@@YAPEAG_KPEAGG@Z proc
+	jrcxz @retz
 	xchg rdi,rdx
 	mov rax,r8
-	repne scasb
+	repne scasw
+	lea rax, [rdi-2]
+	cmovne rax, rcx
+	mov rdi,rdx
+	ret
+?findWORD@NT@@YAPEAG_KPEAGG@Z endp
+
+?findDWORD@NT@@YAPEAK_KPEAKK@Z proc
+	jrcxz @retz
+	xchg rdi,rdx
+	mov rax,r8
+	repne scasd
+	lea rax, [rdi-4]
+	cmovne rax, rcx
+	mov rdi,rdx
+	ret
+?findDWORD@NT@@YAPEAK_KPEAKK@Z endp
+
+?findPVOID@NT@@YAPEAPEAX_KPEAPEAXPEAX@Z proc
+	jrcxz @retz
+	xchg rdi,rdx
+	mov rax,r8
+	repne scasq
+	lea rax, [rdi-8]
+	cmovne rax, rcx
+	mov rdi,rdx
+	ret
+?findPVOID@NT@@YAPEAPEAX_KPEAPEAXPEAX@Z endp
+
+?wtrnchr@NT@@YAPEA_W_KPEBX_W@Z proc
+	jrcxz @retz
+	xchg rdi,rdx
+	mov rax,r8
+	repne scasw
 	mov rax,rdi
 	cmovne rax,rcx
 	mov rdi,rdx
 	ret
-strnchr endp
+?wtrnchr@NT@@YAPEA_W_KPEBX_W@Z endp
 
-strnstr proc
-	jrcxz @@3
+?strnchr@NT@@YAPEAD_KPEBXD@Z proc
+	jrcxz @retz
+	mov rax,r8
+	xchg rdi,rdx
+	repne scasb
+	mov rax,rdi
+	mov rdi,rdx
+	cmovne rax,rcx
+	ret
+?strnchr@NT@@YAPEAD_KPEBXD@Z endp
+
+@retz proc
+	xor eax,eax
+	ret
+@retz endp
+
+?strnstr@NT@@YAPEAD_KPEBX01@Z proc
+	jrcxz @retz
 	cmp rcx,r8
-	jb @@3
+	jb @retz
 	push rdi
 	push rsi
 	mov rdi,rdx
@@ -40,25 +90,12 @@ strnstr proc
 	pop rsi
 	pop rdi
 	ret
-@@3:
-	xor rax,rax
-	ret
-strnstr endp
+?strnstr@NT@@YAPEAD_KPEBX01@Z endp
 
-wtrnchr proc
-	xchg rdi,rdx
-	mov rax,r8
-	repne scasw
-	mov rax,rdi
-	cmovne rax,rcx
-	mov rdi,rdx
-	ret
-wtrnchr endp
-
-wtrnstr proc
-	jrcxz @@3
+?wtrnstr@NT@@YAPEA_W_KPEBX01@Z proc
+	jrcxz @retz
 	cmp rcx,r8
-	jb @@3
+	jb @retz
 	push rdi
 	push rsi
 	mov rdi,rdx
@@ -86,40 +123,7 @@ wtrnstr proc
 	pop rsi
 	pop rdi
 	ret
-@@3:
-	xor rax,rax
-	ret
-wtrnstr endp
-
-findWORD proc
-	xchg rdi,rdx
-	mov rax,r8
-	repne scasw
-	lea rax, [rdi-2]
-	cmovne rax, rcx
-	mov rdi,rdx
-	ret
-findWORD endp
-
-findDWORD proc
-	xchg rdi,rdx
-	mov rax,r8
-	repne scasd
-	lea rax, [rdi-4]
-	cmovne rax, rcx
-	mov rdi,rdx
-	ret
-findDWORD endp
-
-findPVOID proc
-	xchg rdi,rdx
-	mov rax,r8
-	repne scasq
-	lea rax, [rdi-8]
-	cmovne rax, rcx
-	mov rdi,rdx
-	ret
-findPVOID endp
+?wtrnstr@NT@@YAPEA_W_KPEBX01@Z endp
 
 EXTERN ?_WindowProc@ZSubClass@NT@@AEAA_JPEAUHWND__@@I_K_J@Z:PROC
 
