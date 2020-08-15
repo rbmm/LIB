@@ -389,6 +389,50 @@ void CDnsTask::DnsToIp(PCSTR Dns, ULONG crc, ULONG dwMilliseconds)
 	}
 }
 
+BOOL CDnsSocket::Start(PCSTR Dns, ULONG DnsServerIp, ULONG crc)
+{
+	_crc = crc;
+
+	if (CDataPacket* packet = new(1024) CDataPacket)
+	{
+		PSTR __lpsz = packet->getData(), _lpsz, lpsz = __lpsz;
+		char c, i;
+		static USHORT bb1[6]={ 0x1111, 1, 0x0100 };
+		static USHORT bb2[2]={ 0x0100, 0x0100 };
+		memcpy(lpsz, bb1, sizeof bb1);
+		lpsz += sizeof bb1;
+
+		do 
+		{
+			_lpsz = lpsz++, i = 0;
+mm:
+			switch (c = *Dns++)
+			{
+			case '.':
+			case 0:
+				break;
+			default:*lpsz++ = c, ++i;
+				goto mm;
+			}
+			*_lpsz = i;
+		} while (c);
+
+		*lpsz++ = 0;
+
+		memcpy(lpsz, bb2, sizeof bb2);
+
+		packet->setDataSize(RtlPointerToOffset(__lpsz, lpsz) + sizeof(bb2));
+
+		NTSTATUS status = SendTo(DnsServerIp, 0x3500, packet);
+
+		packet->Release();
+
+		return 0 <= status;
+	}
+
+	return FALSE;
+}
+
 ULONG CDnsTask::Create(ULONG n)
 {
 	if (!n)
@@ -431,7 +475,6 @@ ULONG CDnsTask::Create(ULONG n)
 	return 0;
 }
 
-//////////////////////////////////////////////////////////////////////////
 void CDnsSocket::OnRecv(PSTR Buffer, ULONG cbTransferred)
 {
 	if (cbTransferred < 13) return ;
@@ -480,53 +523,6 @@ void CDnsSocket::OnRecv(PSTR Buffer, ULONG cbTransferred)
 		Buffer += x.len;
 	}
 }
-
-BOOL CDnsSocket::Start(PCSTR Dns, ULONG DnsServerIp, ULONG crc)
-{
-	//_DnsServerIp = ip;//$$$
-	_crc = crc;
-
-	if (CDataPacket* packet = new(1024) CDataPacket)
-	{
-		PSTR __lpsz = packet->getData(), _lpsz, lpsz = __lpsz;
-		char c, i;
-		static USHORT bb1[6]={ 0x3333, 1, 0x0100 };
-		static USHORT bb2[2]={ 0x0100, 0x0100 };
-		memcpy(lpsz, bb1, sizeof bb1);
-		lpsz += sizeof bb1;
-
-		do 
-		{
-			_lpsz = lpsz++, i = 0;
-mm:
-			switch (c = *Dns++)
-			{
-			case '.':
-			case 0:
-				break;
-			default:*lpsz++ = c, ++i;
-				goto mm;
-			}
-			*_lpsz = i;
-		} while (c);
-
-		*lpsz++ = 0;
-
-		memcpy(lpsz, bb2, sizeof bb2);
-
-		packet->setDataSize(RtlPointerToOffset(__lpsz, lpsz) + sizeof(bb2));
-
-		NTSTATUS status = SendTo(DnsServerIp, 0x3500, packet);
-
-		packet->Release();
-
-		return 0 <= status;
-	}
-
-	return FALSE;
-}
-
-//////////////////////////////////////////////////////////////////////////
 
 void CTdiObject::DnsToIp(PCSTR Dns)
 {
