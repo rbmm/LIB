@@ -93,7 +93,7 @@ _TEXT segment
 
 @retz8 proc
 	xor eax,eax
-	ret 4
+	ret 8
 @retz8 endp
 
 ?wtrnstr@NT@@YIPA_WKPBXK0@Z proc
