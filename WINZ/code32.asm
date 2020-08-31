@@ -2,8 +2,8 @@
 
 _TEXT segment
 
-?findPVOID@NT@@YIPAPAXKPAPAXPAX@Z proc
-?findDWORD@NT@@YIPAKKPAKK@Z proc
+?findPVOID@NT@@YIPAPAXKPBQAXPAX@Z proc
+?findDWORD@NT@@YIPAKKPBKK@Z proc
 	jecxz @retz4
 	xchg edi,edx
 	mov eax,[esp + 4]
@@ -12,10 +12,10 @@ _TEXT segment
 	cmovne eax,ecx
 	mov edi,edx
 	ret 4
-?findDWORD@NT@@YIPAKKPAKK@Z endp
-?findPVOID@NT@@YIPAPAXKPAPAXPAX@Z endp
+?findDWORD@NT@@YIPAKKPBKK@Z endp
+?findPVOID@NT@@YIPAPAXKPBQAXPAX@Z endp
 
-?findWORD@NT@@YIPAGKPAGG@Z proc
+?findWORD@NT@@YIPAGKPBGG@Z proc
 	jecxz @retz4
 	xchg edi,edx
 	mov eax,[esp + 4]
@@ -24,7 +24,7 @@ _TEXT segment
 	cmovne eax,ecx
 	mov edi,edx
 	ret 4
-?findWORD@NT@@YIPAGKPAGG@Z endp
+?findWORD@NT@@YIPAGKPBGG@Z endp
 
 @retz4 proc
 	xor eax,eax

@@ -2,11 +2,14 @@
 
 //#define _PRINT_CPP_NAMES_
 //#include "../inc/asmfunc.h"
-#define ASM_FUNCTION
 
-PVOID* __fastcall findPVOID(SIZE_T, PVOID*, PVOID)ASM_FUNCTION;
-ULONG* __fastcall findDWORD(SIZE_T, ULONG*, ULONG)ASM_FUNCTION;
-USHORT* __fastcall findWORD(SIZE_T, USHORT*, USHORT)ASM_FUNCTION;
+#ifndef ASM_FUNCTION
+#define ASM_FUNCTION
+#endif
+
+PVOID* __fastcall findPVOID(SIZE_T, const PVOID*, PVOID)ASM_FUNCTION;
+ULONG* __fastcall findDWORD(SIZE_T, const ULONG*, ULONG)ASM_FUNCTION;
+USHORT* __fastcall findWORD(SIZE_T, const USHORT*, USHORT)ASM_FUNCTION;
 
 PSTR __fastcall strnstr(SIZE_T n1, const void* str1, SIZE_T n2, const void* str2)ASM_FUNCTION;
 PSTR __fastcall strnchr(SIZE_T n1, const void* str1, char c)ASM_FUNCTION;
@@ -20,4 +23,3 @@ PWSTR __fastcall wtrnchr(SIZE_T n1, const void* str1, WCHAR c)ASM_FUNCTION;
 
 #define LP(str) RTL_NUMBER_OF(str) - 1, str
 
-#undef ASM_FUNCTION

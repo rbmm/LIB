@@ -164,7 +164,7 @@ LRESULT ZWnd::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 	return DefWinProc(hwnd, uMsg, wParam, lParam);
 }
 
-HWND ZWnd::Create( DWORD dwExStyle, LPCTSTR lpWindowName, DWORD dwStyle, int x, int y, int nWidth, int nHeight, HWND hWndParent, HMENU hMenu, PVOID lpParam)
+HWND ZWnd::Create( DWORD dwExStyle, PCWSTR lpWindowName, DWORD dwStyle, int x, int y, int nWidth, int nHeight, HWND hWndParent, HMENU hMenu, PVOID lpParam)
 {
 	if (!ga)
 	{

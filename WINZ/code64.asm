@@ -1,6 +1,6 @@
 _TEXT segment 'CODE'
 
-?findWORD@NT@@YAPEAG_KPEAGG@Z proc
+?findWORD@NT@@YAPEAG_KPEBGG@Z proc
 	jrcxz @retz
 	xchg rdi,rdx
 	mov rax,r8
@@ -9,9 +9,9 @@ _TEXT segment 'CODE'
 	cmovne rax, rcx
 	mov rdi,rdx
 	ret
-?findWORD@NT@@YAPEAG_KPEAGG@Z endp
+?findWORD@NT@@YAPEAG_KPEBGG@Z endp
 
-?findDWORD@NT@@YAPEAK_KPEAKK@Z proc
+?findDWORD@NT@@YAPEAK_KPEBKK@Z proc
 	jrcxz @retz
 	xchg rdi,rdx
 	mov rax,r8
@@ -20,9 +20,9 @@ _TEXT segment 'CODE'
 	cmovne rax, rcx
 	mov rdi,rdx
 	ret
-?findDWORD@NT@@YAPEAK_KPEAKK@Z endp
+?findDWORD@NT@@YAPEAK_KPEBKK@Z endp
 
-?findPVOID@NT@@YAPEAPEAX_KPEAPEAXPEAX@Z proc
+?findPVOID@NT@@YAPEAPEAX_KPEBQEAXPEAX@Z proc
 	jrcxz @retz
 	xchg rdi,rdx
 	mov rax,r8
@@ -31,7 +31,7 @@ _TEXT segment 'CODE'
 	cmovne rax, rcx
 	mov rdi,rdx
 	ret
-?findPVOID@NT@@YAPEAPEAX_KPEAPEAXPEAX@Z endp
+?findPVOID@NT@@YAPEAPEAX_KPEBQEAXPEAX@Z endp
 
 ?wtrnchr@NT@@YAPEA_W_KPEBX_W@Z proc
 	jrcxz @retz
