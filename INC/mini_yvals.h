@@ -29,7 +29,7 @@
 #define _CRT_STRINGIZE(x) _CRT_STRINGIZE_(x)
 #endif
 
-#ifndef _CRT_WIDE_
+#ifndef _CRT_WIDE
 #define _CRT_WIDE_(s) L ## s
 #define _CRT_WIDE(s) _CRT_WIDE_(s)
 #endif

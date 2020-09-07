@@ -80,6 +80,20 @@ inline void _freea(PVOID pv)
 	if (pv < tib->StackLimit || tib->StackBase <= pv) delete [] pv;
 }
 
+#define C_HRESULT_FROM_WIN32(x) ((0x80000000 | (FACILITY_WIN32 << 16)) | (x))
+
+inline HRESULT GetLastHr(ULONG dwError = GetLastError())
+{
+	return dwError ? C_HRESULT_FROM_WIN32(dwError) : S_OK;
+}
+
+inline HRESULT VtoHr(ULONG_PTR r)
+{
+	return r ? S_OK : GetLastHr();
+}
+
+#define PtoHr(r) VtoHr((ULONG_PTR)(r))
+
 ////////////////////////////////////////////////////////////////
 // CID
 

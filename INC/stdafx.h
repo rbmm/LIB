@@ -23,9 +23,8 @@ struct _CONTEXT;
 _NT_END
 
 #include <stdlib.h>
+//#include <wchar.h>
 #include <stdio.h>
-#include <tchar.h>
-#include <wchar.h>
 #include <string.h>
 
 #define _INC_MMSYSTEM  /* Prevent inclusion of mmsystem.h in windows.h */
@@ -163,3 +162,5 @@ enum __OBJECT_INFORMATION_CLASS {
 
 #define swprintf     _swprintf
 #define vswprintf    _vswprintf
+#define _swprintf_l  __swprintf_l
+#define _vswprintf_l __vswprintf_l

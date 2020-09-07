@@ -1447,28 +1447,28 @@ NTSTATUS
 NTAPI
 SamChangePasswordUser(
     _In_ SAM_HANDLE UserHandle,
-    _In_ PUNICODE_STRING OldPassword,
-    _In_ PUNICODE_STRING NewPassword
+    _In_ PCUNICODE_STRING OldPassword,
+    _In_ PCUNICODE_STRING NewPassword
     );
 
 
 NTSTATUS
 NTAPI
 SamChangePasswordUser2(
-    _In_ PUNICODE_STRING ServerName,
-    _In_ PUNICODE_STRING UserName,
-    _In_ PUNICODE_STRING OldPassword,
-    _In_ PUNICODE_STRING NewPassword
+    _In_ PCUNICODE_STRING ServerName,
+    _In_ PCUNICODE_STRING UserName,
+    _In_ PCUNICODE_STRING OldPassword,
+    _In_ PCUNICODE_STRING NewPassword
     );
 
 
 NTSTATUS
 NTAPI
 SamChangePasswordUser3(
-    _In_ PUNICODE_STRING ServerName,
-    _In_ PUNICODE_STRING UserName,
-    _In_ PUNICODE_STRING OldPassword,
-    _In_ PUNICODE_STRING NewPassword,
+    _In_ PCUNICODE_STRING ServerName,
+    _In_ PCUNICODE_STRING UserName,
+    _In_ PCUNICODE_STRING OldPassword,
+    _In_ PCUNICODE_STRING NewPassword,
     _Outptr_ PDOMAIN_PASSWORD_INFORMATION *EffectivePasswordPolicy,
     _Outptr_ PUSER_PWD_CHANGE_FAILURE_INFORMATION *PasswordChangeFailureInfo
     );
