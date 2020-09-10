@@ -66,7 +66,7 @@ private:
 
 	virtual BOOL OnRenegotiate();
 
-	virtual BOOL OnEndHandshake() = 0;
+	virtual SECURITY_STATUS OnEndHandshake() = 0;
 
 	virtual void OnShutdown() = 0;
 
@@ -128,6 +128,11 @@ protected:
 	void FreeCredentials();
 
 	BOOL OnData(PSTR Buffer, ULONG cbTransferred);
+	
+	BOOL OnData()
+	{
+		return OnData(get_packet()->getData() + m_cbSavedData, 0);
+	}
 };
 
 class __declspec(novtable) CSSLEndpoint : public CSSLStream, public CTcpEndpoint
@@ -172,7 +177,7 @@ protected:
 
 	virtual PCCERT_CONTEXT GetUserCert();
 
-	virtual BOOL OnEndHandshake();
+	virtual SECURITY_STATUS OnEndHandshake();
 
 	virtual BOOL OnUserData(PSTR buf, ULONG cb);
 

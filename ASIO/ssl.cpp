@@ -4,7 +4,7 @@ _NT_BEGIN
 #include <Cryptuiapi.h>
 #include "SSL.h"
 #define DbgPrint echo(/)echo(/)
-
+//
 SECURITY_STATUS SharedCred::Acquire(ULONG fCredentialUse, PCCERT_CONTEXT pCertContext, ULONG dwFlags, ULONG grbitEnabledProtocols)
 {
 	SCHANNEL_CRED sc = { SCHANNEL_CRED_VERSION };
@@ -161,7 +161,7 @@ loop:
 
 	SECURITY_STATUS ss = ProcessSecurityContext(&sbd_in, &sbd_out);
 
-	DbgPrint("%p>%u:ProcessSecurityContext(%x)=%x, out=%x, (%x,%x),(%x,%x)\n", this, IsServer(), cb, ss, OutBuf.cbBuffer,InBuf[0].BufferType, InBuf[0].cbBuffer,InBuf[1].BufferType, InBuf[1].cbBuffer);
+	DbgPrint("%p>%u:ProcessSecurityContext(%x)=%x, out=%x, (%x,%x),(%x,%x)\n", this, IsServer(), cb, ss, OutBuf.cbBuffer, InBuf[0].BufferType, InBuf[0].cbBuffer,InBuf[1].BufferType, InBuf[1].cbBuffer);
 
 	switch (ss)
 	{
@@ -220,7 +220,7 @@ loop:
 		if (SEC_E_OK == (ss = ::QueryContextAttributes(this, SECPKG_ATTR_STREAM_SIZES, static_cast<SecPkgContext_StreamSizes*>(this))))
 		{
 			DbgPrint("\r\nStreamSizes( %x-%x-%x %x *%x)\r\n", cbHeader, cbMaximumMessage, cbTrailer, cBuffers, cbBlockSize);
-			OnEndHandshake();
+			ss = OnEndHandshake();
 		}
 		break;
 	
@@ -277,6 +277,10 @@ BOOL CSSLStream::OnData(PSTR buf, ULONG cb)
 	{
 		switch(ProcessSecurityContext(buf, cb))
 		{
+		case STATUS_PENDING:
+			m_cbSavedData = cb;
+			packet->addData(buf, cb);
+			return -1;// no recv
 		case SEC_E_INCOMPLETE_MESSAGE:
 __save_and_exit:
 			m_cbSavedData = cb;
