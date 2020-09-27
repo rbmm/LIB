@@ -91,17 +91,7 @@ typedef VOID (NTAPI * APC_CALLBACK_FUNCTION)(
 
 NTDLL RtlSetIoCompletionCallback(HANDLE FileHandle, APC_CALLBACK_FUNCTION Function, ULONG Flags);
 
-
 NTDLL_(DWORD) RtlComputeCrc32(DWORD crc, LPCVOID buf, DWORD cb);
-
-NTDLL_(PSTR) RtlIpv4AddressToStringA(DWORD& Ipv4Adress, LPSTR lpsz);
-NTDLL_(PWSTR) RtlIpv4AddressToStringW(DWORD& Ipv4Adress, LPWSTR lpsz);
-NTDLL RtlIpv4AddressToStringExW(DWORD& Ipv4Adress, WORD Port, LPWSTR lpsz, DWORD& count);
-NTDLL RtlIpv4AddressToStringExA(DWORD& Ipv4Adress, WORD Port, LPSTR lpsz, DWORD& count);
-NTDLL RtlIpv4StringToAddressA(LPCSTR lpsz, BOOLEAN , LPSTR& lpszend, DWORD& Ipv4Adress);
-NTDLL RtlIpv4StringToAddressW(LPCWSTR lpsz, BOOLEAN , LPWSTR& lpszend, DWORD& Ipv4Adress);
-NTDLL RtlIpv4StringToAddressExA(LPCSTR lpsz, BOOLEAN , DWORD& Ipv4Adress, WORD& Port);
-NTDLL RtlIpv4StringToAddressExW(LPCWSTR lpsz, BOOLEAN , DWORD& Ipv4Adress, WORD& Port);
 
 NTDLL ZwCreateMailslotFile
 (
@@ -168,12 +158,6 @@ NTDLL RtlLocalTimeToSystemTime(const LARGE_INTEGER* LocalTime, PLARGE_INTEGER Sy
 NTDLL RtlAcquirePebLock();
 
 NTDLL RtlReleasePebLock();
-
-NTDLL
-RtlRaiseException
-(
-	PEXCEPTION_RECORD
-	);
 
 NTDLL_(VOID) CsrProbeForWrite 
 (
@@ -1193,13 +1177,6 @@ LdrFindEntryForAddress
 	);
 
 #define LDR_DONT_RESOLVE_DLL_REFERENCES 2
-
-NTDLL_(PVOID)
-RtlPcToFileHeader
-(
-	LPCVOID AddressInFile,
-	PVOID* FileHeader
-	);
 
 NTDLL
 LdrShutdownProcess

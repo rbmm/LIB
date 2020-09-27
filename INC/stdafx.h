@@ -27,13 +27,29 @@ _NT_END
 #include <stdio.h>
 #include <string.h>
 
+#define RtlInitializeCorrelationVector _RtlInitializeCorrelationVector_
+#define RtlIncrementCorrelationVector _RtlIncrementCorrelationVector_
+#define RtlExtendCorrelationVector _RtlExtendCorrelationVector_
+#define RtlValidateCorrelationVector _RtlValidateCorrelationVector_
+#define RtlRaiseCustomSystemEventTrigger _RtlRaiseCustomSystemEventTrigger_
+#define RtlCaptureContext _RtlCaptureContext_
+
 #define _INC_MMSYSTEM  /* Prevent inclusion of mmsystem.h in windows.h */
 
 #include <WinSock2.h>
 #include <intrin.h>
 
+#undef RtlInitializeCorrelationVector
+#undef RtlIncrementCorrelationVector
+#undef RtlExtendCorrelationVector
+#undef RtlValidateCorrelationVector
+#undef RtlRaiseCustomSystemEventTrigger
+#undef RtlCaptureContext
+
 #ifdef SECURITY_WIN32
+#define InitSecurityInterfaceW _InitSecurityInterfaceW_
 #include <Sspi.h>
+#undef InitSecurityInterfaceW
 #endif // SECURITY_WIN32
 
 #undef _INC_MMSYSTEM
@@ -106,7 +122,13 @@ EXTERN_C_END
 
 #endif//NOWINBASEINTERLOCK
 
+#define RtlOsDeploymentState _RtlOsDeploymentState_
+#define CUSTOM_SYSTEM_EVENT_TRIGGER_INIT _CUSTOM_SYSTEM_EVENT_TRIGGER_INIT_
+
 #include <ntifs.h>
+
+#undef RtlOsDeploymentState
+#undef CUSTOM_SYSTEM_EVENT_TRIGGER_INIT
 
 #include "ntpebteb.h"
 #include "sysinfo.h"
