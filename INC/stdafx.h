@@ -33,6 +33,13 @@ _NT_END
 #define RtlValidateCorrelationVector _RtlValidateCorrelationVector_
 #define RtlRaiseCustomSystemEventTrigger _RtlRaiseCustomSystemEventTrigger_
 #define RtlCaptureContext _RtlCaptureContext_
+#define RtlGetNonVolatileToken _RtlGetNonVolatileToken_
+#define RtlFreeNonVolatileToken _RtlFreeNonVolatileToken_
+#define RtlFlushNonVolatileMemory _RtlFlushNonVolatileMemory_
+#define RtlDrainNonVolatileFlush _RtlDrainNonVolatileFlush_
+#define RtlWriteNonVolatileMemory _RtlWriteNonVolatileMemory_
+#define RtlFillNonVolatileMemory _RtlFillNonVolatileMemory_
+#define RtlFlushNonVolatileMemoryRanges _RtlFlushNonVolatileMemoryRanges_
 
 #define _INC_MMSYSTEM  /* Prevent inclusion of mmsystem.h in windows.h */
 
@@ -45,6 +52,13 @@ _NT_END
 #undef RtlValidateCorrelationVector
 #undef RtlRaiseCustomSystemEventTrigger
 #undef RtlCaptureContext
+#undef RtlGetNonVolatileToken
+#undef RtlFreeNonVolatileToken
+#undef RtlFlushNonVolatileMemory
+#undef RtlDrainNonVolatileFlush
+#undef RtlWriteNonVolatileMemory
+#undef RtlFillNonVolatileMemory
+#undef RtlFlushNonVolatileMemoryRanges
 
 #ifdef SECURITY_WIN32
 #define InitSecurityInterfaceW _InitSecurityInterfaceW_

@@ -8,12 +8,12 @@ _NT_BEGIN
 
 #include "socket.h"
 
-inline ULONG WSA_ERROR(int i) 
+ULONG WSA_ERROR(int i) 
 {
 	return i ? WSAGetLastError() : NOERROR;
 }
 
-inline ULONG BOOL_TO_ERR(BOOL b)
+ULONG BOOL_TO_ERR(BOOL b)
 {
 	return b ? NOERROR : WSAGetLastError();
 }
@@ -526,7 +526,10 @@ ULONG CTcpEndpoint::Connect_l(SOCKET socket, PSOCKADDR RemoteAddress, DWORD Remo
 			NULL, 
 			NULL)) return WSAGetLastError();
 
-		g_lpfnConnectEx = lpfnConnectEx;
+		if (!g_lpfnConnectEx)
+		{
+			g_lpfnConnectEx = lpfnConnectEx;
+		}
 	}
 
 	if (!InterlockedBitTestAndSetNoFence(&m_flags, flBind))

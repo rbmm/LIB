@@ -1,7 +1,7 @@
 #include "StdAfx.h"
 
 _NT_BEGIN
-
+#include <mstcpip.h>
 #include "socket.h"
 #define DbgPrint /##/
 
@@ -332,7 +332,7 @@ ULONG FillDnsServerList(ULONG MaxCount, ULONG IPs[])
 										{
 											while (*psz == ' ') psz++;
 
-											if (!*psz || 0 > RtlIpv4StringToAddressW(psz, TRUE, psz, ip))
+											if (!*psz || 0 > RtlIpv4StringToAddressW(psz, TRUE, (PCWSTR*)&psz, (in_addr*)&ip))
 											{
 												break;
 											}
@@ -589,8 +589,8 @@ void CDnsSocket::OnRecv(PSTR Buffer, ULONG cbTransferred, CDataPacket* /*packet*
 void CSocketObject::DnsToIp(PCSTR Dns)
 {
 	ULONG crc, ip;
-	PSTR c;
-	if (0 <= RtlIpv4StringToAddressA(Dns, TRUE, c, ip) || (ip = DnsCache::get(Dns, crc)))
+	PCSTR c;
+	if (0 <= RtlIpv4StringToAddressA(Dns, TRUE, &c, (in_addr*)&ip) || (ip = DnsCache::get(Dns, crc)))
 	{
 		OnIp(ip);
 		return;
