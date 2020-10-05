@@ -78,6 +78,7 @@ _NT_BEGIN
 
 typedef
 VOID
+NTAPI
 KNORMAL_ROUTINE (
 				 __in_opt PVOID NormalContext,
 				 __in_opt PVOID SystemArgument1,
@@ -87,6 +88,7 @@ typedef KNORMAL_ROUTINE *PKNORMAL_ROUTINE;
 
 typedef
 VOID
+NTAPI
 KKERNEL_ROUTINE (
 				 __in struct _KAPC *Apc,
 				 __deref_inout_opt PKNORMAL_ROUTINE *NormalRoutine,
@@ -98,6 +100,7 @@ typedef KKERNEL_ROUTINE *PKKERNEL_ROUTINE;
 
 typedef
 VOID
+NTAPI
 KRUNDOWN_ROUTINE (
 				  __in struct _KAPC *Apc
 				  );
