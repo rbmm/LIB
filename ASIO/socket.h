@@ -66,6 +66,7 @@ public:
 	ULONG Create(PSOCKADDR Address, DWORD AddressLength);
 	ULONG RecvFrom(CDataPacket* packet);
 	ULONG SendTo(PSOCKADDR Address, DWORD AddressLength, CDataPacket* packet);	
+	ULONG SendTo(PSOCKADDR Address, DWORD AddressLength, const void* lpData, DWORD cbData);	
 	ULONG SendTo(ULONG IpAddr, USHORT Port, CDataPacket* packet);	
 	ULONG SendTo(ULONG IpAddr, USHORT Port, const void* lpData, DWORD cbData);	
 };

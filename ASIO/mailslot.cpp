@@ -4,117 +4,93 @@ _NT_BEGIN
 
 #include "mailslot.h"
 
-void MailSlot::IOCompletionRoutine(CDataPacket* packet, DWORD Code, NTSTATUS status, ULONG_PTR dwNumberOfBytesTransfered, PVOID Pointer)
+void MailSlot::IOCompletionRoutine(CDataPacket* /*packet*/, DWORD Code, NTSTATUS status, ULONG_PTR dwNumberOfBytesTransfered, PVOID Pointer)
 {
 	switch (Code)
 	{
 	case opRead:
-		if (status == STATUS_BUFFER_TOO_SMALL)
-		{
-			ULONG NextSize = 0;
-			HANDLE hFile;
-			status = STATUS_INVALID_HANDLE;
-			if (LockHandle(hFile))
-			{
-				if (GetMailslotInfo(hFile, 0, &NextSize, 0, 0))
-				{
-					status = STATUS_SUCCESS;
-				}
-				else
-				{
-					status = RtlGetLastNtStatus();
-				}
-				UnlockHandle();
-			}
-
-			if (status == STATUS_SUCCESS)
-			{
-				OnBufferTooSmall(NextSize);
-				break;
-			}
-		}
-
 		if (0 > status)
 		{
-			OnError(status);
+			switch (status)
+			{
+			case STATUS_FILE_FORCED_CLOSED: 
+				OnServerClosed();
+				break;
+			case STATUS_BUFFER_TOO_SMALL: 
+				OnBufferTooSmall();
+				break;
+			default:
+				OnError(status);
+			}
 			break;
 		}
-
-		OnRead(Pointer, (ULONG)dwNumberOfBytesTransfered, packet);
+		Pointer = OnRead(Pointer, dwNumberOfBytesTransfered);
 		break;
 	case opWrite:
-		FreeAfterWrite(Pointer);
-		OnWrite(status);
+		if (0 > status)
+		{
+			switch (status)
+			{
+			case STATUS_FILE_FORCED_CLOSED: 
+				OnServerClosed();
+				break;
+			default:
+				OnError(status);
+			}
+			break;
+		}
+		Pointer = OnWrite(Pointer, dwNumberOfBytesTransfered);
 		break;
 	default: __debugbreak();
 	}
+
+	BufferNotInUse(Pointer);
 }
 
-void MailSlot::OnBufferTooSmall(ULONG NextSize)
+void MailSlot::OnBufferTooSmall()
 {
-	if (IsSizeOk(NextSize))
+	HANDLE hFile;
+
+	if (LockHandle(hFile))
 	{
-		if (CDataPacket* packet = new(NextSize) CDataPacket)
+		ULONG NextSize = 0;
+		BOOL f = GetMailslotInfo(hFile, 0, &NextSize, 0, 0);
+		UnlockHandle();
+		if (f)
 		{
-			Read(packet);
-			packet->Release();
+			OnBufferTooSmall(NextSize);
 		}
 	}
 }
 
-void MailSlot::OnWrite(NTSTATUS status)
+void MailSlot::ReadWrite(PVOID Buffer, ULONG Length, ULONG op, NTSTATUS (NTAPI * fn)(
+			   HANDLE ,HANDLE ,PIO_APC_ROUTINE ,PVOID ,PIO_STATUS_BLOCK ,PVOID , ULONG ,PLARGE_INTEGER, PULONG))
 {
-	if (0 > status)
-	{
-		if (status == STATUS_FILE_FORCED_CLOSED)
-		{
-			Close();
-			OnServerClosed();
-		}
-		else
-		{
-			OnError(status);
-		}
-	}
-}
-
-NTSTATUS MailSlot::Read(CDataPacket* packet)
-{
-	PVOID buf = packet->getData();
-	if (NT_IRP* irp = new NT_IRP(this, opRead, packet, buf))
+	if (NT_IRP* irp = new NT_IRP(this, op, 0, Buffer))
 	{
 		HANDLE hFile;
 		NTSTATUS status = STATUS_INVALID_HANDLE;
 		if (LockHandle(hFile))
 		{
-			status = NtReadFile(hFile, 0, 0, irp, irp, buf, packet->getBufferSize(), 0, 0);
+			status = fn(hFile, 0, 0, irp, irp, Buffer, Length, 0, 0);
 			UnlockHandle();
 		}
 		irp->CheckNtStatus(status);
-
-		return STATUS_SUCCESS;
 	}
-
-	return STATUS_INSUFFICIENT_RESOURCES;
+	else
+	{
+		IOCompletionRoutine(0, op, STATUS_INSUFFICIENT_RESOURCES, 0, Buffer);
+	}
 }
 
-NTSTATUS MailSlot::Write(PVOID Buffer, ULONG Length)
+void MailSlot::Read(PVOID Buffer, ULONG Length)
 {
-	if (NT_IRP* irp = new NT_IRP(this, opWrite, 0, Buffer))
-	{
-		HANDLE hFile;
-		NTSTATUS status = STATUS_INVALID_HANDLE;
-		if (LockHandle(hFile))
-		{
-			status = NtWriteFile(hFile, 0, 0, irp, irp, Buffer, Length, 0, 0);
-			UnlockHandle();
-		}
-		irp->CheckNtStatus(status);
+	ReadWrite(Buffer, Length, opRead, NtReadFile);
+}
 
-		return STATUS_SUCCESS;
-	}
-
-	return STATUS_INSUFFICIENT_RESOURCES;
+void MailSlot::Write(PVOID Buffer, ULONG Length)
+{
+	ReadWrite(Buffer, Length, opWrite, NtWriteFile);
 }
 
 NTSTATUS MailSlot::Init(HANDLE hFile)

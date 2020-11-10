@@ -4,11 +4,14 @@
 
 class MailSlot : public IO_OBJECT
 {
-	void OnWrite(NTSTATUS status);
+	void OnBufferTooSmall();
+
+	void ReadWrite(PVOID Buffer, ULONG Length, ULONG op, NTSTATUS (NTAPI * fn)(
+		HANDLE ,HANDLE ,PIO_APC_ROUTINE ,PVOID ,PIO_STATUS_BLOCK ,PVOID , ULONG ,PLARGE_INTEGER, PULONG));
 
 protected:
 	
-	enum { opRead = 'rrrr', opWrite = 'wwww' };
+	enum { opRead, opWrite };
 
 	virtual void IOCompletionRoutine(CDataPacket* packet, DWORD Code, NTSTATUS status, ULONG_PTR dwNumberOfBytesTransfered, PVOID Pointer);
 
@@ -20,25 +23,28 @@ protected:
 	{
 	}
 
-	virtual void OnRead(PVOID /*buf*/, ULONG /*dwNumberOfBytesTransfered*/, CDataPacket* /*packet*/)
+	virtual PVOID OnWrite(PVOID Buffer, ULONG_PTR /*dwNumberOfBytesTransfered*/)
+	{
+		return Buffer;
+	}
+
+	virtual PVOID OnRead(PVOID Buffer, ULONG_PTR /*dwNumberOfBytesTransfered*/)
+	{
+		return Buffer;
+	}
+
+	virtual void BufferNotInUse(PVOID /*buf*/)
 	{
 	}
 
-	virtual void FreeAfterWrite(PVOID /*buf*/)
+	virtual void OnBufferTooSmall(ULONG /*NextSize*/)
 	{
 	}
-
-	virtual void OnBufferTooSmall(ULONG NextSize);
 	
-	virtual bool IsSizeOk(ULONG /*NextSize*/)
-	{
-		return true;
-	}
-
 public:
-	NTSTATUS Read(CDataPacket* packet);
+	void Read(PVOID Buffer, ULONG Length);
 
-	NTSTATUS Write(PVOID Buffer, ULONG Length);
+	void Write(PVOID Buffer, ULONG Length);
 
 	NTSTATUS Init(HANDLE hFile);
 

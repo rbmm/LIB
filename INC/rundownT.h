@@ -6,11 +6,11 @@ enum RundownState {
 	v_complete = 0, v_init = 0x80000000
 };
 
-template<typename T>
+template<typename T, RundownState V = v_init>
 class RundownProtection_NC
 {
 protected:
-	LONG _Value;
+	LONG _Value = V;
 
 public:
 
@@ -62,15 +62,5 @@ public:
 	void Init()
 	{
 		_Value = v_init;
-	}
-};
-
-template<typename T, RundownState V = v_init>
-class RundownProtection : public RundownProtection_NC<T>
-{
-public:
-	RundownProtection() 
-	{
-		_Value = V;
 	}
 };

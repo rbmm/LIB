@@ -247,7 +247,7 @@ SECURITY_STATUS CSSLStream::ProcessSecurityContext(PSecBufferDesc pInput, PSecBu
 
 	PCtxtHandle phContext = 0, phNewContext = 0;
 	
-	dwLower | dwUpper ? phContext = this : phNewContext = this;//m_pszTargetName!!cdn.static.wizzair
+	dwLower | dwUpper ? phContext = this : phNewContext = this;
 
 	BOOLEAN bMutualAuth = FALSE;
 

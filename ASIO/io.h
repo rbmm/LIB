@@ -45,10 +45,6 @@ protected:
 		if (hFile) NtClose(hFile);
 	}
 
-	virtual void OnCleanup()
-	{
-	}
-
 public:
 
 	_NODISCARD BOOL LockHandle(HANDLE& hFile)
@@ -62,7 +58,6 @@ public:
 	{
 		if (m_HandleLock.Release())
 		{
-			OnCleanup();
 			CloseObjectHandle(m_hFile), m_hFile = 0;
 		}
 	}
@@ -343,9 +338,10 @@ class __declspec(novtable) IO_OBJECT_TIMEOUT : public IO_OBJECT
 
 protected:
 
-	virtual void OnCleanup()
+	virtual void CloseObjectHandle(HANDLE hFile)
 	{
 		SetNewTimer(0);
+		if (hFile) NtClose(hFile);
 	}
 
 	virtual void OnTimeout()

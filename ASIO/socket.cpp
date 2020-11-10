@@ -188,6 +188,20 @@ ULONG CUdpEndpoint::SendTo(ULONG IpAddr, USHORT Port, const void* lpData, DWORD 
 	return ERROR_NO_SYSTEM_RESOURCES;
 }
 
+ULONG CUdpEndpoint::SendTo(PSOCKADDR Address, DWORD AddressLength, const void* lpData, DWORD cbData)
+{
+	if (CDataPacket* packet = new(cbData) CDataPacket)
+	{
+		memcpy(packet->getData(), lpData, cbData);
+		packet->setDataSize(cbData);
+		ULONG err = SendTo(Address, AddressLength, packet);
+		packet->Release();
+		return err;
+	}
+
+	return ERROR_NO_SYSTEM_RESOURCES;
+}
+
 ULONG CUdpEndpoint::SendTo(ULONG IpAddr, USHORT Port, CDataPacket* packet )
 {
 	sockaddr_in saddr = { AF_INET, Port };
