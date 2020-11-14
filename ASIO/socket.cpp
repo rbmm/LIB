@@ -56,7 +56,7 @@ SOCKET _WSASocket(
 
 void CSocketObject::CloseObjectHandle(HANDLE hFile)
 {
-	closesocket((SOCKET)hFile);
+	if (hFile) closesocket((SOCKET)hFile);
 }
 
 ULONG CSocketObject::GetPort(PUSHORT pPort)

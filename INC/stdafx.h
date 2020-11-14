@@ -40,6 +40,7 @@ _NT_END
 #define RtlWriteNonVolatileMemory _RtlWriteNonVolatileMemory_
 #define RtlFillNonVolatileMemory _RtlFillNonVolatileMemory_
 #define RtlFlushNonVolatileMemoryRanges _RtlFlushNonVolatileMemoryRanges_
+#define RtlCaptureContext2 _RtlCaptureContext2_
 
 #define _INC_MMSYSTEM  /* Prevent inclusion of mmsystem.h in windows.h */
 
@@ -59,6 +60,7 @@ _NT_END
 #undef RtlWriteNonVolatileMemory
 #undef RtlFillNonVolatileMemory
 #undef RtlFlushNonVolatileMemoryRanges
+#undef RtlCaptureContext2
 
 #ifdef SECURITY_WIN32
 #define InitSecurityInterfaceW _InitSecurityInterfaceW_
