@@ -17,7 +17,6 @@ class CSocketObject : public IO_OBJECT_TIMEOUT
 {
 	friend class CTcpEndpoint;
 
-
 	virtual void IOCompletionRoutine(CDataPacket* , DWORD , NTSTATUS , ULONG_PTR , PVOID )
 	{
 		__debugbreak();

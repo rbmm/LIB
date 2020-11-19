@@ -6,19 +6,16 @@ class CDataPacket
 {
 private:
 	LONG m_nRef;
-	DWORD m_BufferSize, m_DataSize, m_Pad;
+	ULONG m_BufferSize, m_DataSize, m_Pad;
 	char m_Data[];
 
-	enum ST : size_t {};
-
-	CDataPacket(DWORD BufferSize) : m_nRef(1), m_BufferSize(BufferSize), m_DataSize(0), m_Pad(0) { }
-
-	void* operator new(size_t ByteSize, ST BufferSize)
-	{
-		return ::operator new(ByteSize + BufferSize);
-	}
-
 public:
+	CDataPacket(ULONG BufferSize) : m_nRef(1), m_BufferSize(BufferSize), m_DataSize(0), m_Pad(0) { }
+
+	void* operator new(size_t , PVOID pv)
+	{
+		return pv;
+	}
 
 	CDataPacket() { }
 
@@ -32,9 +29,9 @@ public:
 		if (!InterlockedDecrement(&m_nRef)) delete this;
 	}
 
-	void* operator new(size_t , DWORD BufferSize)
+	void* operator new(size_t ByteSize, ULONG BufferSize)
 	{
-		return new((ST)BufferSize) CDataPacket(BufferSize);
+		return new(::operator new(ByteSize + BufferSize)) CDataPacket(BufferSize);
 	}
 
 	PSTR getFreeBuffer()
@@ -42,7 +39,7 @@ public:
 		return m_Data + m_DataSize;
 	}
 
-	DWORD getFreeSize()
+	ULONG getFreeSize()
 	{
 		return m_BufferSize - m_DataSize;
 	}
@@ -52,32 +49,32 @@ public:
 		return m_Data;
 	}
 
-	DWORD getBufferSize()
+	ULONG getBufferSize()
 	{
 		return m_BufferSize;
 	}
 
-	DWORD getDataSize()
+	ULONG getDataSize()
 	{
 		return m_DataSize;
 	}
 
-	DWORD setDataSize(DWORD DataSize)
+	ULONG setDataSize(ULONG DataSize)
 	{
 		return m_DataSize = DataSize;
 	}
 
-	DWORD addData(DWORD DataSize)
+	ULONG addData(ULONG DataSize)
 	{
 		return m_DataSize += DataSize;
 	}
 
-	DWORD decData(DWORD DataSize)
+	ULONG decData(ULONG DataSize)
 	{
 		return m_DataSize -= DataSize;
 	}
 
-	DWORD addData(const void* pvData, DWORD cbData)
+	ULONG addData(const void* pvData, ULONG cbData)
 	{
 		PVOID to = m_Data + m_DataSize;
 		if (to != pvData) memcpy(to, pvData, cbData);
@@ -96,12 +93,12 @@ public:
 		return TRUE;
 	}
 
-	void removeData(DWORD DataSize)
+	void removeData(ULONG DataSize)
 	{
 		memcpy(m_Data, m_Data + DataSize, m_DataSize -= DataSize);
 	}
 
-	void reservBuffer(DWORD d)
+	void reservBuffer(ULONG d)
 	{
 		m_BufferSize -= d;
 	}
