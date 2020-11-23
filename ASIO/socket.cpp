@@ -390,7 +390,7 @@ ULONG CTcpEndpoint::Create(DWORD BufferSize, int af)
 		SOCKET socket;
 		if (LockSocket(socket))
 		{
-			err = BOOL_TO_ERR(WSAIoctl(socket, 
+			err = WSA_ERROR(WSAIoctl(socket, 
 				SIO_GET_EXTENSION_FUNCTION_POINTER, 
 				&guid, 
 				sizeof(guid),
