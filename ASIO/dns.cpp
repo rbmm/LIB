@@ -583,10 +583,7 @@ void CDnsSocket::OnRecv(PSTR Buffer, ULONG cbTransferred)
 {
 	if (cbTransferred < sizeof(DNS_HEADER) || reinterpret_cast<DNS_HEADER*>(Buffer)->Xid != _Xid) return ;
 
-	DNS_HEADER* p = reinterpret_cast<DNS_HEADER*>(Buffer);
-	p->AnswerCount = 8;
 	Buffer += sizeof(DNS_HEADER), cbTransferred -= sizeof(DNS_HEADER);
-
 
 	UCHAR c;
 
