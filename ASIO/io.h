@@ -123,18 +123,17 @@ class IO_IRP : public OVERLAPPED
 	DWORD m_Code;
 	PVOID m_buf[];
 
+protected:
+
+	~IO_IRP();
+
+public:
 	VOID IOCompletionRoutine(DWORD dwErrorCode, ULONG_PTR dwNumberOfBytesTransfered)
 	{
 		CPP_FUNCTION;
 		m_pObj->IOCompletionRoutine(m_packet, m_Code, dwErrorCode, dwNumberOfBytesTransfered, Pointer);
 		delete this;
 	}
-
-protected:
-
-	~IO_IRP();
-
-public:
 
 #ifdef _WINDLL
 	static VOID CALLBACK _IOCompletionRoutine(NTSTATUS status, ULONG_PTR dwNumberOfBytesTransfered, LPOVERLAPPED lpOverlapped)ASM_FUNCTION;

@@ -99,6 +99,10 @@ protected:
 
 	virtual ~CTcpEndpoint();
 
+	virtual ULONG vSend(SOCKET socket, WSABUF* lpBuffers, DWORD dwBufferCount, IO_IRP* Irp);
+	virtual ULONG vRecv(SOCKET socket, WSABUF* lpBuffers, DWORD dwBufferCount, IO_IRP* Irp);
+	virtual CDataPacket* allocPacket(ULONG cb) { return new(cb) CDataPacket; };
+
 	/************************************************************************/
 	/* implement this ! */
 

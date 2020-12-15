@@ -4,7 +4,7 @@ extern __ImageBase:BYTE
 extern __imp_RtlNtStatusToDosError:QWORD
 
 ; void IO_IRP::IOCompletionRoutine(unsigned long,unsigned __int64)
-extern ?IOCompletionRoutine@IO_IRP@NT@@AEAAXK_K@Z : PROC
+extern ?IOCompletionRoutine@IO_IRP@NT@@QEAAXK_K@Z : PROC
 
 ; void NT_IRP::IOCompletionRoutine(long,unsigned __int64)
 extern ?IOCompletionRoutine@NT_IRP@NT@@AEAAXJ_K@Z : PROC
@@ -52,7 +52,7 @@ extern ?IOCompletionRoutine@NT_IRP@NT@@AEAAXJ_K@Z : PROC
 	mov r8,[rsp + 30h]
 	mov edx,eax
 	mov rcx,[rsp + 38h]
-	call ?IOCompletionRoutine@IO_IRP@NT@@AEAAXK_K@Z
+	call ?IOCompletionRoutine@IO_IRP@NT@@QEAAXK_K@Z
 	jmp ?CommonCbRet?
 ?_IOCompletionRoutine@IO_IRP@NT@@SAXJ_KPEAU_OVERLAPPED@@@Z endp
 

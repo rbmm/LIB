@@ -193,7 +193,7 @@ loop:
 	{
 		fOk = FALSE;
 
-		if (CDataPacket* packet = new(OutBuf.cbBuffer) CDataPacket)
+		if (CDataPacket* packet = allocPacket(OutBuf.cbBuffer))
 		{
 			memcpy(packet->getData(), OutBuf.pvBuffer, OutBuf.cbBuffer);
 			packet->setDataSize(OutBuf.cbBuffer);
@@ -371,7 +371,7 @@ CDataPacket* CSSLStream::AllocPacket(DWORD cbBody, PSTR& buf)
 {
 	if (cbBody <= cbMaximumMessage)
 	{
-		if (CDataPacket* packet = new(cbHeader + cbBody + cbTrailer) CDataPacket)
+		if (CDataPacket* packet = allocPacket(cbHeader + cbBody + cbTrailer))
 		{
 			buf = packet->getData() + cbHeader;
 			return packet;
@@ -458,7 +458,7 @@ SECURITY_STATUS CSSLStream::Shutdown()
 
 	if (OutBuf.cbBuffer)
 	{
-		if (CDataPacket* packet = new(OutBuf.cbBuffer) CDataPacket)
+		if (CDataPacket* packet = allocPacket(OutBuf.cbBuffer))
 		{
 			memcpy(packet->getData(), OutBuf.pvBuffer, OutBuf.cbBuffer);
 			packet->setDataSize(OutBuf.cbBuffer);
@@ -484,7 +484,7 @@ SECURITY_STATUS CSSLStream::Renegotiate()
 	{
 		_bittestandset(&m_flags, f_Handshake);
 
-		if (CDataPacket* packet = new(OutBuf.cbBuffer) CDataPacket)
+		if (CDataPacket* packet = allocPacket(OutBuf.cbBuffer))
 		{
 			memcpy(packet->getData(), OutBuf.pvBuffer, OutBuf.cbBuffer);
 			packet->setDataSize(OutBuf.cbBuffer);

@@ -2,6 +2,8 @@
 
 _NT_BEGIN
 #include <mstcpip.h>
+#include <iphlpapi.h>
+#include <WinDNS.h>
 #include "socket.h"
 #define DbgPrint /##/
 
@@ -79,6 +81,7 @@ DWORD HashString(PCSTR lpsz, DWORD hash = 0)
 	while (char c = *lpsz++) hash = hash * 33 ^ c;
 	return hash;
 }
+
 
 struct DnsCache 
 {
@@ -182,8 +185,11 @@ public:
 
 class CDnsSocket : public CUdpEndpoint
 {
+	//LONGLONG _time;
 	CDnsTask* _pTask;
 	ULONG _crc;
+	ULONG _DnsServerIp;
+	USHORT _Xid;
 
 	virtual void OnRecv(PSTR Buffer, ULONG cbTransferred);
 	virtual void OnRecv(PSTR Buffer, ULONG cbTransferred, CDataPacket* /*packet*/, SOCKADDR_IN* addr);
@@ -267,9 +273,9 @@ ULONG FillDnsServerList(ULONG MaxCount, ULONG IPs[])
 
 	ULONG m = 0;
 
-	NTSTATUS status;
+	NTSTATUS status = ZwOpenKey(&oa.RootDirectory, KEY_READ, &soa);
 
-	if (0 <= (status = ZwOpenKey(&oa.RootDirectory, KEY_READ, &soa)))
+	if (0 <= status)
 	{
 		PVOID stack = alloca(guz);
 		union {
@@ -280,6 +286,13 @@ ULONG FillDnsServerList(ULONG MaxCount, ULONG IPs[])
 		ULONG cb = 0, rcb = 0x100, Index = 0;
 
 		LONGLONG BootTime = GetBootTime();
+		//TIME_FIELDS tf;
+		//LARGE_INTEGER li;
+		//GetSystemTimeAsFileTime((LPFILETIME)&li);
+		//li.QuadPart -= BootTime;
+		//RtlTimeToTimeFields(&li, &tf);
+		//DbgPrint("now %u-%02u-%02u %02u:%02u:%02u after boot\r\n", 
+		//	tf.Year-1601, tf.Month-1, tf.Day-1, tf.Hour, tf.Minute, tf.Second);
 
 		do 
 		{
@@ -289,13 +302,23 @@ ULONG FillDnsServerList(ULONG MaxCount, ULONG IPs[])
 
 				if (0 <= (status = ZwEnumerateKey(oa.RootDirectory, Index, KeyBasicInformation, buf, cb, &rcb)))
 				{
-					if (pkni->LastWriteTime.QuadPart < BootTime)
-					{
-						goto __nextIndex;
-					}
-
 					ObjectName.Buffer = pkni->Name;
 					ObjectName.MaximumLength = ObjectName.Length = (USHORT)pkni->NameLength;
+
+					DbgPrint("========================\r\n%wZ:\r\n", &ObjectName);
+
+					if (pkni->LastWriteTime.QuadPart < BootTime)
+					{
+						DbgPrint("!! modified before boot !!\r\n");
+						goto __nextIndex;
+					}
+					//else
+					//{
+					//	pkni->LastWriteTime.QuadPart -= BootTime;
+					//	RtlTimeToTimeFields(&pkni->LastWriteTime, &tf);
+					//	DbgPrint("modified %u-%02u-%02u %02u:%02u:%02u after boot\r\n", 
+					//		tf.Year-1601, tf.Month-1, tf.Day-1, tf.Hour, tf.Minute, tf.Second);
+					//}
 
 					if (0 <= ZwOpenKey(&hKey, KEY_READ, &oa))
 					{
@@ -303,7 +326,7 @@ ULONG FillDnsServerList(ULONG MaxCount, ULONG IPs[])
 						STATIC_UNICODE_STRING_(DhcpNameServer);
 						NTSTATUS ss;
 						PCUNICODE_STRING aa[] = { &DhcpNameServer, &NameServer }, ValueName;
-						ULONG n = RTL_NUMBER_OF(aa);
+						ULONG n = _countof(aa);
 
 						do 
 						{
@@ -326,19 +349,29 @@ ULONG FillDnsServerList(ULONG MaxCount, ULONG IPs[])
 										!(DataLength & (sizeof(WCHAR) - 1)) &&
 										!*(WCHAR*)(Data + DataLength - sizeof(WCHAR)))
 									{
+										DbgPrint("found %wZ = %S\r\n", ValueName, psz);
 										ULONG ip;
 
 										for (;;)
 										{
-											while (*psz == ' ') psz++;
+__skip:
+											switch (*psz)
+											{
+											case ' ':
+											case ',':
+												psz++;
+												goto __skip;
+											}
 
 											if (!*psz || 0 > RtlIpv4StringToAddressW(psz, TRUE, (PCWSTR*)&psz, (in_addr*)&ip))
 											{
+												DbgPrint("invalid Ipv4 String\r\n");
 												break;
 											}
 
 											n = 0;// not look for DhcpNameServer if found NameServer
 											*IPs++ = ip;
+											DbgPrint("ip=%08x\r\n", ip);
 											if (++m, !--MaxCount)
 											{
 												NtClose(hKey);
@@ -401,7 +434,7 @@ void CDnsTask::DnsToIp(PCSTR Dns, ULONG crc, DWORD dwMilliseconds)
 	{
 		if (SetTimeout(dwMilliseconds))
 		{
-			_nRecvCount = n;
+			_nRecvCount = n + 1;
 			CDnsSocket** ppSocks = (CDnsSocket**)alloca(n * sizeof(CDnsSocket*)), *pSock;
 			memcpy(ppSocks, _ppSocks, n * sizeof(CDnsSocket*));
 
@@ -417,7 +450,7 @@ void CDnsTask::DnsToIp(PCSTR Dns, ULONG crc, DWORD dwMilliseconds)
 
 				BOOL fOk = FALSE;
 
-				if (CDataPacket* packet = new(1024) CDataPacket)
+				if (CDataPacket* packet = new(DNS_RFC_MAX_UDP_PACKET_LENGTH) CDataPacket)
 				{
 					DbgPrint("-->%08x\n", DnsServerAddresses[n]);
 
@@ -436,6 +469,8 @@ void CDnsTask::DnsToIp(PCSTR Dns, ULONG crc, DWORD dwMilliseconds)
 				pSock->Release();
 
 			} while (n);
+
+			DecRecvCount();
 		}
 		else
 		{
@@ -489,14 +524,27 @@ BOOL CDnsSocket::Start(PCSTR Dns, DWORD DnsServerIp, ULONG crc)
 {
 	_crc = crc;
 
-	if (CDataPacket* packet = new(1024) CDataPacket)
+	if (CDataPacket* packet = new(DNS_RFC_MAX_UDP_PACKET_LENGTH) CDataPacket)
 	{
-		PSTR __lpsz = packet->getData(), _lpsz, lpsz = __lpsz;
+		union {
+			DNS_HEADER* pdh;
+			PSTR lpsz;
+			PBYTE pb;
+		};
+		
+		lpsz = packet->getData();
+		PSTR _lpsz, __lpsz = lpsz;
 		char c, i;
-		static WORD bb1[6]={ 0x1111, 1, 0x0100 };
-		static WORD bb2[2]={ 0x0100, 0x0100 };
-		memcpy(lpsz, bb1, sizeof bb1);
-		lpsz += sizeof bb1;
+		RtlZeroMemory(pdh, sizeof(DNS_HEADER));
+		ULONG seed = (ULONG)(ULONG_PTR)this ^ ~GetTickCount();
+		pdh->Xid = _Xid = (USHORT)RtlRandomEx(&seed);
+		pdh->RecursionDesired = 1;
+		pdh++->QuestionCount = 0x0100; //_byteswap_ushort(1);
+
+		_DnsServerIp = DnsServerIp;
+
+		// { _byteswap_ushort(DNS_TYPE_A), _byteswap_ushort(DNS_CLASS_INTERNET) }
+		static const DNS_WIRE_QUESTION dwq = { 0x0100, 0x0100 };
 
 		do 
 		{
@@ -515,15 +563,17 @@ mm:
 
 		*lpsz++ = 0;
 
-		memcpy(lpsz, bb2, sizeof bb2);
+		memcpy(lpsz, &dwq, sizeof(dwq));
 
-		packet->setDataSize(RtlPointerToOffset(__lpsz, lpsz) + sizeof(bb2));
+		packet->setDataSize(RtlPointerToOffset(__lpsz, lpsz) + sizeof(dwq));
 
-		ULONG err = SendTo(DnsServerIp, 0x3500, packet);
+		//GetSystemTimeAsFileTime((PFILETIME)&_time);
+
+		ULONG err = SendTo(DnsServerIp, DNS_PORT_NET_ORDER, packet);
 
 		packet->Release();
 
-		return !err;
+		return err == NOERROR;
 	}
 
 	return FALSE;
@@ -531,50 +581,74 @@ mm:
 
 void CDnsSocket::OnRecv(PSTR Buffer, ULONG cbTransferred)
 {
-	if (cbTransferred < 13) return ;
+	if (cbTransferred < sizeof(DNS_HEADER) || reinterpret_cast<DNS_HEADER*>(Buffer)->Xid != _Xid) return ;
 
-	Buffer += 12, cbTransferred -= 12;
+	DNS_HEADER* p = reinterpret_cast<DNS_HEADER*>(Buffer);
+	p->AnswerCount = 8;
+	Buffer += sizeof(DNS_HEADER), cbTransferred -= sizeof(DNS_HEADER);
+
 
 	UCHAR c;
 
-	while (c = *Buffer++)
+	while (cbTransferred-- && (c = *Buffer++))
 	{
-		if (cbTransferred < (DWORD)(2 + c)) return;
-		cbTransferred -= 1 + c;
-		Buffer += c;
+		if (cbTransferred < c) return;
+		cbTransferred -= c, Buffer += c;
 	}
 
-	Buffer += 4;
-	if (cbTransferred < 4) return ;
-	cbTransferred -= 4;
-
-	struct DNS_RR
-	{
-		WORD name, type, cls, ttl1, ttl2, len;
-	} x;
+	if (cbTransferred < sizeof(DNS_WIRE_QUESTION)) return ;
+	Buffer += sizeof(DNS_WIRE_QUESTION), cbTransferred -= sizeof(DNS_WIRE_QUESTION);
 
 	for(;;) 
 	{
-		if (cbTransferred < sizeof(DNS_RR)) return;
-		memcpy(&x, Buffer, sizeof(x));
-		cbTransferred -= sizeof (DNS_RR), Buffer += sizeof (DNS_RR);
-		x.len = _byteswap_ushort(x.len);
-		if (cbTransferred < x.len) return;
-		cbTransferred -= x.len;
-		if (x.type == 0x100 && x.cls == 0x100 && x.len == sizeof(DWORD))
+		if (!cbTransferred)
 		{
-			ULONG ip;
-			memcpy(&ip, Buffer, sizeof(DWORD));
+			return;
+		}
+		
+		if ((*Buffer & 0xc0) == 0xc0)
+		{
+			//compressed question name
+			if (cbTransferred < sizeof(USHORT)) return ;
+			Buffer += sizeof(USHORT), cbTransferred -= sizeof(USHORT);
+		}
+		else
+		{
+			while (cbTransferred-- && (c = *Buffer++))
+			{
+				if (cbTransferred < c) return;
+				cbTransferred -= c, Buffer += c;
+			}
+		}
+
+		if (cbTransferred < sizeof(DNS_WIRE_RECORD)) return;
+
+		DNS_WIRE_RECORD dwr;
+
+		memcpy(&dwr, Buffer, sizeof(dwr));
+
+		cbTransferred -= sizeof (DNS_WIRE_RECORD), Buffer += sizeof (DNS_WIRE_RECORD);
+		
+		if (cbTransferred < (dwr.DataLength = _byteswap_ushort(dwr.DataLength))) return;
+
+		DbgPrint("[%08x]{ %04x %04x : %04x }\n", _DnsServerIp, dwr.RecordType, dwr.RecordClass, dwr.DataLength);
+		
+		if (dwr.RecordType == 0x100/*DNS_TYPE_A*/ && dwr.DataLength == sizeof(IP4_ADDRESS))
+		{
+			IP4_ADDRESS ip;
+			memcpy(&ip, Buffer, sizeof(IP4_ADDRESS));
 
 			if (ip)
 			{
-				//DbgPrint("[%08x]->%08x\n", _DnsServerIp, ip);
+				//LONGLONG time;
+				//GetSystemTimeAsFileTime((PFILETIME)&time);, time - _time [%016Iu]
+				DbgPrint("[%08x]->%08x\n", _DnsServerIp, ip);
 				DnsCache::set(_crc, ip);
 				_pTask->OnIp(ip);
 				return;
 			}
 		}
-		Buffer += x.len;
+		cbTransferred -= dwr.DataLength, Buffer += dwr.DataLength;
 	}
 }
 
@@ -596,7 +670,7 @@ void CSocketObject::DnsToIp(PCSTR Dns)
 		return;
 	}
 
-	if (strlen(Dns) > 256)
+	if (strlen(Dns) > DNS_MAX_TEXT_STRING_LENGTH)
 	{
 		OnIp(0);
 		return;

@@ -76,6 +76,8 @@ private:
 
 	virtual CDataPacket* get_packet() = 0;
 
+	virtual CDataPacket* allocPacket(ULONG cb) { return new(cb) CDataPacket; };
+
 public:
 
 	virtual BOOL IsServer(PBOOLEAN pbMutualAuth = 0) = 0;

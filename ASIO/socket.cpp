@@ -284,7 +284,7 @@ void CUdpEndpoint::IOCompletionRoutine(CDataPacket* packet, DWORD Code, NTSTATUS
 //////////////////////////////////////////////////////////////////////////
 // CTcpEndpoint
 
-static LPFN_DISCONNECTEX lpfnDisconnectEx;
+LPFN_DISCONNECTEX lpfnDisconnectEx;
 
 CTcpEndpoint::CTcpEndpoint(CSocketObject* pAddress) : m_pAddress(pAddress), m_packet(0), m_flags(0)
 {
@@ -370,7 +370,7 @@ void CTcpEndpoint::Disconnect(DWORD dwErrorReason)
 
 ULONG CTcpEndpoint::Create(DWORD BufferSize, int af)
 {
-	if (BufferSize && !(m_packet = new(BufferSize) CDataPacket)) return ERROR_NO_SYSTEM_RESOURCES;
+	if (BufferSize && !(m_packet = allocPacket(BufferSize))) return ERROR_NO_SYSTEM_RESOURCES;
 
 	if (ULONG err = CSocketObject::Create(af, SOCK_STREAM, IPPROTO_TCP))
 	{
@@ -635,7 +635,7 @@ ULONG CTcpEndpoint::Send(const void* Buffer, ULONG cb)
 {
 	ULONG dwError = ERROR_NO_SYSTEM_RESOURCES;
 
-	if (CDataPacket* packet = new(cb) CDataPacket)
+	if (CDataPacket* packet = allocPacket(cb))
 	{
 		memcpy(packet->getData(), Buffer, cb);
 		packet->setDataSize(cb);
@@ -660,14 +660,13 @@ ULONG CTcpEndpoint::Send(CDataPacket* packet)
 
 		if (IO_IRP* Irp = new IO_IRP(this, send, packet))
 		{
-			DWORD dwBytes;
 
 			err = ERROR_INVALID_HANDLE;
 
 			SOCKET socket;
 			if (LockSocket(socket))
 			{
-				err = WSA_ERROR(WSASend(socket, &wb, 1, &dwBytes, 0, Irp, 0));
+				err = vSend(socket, &wb, 1, Irp);
 
 				UnlockSocket();
 			}
@@ -679,6 +678,12 @@ ULONG CTcpEndpoint::Send(CDataPacket* packet)
 	}
 
 	return err;
+}
+
+ULONG CTcpEndpoint::vSend(SOCKET socket, WSABUF* lpBuffers, DWORD dwBufferCount, IO_IRP* Irp)
+{
+	DWORD dwBytes;
+	return WSA_ERROR(WSASend(socket, lpBuffers, dwBufferCount, &dwBytes, 0, Irp, 0));
 }
 
 ULONG CTcpEndpoint::GetRecvBuffers(WSABUF lpBuffers[2], void** ppv)
@@ -711,15 +716,12 @@ ULONG CTcpEndpoint::Recv(WSABUF* lpBuffers, DWORD dwBufferCount, PVOID buf)
 
 		if (IO_IRP* Irp = new IO_IRP(this, recv, m_packet, buf))
 		{
-			DWORD Flags = 0;
-			DWORD dwBytes;
-
 			err = ERROR_INVALID_HANDLE;
 
 			SOCKET socket;
 			if (LockSocket(socket))
 			{
-				err = WSA_ERROR(WSARecv(socket, lpBuffers, dwBufferCount, &dwBytes, &Flags, Irp, 0));
+				err = vRecv(socket, lpBuffers, dwBufferCount, Irp);
 
 				UnlockSocket();
 			}
@@ -731,6 +733,14 @@ ULONG CTcpEndpoint::Recv(WSABUF* lpBuffers, DWORD dwBufferCount, PVOID buf)
 	}
 
 	return err;
+}
+
+ULONG CTcpEndpoint::vRecv(SOCKET socket, WSABUF* lpBuffers, DWORD dwBufferCount, IO_IRP* Irp)
+{
+	DWORD Flags = 0;
+	DWORD dwBytes;
+
+	return WSA_ERROR(WSARecv(socket, lpBuffers, dwBufferCount, &dwBytes, &Flags, Irp, 0));
 }
 
 void CTcpEndpoint::IOCompletionRoutine(CDataPacket* packet, DWORD Code, NTSTATUS dwError, ULONG_PTR dwNumberOfBytesTransfered, PVOID Pointer)

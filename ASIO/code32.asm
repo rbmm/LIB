@@ -8,7 +8,7 @@ extern ___ImageBase:BYTE
 extern __imp__RtlNtStatusToDosError@4:DWORD
 
 ; void IO_IRP::IOCompletionRoutine(unsigned long,unsigned long)
-extern ?IOCompletionRoutine@IO_IRP@NT@@AAEXKK@Z : PROC 
+extern ?IOCompletionRoutine@IO_IRP@NT@@QAEXKK@Z : PROC
 
 ; void NT_IRP::IOCompletionRoutine(long,unsigned long)
 extern ?IOCompletionRoutine@NT_IRP@NT@@AAEXJK@Z : PROC 
@@ -54,7 +54,7 @@ extern ?IOCompletionRoutine@NT_IRP@NT@@AAEXJK@Z : PROC
 	pop ecx
 	xchg ecx,[esp + 8]
 	mov [esp],eax
-	call ?IOCompletionRoutine@IO_IRP@NT@@AAEXKK@Z
+	call ?IOCompletionRoutine@IO_IRP@NT@@QAEXKK@Z
 	jmp ?DereferenceDll@NT@@YGXXZ	
 ?_IOCompletionRoutine@IO_IRP@NT@@SGXJKPAU_OVERLAPPED@@@Z endp
 

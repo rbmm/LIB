@@ -7,7 +7,9 @@ class CDataPacket
 private:
 	LONG m_nRef;
 	ULONG m_BufferSize, m_DataSize, m_Pad;
-	char m_Data[];
+protected:
+
+	virtual ~CDataPacket() {}
 
 public:
 	CDataPacket(ULONG BufferSize) : m_nRef(1), m_BufferSize(BufferSize), m_DataSize(0), m_Pad(0) { }
@@ -29,6 +31,9 @@ public:
 		if (!InterlockedDecrement(&m_nRef)) delete this;
 	}
 
+	void* operator new(size_t ByteSize) = delete;
+	void* operator new[](size_t ByteSize) = delete;
+
 	void* operator new(size_t ByteSize, ULONG BufferSize)
 	{
 		return new(::operator new(ByteSize + BufferSize)) CDataPacket(BufferSize);
@@ -36,7 +41,7 @@ public:
 
 	PSTR getFreeBuffer()
 	{
-		return m_Data + m_DataSize;
+		return (char*)(this + 1) + m_DataSize;
 	}
 
 	ULONG getFreeSize()
@@ -46,7 +51,7 @@ public:
 
 	PSTR getData()
 	{
-		return m_Data;
+		return (char*)(this + 1);
 	}
 
 	ULONG getBufferSize()
@@ -76,14 +81,14 @@ public:
 
 	ULONG addData(const void* pvData, ULONG cbData)
 	{
-		PVOID to = m_Data + m_DataSize;
+		PVOID to = (char*)(this + 1) + m_DataSize;
 		if (to != pvData) memcpy(to, pvData, cbData);
 		return m_DataSize += cbData;
 	}
 
-	BOOL formatData(PCSTR fmt, ...)
+	BOOL formatData(PCSTR fmt, va_list args)
 	{
-		int n = _vsnprintf(m_Data + m_DataSize, m_BufferSize - m_DataSize, fmt, (va_list)(&fmt + 1));
+		int n = _vsnprintf((char*)(this + 1) + m_DataSize, m_BufferSize - m_DataSize, fmt, args);
 		if (0 > n)
 		{
 			return FALSE;
@@ -93,9 +98,18 @@ public:
 		return TRUE;
 	}
 
+	BOOL formatData(PCSTR fmt, ...)
+	{
+		va_list args;
+		va_start(args, fmt);
+		BOOL b = formatData(fmt, args);
+		va_end(args);
+		return b;
+	}
+
 	void removeData(ULONG DataSize)
 	{
-		memcpy(m_Data, m_Data + DataSize, m_DataSize -= DataSize);
+		memcpy((char*)(this + 1), (char*)(this + 1) + DataSize, m_DataSize -= DataSize);
 	}
 
 	void reservBuffer(ULONG d)
