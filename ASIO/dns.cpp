@@ -191,7 +191,7 @@ class CDnsSocket : public CUdpEndpoint
 	ULONG _DnsServerIp;
 	USHORT _Xid;
 
-	virtual void OnRecv(PSTR Buffer, ULONG cbTransferred);
+	void OnRecv(PSTR Buffer, ULONG cbTransferred);
 	virtual void OnRecv(PSTR Buffer, ULONG cbTransferred, CDataPacket* /*packet*/, SOCKADDR_IN* addr);
 
 	~CDnsSocket()
