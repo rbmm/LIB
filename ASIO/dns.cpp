@@ -246,24 +246,6 @@ void CDnsTask::DecRecvCount()
 	}
 }
 
-LONGLONG GetBootTime()
-{
-	static LONGLONG BootTime;
-	if (!BootTime)
-	{
-		SYSTEM_TIMEOFDAY_INFORMATION sti;
-		if (0 <= NtQuerySystemInformation(SystemTimeOfDayInformation, &sti, sizeof(sti), 0))
-		{
-			BootTime = sti.BootTime.QuadPart;
-		}
-		else
-		{
-			BootTime = 1;
-		}
-	}
-	return BootTime;
-}
-
 ULONG FillDnsServerList(ULONG MaxCount, ULONG IPs[])
 {
 	HANDLE hKey;
@@ -285,15 +267,6 @@ ULONG FillDnsServerList(ULONG MaxCount, ULONG IPs[])
 		};
 		ULONG cb = 0, rcb = 0x100, Index = 0;
 
-		LONGLONG BootTime = GetBootTime();
-		//TIME_FIELDS tf;
-		//LARGE_INTEGER li;
-		//GetSystemTimeAsFileTime((LPFILETIME)&li);
-		//li.QuadPart -= BootTime;
-		//RtlTimeToTimeFields(&li, &tf);
-		//DbgPrint("now %u-%02u-%02u %02u:%02u:%02u after boot\r\n", 
-		//	tf.Year-1601, tf.Month-1, tf.Day-1, tf.Hour, tf.Minute, tf.Second);
-
 		do 
 		{
 			do 
@@ -306,19 +279,6 @@ ULONG FillDnsServerList(ULONG MaxCount, ULONG IPs[])
 					ObjectName.MaximumLength = ObjectName.Length = (USHORT)pkni->NameLength;
 
 					DbgPrint("========================\r\n%wZ:\r\n", &ObjectName);
-
-					if (pkni->LastWriteTime.QuadPart < BootTime)
-					{
-						DbgPrint("!! modified before boot !!\r\n");
-						goto __nextIndex;
-					}
-					//else
-					//{
-					//	pkni->LastWriteTime.QuadPart -= BootTime;
-					//	RtlTimeToTimeFields(&pkni->LastWriteTime, &tf);
-					//	DbgPrint("modified %u-%02u-%02u %02u:%02u:%02u after boot\r\n", 
-					//		tf.Year-1601, tf.Month-1, tf.Day-1, tf.Hour, tf.Minute, tf.Second);
-					//}
 
 					if (0 <= ZwOpenKey(&hKey, KEY_READ, &oa))
 					{
@@ -391,7 +351,6 @@ __skip:
 
 			} while (status == STATUS_BUFFER_OVERFLOW);
 
-__nextIndex:
 			Index++;
 
 		} while (status != STATUS_NO_MORE_ENTRIES);
@@ -581,7 +540,13 @@ mm:
 
 void CDnsSocket::OnRecv(PSTR Buffer, ULONG cbTransferred)
 {
-	if (cbTransferred < sizeof(DNS_HEADER) || reinterpret_cast<DNS_HEADER*>(Buffer)->Xid != _Xid) return ;
+	if (cbTransferred < sizeof(DNS_HEADER) || 
+		reinterpret_cast<DNS_HEADER*>(Buffer)->Xid != _Xid ||
+		reinterpret_cast<DNS_HEADER*>(Buffer)->ResponseCode != DNS_RCODE_NOERROR) return ;
+
+	ULONG AnswerCount = _byteswap_ushort(reinterpret_cast<DNS_HEADER*>(Buffer)->AnswerCount);
+
+	if (!AnswerCount) return ;
 
 	Buffer += sizeof(DNS_HEADER), cbTransferred -= sizeof(DNS_HEADER);
 
@@ -596,7 +561,7 @@ void CDnsSocket::OnRecv(PSTR Buffer, ULONG cbTransferred)
 	if (cbTransferred < sizeof(DNS_WIRE_QUESTION)) return ;
 	Buffer += sizeof(DNS_WIRE_QUESTION), cbTransferred -= sizeof(DNS_WIRE_QUESTION);
 
-	for(;;) 
+	do 
 	{
 		if (!cbTransferred)
 		{
@@ -646,7 +611,8 @@ void CDnsSocket::OnRecv(PSTR Buffer, ULONG cbTransferred)
 			}
 		}
 		cbTransferred -= dwr.DataLength, Buffer += dwr.DataLength;
-	}
+
+	} while(--AnswerCount);
 }
 
 void CDnsSocket::OnRecv(PSTR Buffer, ULONG cbTransferred, CDataPacket* /*packet*/, SOCKADDR_IN* /*addr*/)
