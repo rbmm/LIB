@@ -195,4 +195,13 @@ static const ANSI_STRING name = RTL_CONSTANT_STRINGA(label(__))
 	STATIC_UNICODE_STRING(label(m), name);\
 	static OBJECT_ATTRIBUTES oa = { sizeof(oa), 0, const_cast<PUNICODE_STRING>(&label(m)), a, sd, sqs }
 
+
+#define BEGIN_PRIVILEGES(name, n) static const union { TOKEN_PRIVILEGES name;\
+struct { ULONG PrivilegeCount; LUID_AND_ATTRIBUTES Privileges[n];} label(_) = { n, {
+
+#define LAA(se) {{se}, SE_PRIVILEGE_ENABLED }
+#define LAA_D(se) {{se} }
+
+#define END_PRIVILEGES }};};
+
 #pragma warning(default : 4005)
