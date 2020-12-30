@@ -1,5 +1,12 @@
 // helper for get complex c++ names for use in asm code
-#pragma once
+#ifdef ASM_FUNCTION
+#undef ASM_FUNCTION
+#endif
+
+#ifdef CPP_FUNCTION
+#undef CPP_FUNCTION
+#endif
+
 #ifdef _PRINT_CPP_NAMES_
 
 #define ASM_FUNCTION {__pragma(message(__FUNCDNAME__" proc\r\n" __FUNCDNAME__ " endp"))}
@@ -12,4 +19,5 @@ __pragma(message(__FILE__ "(" _CRT_STRINGIZE(__LINE__) "): !! undef _PRINT_CPP_N
 
 #define ASM_FUNCTION
 #define CPP_FUNCTION
+
 #endif
