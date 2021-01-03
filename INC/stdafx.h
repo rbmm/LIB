@@ -9,6 +9,7 @@
 #define _CRT_SECURE_NO_DEPRECATE
 #define _CRT_NON_CONFORMING_SWPRINTFS
 #define _NO_CRT_STDIO_INLINE
+#define _CRT_SECURE_CPP_OVERLOAD_SECURE_NAMES 0
 
 #define _NT_BEGIN namespace NT {
 #define _NT_END }

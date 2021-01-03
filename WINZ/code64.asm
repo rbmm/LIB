@@ -125,20 +125,5 @@ _TEXT segment 'CODE'
 	ret
 ?wtrnstr@NT@@YAPEA_W_KPEBX01@Z endp
 
-EXTERN ?_WindowProc@ZSubClass@NT@@AEAA_JPEAUHWND__@@I_K_J@Z:PROC
-
-;;;;;;;;;;;;;;;;;;; NT::ZSubClass::__WindowProc ;;;;;;;;;;;;;;;;;;;
-
-?__WindowProc@ZSubClass@NT@@CAXXZ PROC
-	xchg [rsp],r9
-	xchg r9,r8
-	xchg r8,rdx
-	xchg rdx,rcx
-	sub rsp,4*8
-	call ?_WindowProc@ZSubClass@NT@@AEAA_JPEAUHWND__@@I_K_J@Z ; NT::ZSubClass::_WindowProc
-	add rsp,5*8
-	ret
-?__WindowProc@ZSubClass@NT@@CAXXZ ENDP
-
 _TEXT ENDS
 END

@@ -135,14 +135,5 @@ _TEXT segment
 	ret 8
 ?wtrnstr@NT@@YIPA_WKPBXK0@Z endp
 
-EXTERN ?_WindowProc@ZSubClass@NT@@AAEJPAUHWND__@@IIJ@Z:PROC ; NT::ZSubClass::_WindowProc
-
-;;;;;;;;;;;;;;; NT::ZSubClass::__WindowProc  ;;;;;;;;;;;;;;;;;;;;;
-
-?__WindowProc@ZSubClass@NT@@CGXXZ PROC
-	pop ecx
-	jmp	?_WindowProc@ZSubClass@NT@@AAEJPAUHWND__@@IIJ@Z
-?__WindowProc@ZSubClass@NT@@CGXXZ ENDP
-
 _TEXT ends
 end

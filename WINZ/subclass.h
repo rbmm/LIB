@@ -2,30 +2,33 @@
 
 #include "object.h"
 
-class WINZ_API __declspec(novtable) ZSubClass : public ZObject
+class WINZ_API __declspec(novtable) ZSubClass : public ZObject 
 {
-	WNDPROC _prevWndProc;
-	HWND _hWnd;
+	HWND _hwnd = 0;
+	LONG _dwCallCount;
 
-	LRESULT _WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+	static LRESULT CALLBACK SubClassProc(HWND hwnd, UINT uMsg, WPARAM wParam,
+		LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData); 
 
-	static void __WindowProc();
+	LRESULT WrapperWindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
 protected:
 
 	virtual HRESULT QI(REFIID riid, void **ppvObject);
 
+	virtual ~ZSubClass() = default;
+
 	virtual LRESULT WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+
+	virtual void AfterLastMessage()
+	{
+	}
 
 public:
 
-	HWND getHWND(){ return _hWnd; }
-
-	void Subclass(HWND hWnd);
+	BOOL Subclass(HWND hWnd);
 
 	void Unsubclass(HWND hWnd);
 
-	void* operator new(size_t cb);
-
-	void operator delete(void* pv);
+	HWND getHWND() { return _hwnd; }
 };

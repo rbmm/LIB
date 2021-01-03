@@ -122,8 +122,9 @@ LRESULT ZWnd::MStartWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPara
 	SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR)this);
 	SetWindowLongPtr(hwnd, GWLP_WNDPROC, (LONG_PTR)_WindowProc);
 	AddRef();
+	_dwCallCount = 1 << 31;
 	_hWnd = hwnd;
-	return WindowProc(hwnd, uMsg, wParam, lParam);
+	return WrapperWindowProc(hwnd, uMsg, wParam, lParam);
 }
 
 LRESULT CALLBACK ZWnd::StartWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
@@ -131,13 +132,22 @@ LRESULT CALLBACK ZWnd::StartWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPAR
 	return reinterpret_cast<ZWnd*>(TlsGetValue(getTlsIndex()))->MStartWindowProc(hwnd, uMsg, wParam, lParam);
 }
 
+LRESULT ZWnd::WrapperWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+{
+	_dwCallCount++;
+	lParam = WindowProc(hwnd, uMsg, wParam, lParam);
+	if (!--_dwCallCount)
+	{
+		_hWnd = 0;
+		AfterLastMessage();
+		Release();
+	}
+	return lParam;
+}
+
 LRESULT CALLBACK ZWnd::_WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
-	ZWnd* p = (ZWnd*)GetWindowLongPtrW(hwnd, GWLP_USERDATA);
-	p->AddRef();
-	LRESULT r = p->WindowProc(hwnd, uMsg, wParam, lParam);
-	p->Release();
-	return r;
+	return reinterpret_cast<ZWnd*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA))->WrapperWindowProc(hwnd, uMsg, wParam, lParam);
 }
 
 LRESULT ZWnd::DefWinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
@@ -156,8 +166,7 @@ LRESULT ZWnd::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 		}
 		break;
 	case WM_NCDESTROY:
-		_hWnd = 0;
-		Release();
+		_bittestandreset(&_dwCallCount, 31);
 		break;
 	}
 
@@ -222,25 +231,37 @@ HRESULT ZWnd::QI(REFIID riid, void **ppvObject)
 
 //////////////////////////////////////////////////////////////////////////
 // ZDlg
+INT_PTR ZDlg::MStartDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
+{
+	SetWindowLongPtr(hwndDlg, DWLP_USER, (LONG_PTR)this);
+	SetWindowLongPtr(hwndDlg, DWLP_DLGPROC, (LONG_PTR)_DialogProc);
+	AddRef();
+	_dwCallCount = 1 << 31;
+	_hWnd = hwndDlg;
+	return WrapperDialogProc(hwndDlg, uMsg, wParam, lParam);
+}
 
 INT_PTR CALLBACK ZDlg::StartDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
-	PVOID pv = TlsGetValue(getTlsIndex());
-	SetWindowLongPtr(hwndDlg, DWLP_USER, (LONG_PTR)pv);
-	SetWindowLongPtr(hwndDlg, DWLP_DLGPROC, (LONG_PTR)_DialogProc);
-	reinterpret_cast<ZDlg*>(pv)->AddRef();
-	reinterpret_cast<ZDlg*>(pv)->_hWnd = hwndDlg;
+	return reinterpret_cast<ZDlg*>(TlsGetValue(getTlsIndex()))->MStartDialogProc(hwndDlg, uMsg, wParam, lParam);
+}
 
-	return reinterpret_cast<ZDlg*>(pv)->DialogProc(hwndDlg, uMsg, wParam, lParam);
+INT_PTR ZDlg::WrapperDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
+{
+	_dwCallCount++;
+	lParam = DialogProc(hwndDlg, uMsg, wParam, lParam);
+	if (!--_dwCallCount)
+	{
+		_hWnd = 0;
+		AfterLastMessage();
+		Release();
+	}
+	return lParam;
 }
 
 INT_PTR CALLBACK ZDlg::_DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
-	ZDlg* p = (ZDlg*)GetWindowLongPtrW(hwndDlg, DWLP_USER);
-	p->AddRef();
-	INT_PTR r = p->DialogProc(hwndDlg, uMsg, wParam, lParam);
-	p->Release();
-	return r;
+	return reinterpret_cast<ZDlg*>(GetWindowLongPtrW(hwndDlg, DWLP_USER))->WrapperDialogProc(hwndDlg, uMsg, wParam, lParam);
 }
 
 INT_PTR ZDlg::DialogProc(HWND /*hwndDlg*/, UINT uMsg, WPARAM /*wParam*/, LPARAM /*lParam*/)
@@ -248,8 +269,7 @@ INT_PTR ZDlg::DialogProc(HWND /*hwndDlg*/, UINT uMsg, WPARAM /*wParam*/, LPARAM 
 	switch (uMsg)
 	{
 	case WM_NCDESTROY:
-		_hWnd = 0;
-		Release();
+		_bittestandreset(&_dwCallCount, 31);
 		break;
 	}
 
