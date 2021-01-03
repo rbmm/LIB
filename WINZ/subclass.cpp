@@ -48,7 +48,7 @@ LRESULT CALLBACK ZSubClass::SubClassProc(HWND hwnd, UINT uMsg, WPARAM wParam,
 {
 	if (uIdSubclass != dwRefData) __debugbreak();
 
-	reinterpret_cast<ZSubClass*>(dwRefData)->WrapperWindowProc(hwnd, uMsg, wParam, lParam);
+	return reinterpret_cast<ZSubClass*>(dwRefData)->WrapperWindowProc(hwnd, uMsg, wParam, lParam);
 }
 
 LRESULT ZSubClass::WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
