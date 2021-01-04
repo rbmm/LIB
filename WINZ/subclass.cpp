@@ -6,6 +6,11 @@ _NT_BEGIN
 
 //////////////////////////////////////////////////////////////////////////
 // ZSubClass
+void ZSubClass::OnCallCountZero()
+{
+	AfterLastMessage();
+	Release();
+}
 
 BOOL ZSubClass::Subclass(HWND hWnd)
 {
@@ -18,17 +23,20 @@ BOOL ZSubClass::Subclass(HWND hWnd)
 		return TRUE;
 	}
 
-	AfterLastMessage();
-	Release();
-
+	_dwCallCount = 0;
+	OnCallCountZero();
 	return FALSE;
 }
 
 void ZSubClass::Unsubclass(HWND hWnd)
 {
-	if (RemoveWindowSubclass(hWnd, SubClassProc, (UINT_PTR)this))
+	if (_bittestandreset(&_dwCallCount, 31))
 	{
-		_bittestandreset(&_dwCallCount, 31);
+		if (!RemoveWindowSubclass(hWnd, SubClassProc, (UINT_PTR)this)) __debugbreak();
+		if (!_dwCallCount)
+		{
+			OnCallCountZero();
+		}
 	}
 }
 
@@ -38,8 +46,7 @@ LRESULT ZSubClass::WrapperWindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM
 	lParam = WindowProc(hWnd, uMsg, wParam, lParam);
 	if (!--_dwCallCount)
 	{
-		AfterLastMessage();
-		Release();
+		OnCallCountZero();
 	}
 	return lParam;
 }

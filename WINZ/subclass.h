@@ -12,6 +12,8 @@ class WINZ_API __declspec(novtable) ZSubClass : public ZObject
 
 	LRESULT WrapperWindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
+	void OnCallCountZero();
+
 protected:
 
 	virtual HRESULT QI(REFIID riid, void **ppvObject);
