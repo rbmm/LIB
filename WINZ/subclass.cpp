@@ -18,6 +18,7 @@ BOOL ZSubClass::Subclass(HWND hWnd)
 		return TRUE;
 	}
 
+	AfterLastMessage();
 	Release();
 
 	return FALSE;
