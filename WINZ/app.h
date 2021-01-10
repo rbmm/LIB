@@ -40,16 +40,16 @@ public:
 class __declspec(novtable) ZSignalObject
 {
 public:
+	virtual ~ZSignalObject() = default;
 	virtual void OnSignal() = 0;
 	virtual void OnAbandoned();
+	virtual void OnStop();
 };
 
 class WINZ_API ZApp
 {
 	LIST_ENTRY _headTM, _headIdle;
 	
-	BOOL PreTranslateMessage(PMSG lpMsg);
-
 protected:
 
 	virtual DWORD GetWaitHandles(HANDLE ** ppHandles);
@@ -68,10 +68,11 @@ public:
 
 	void InsertTM(PLIST_ENTRY entry);
 	void InsertIdle(PLIST_ENTRY entry);
+	BOOL PreTranslateMessage(PMSG lpMsg);
 
 	virtual BOOL CanClose(HWND hwnd);
 
-	void Run();
+	WPARAM Run();
 };
 
 class WINZ_API ZAppEx : public ZApp

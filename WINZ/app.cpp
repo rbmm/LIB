@@ -230,7 +230,7 @@ void ZApp::OnIdle()
 	}
 }
 
-void ZApp::Run()
+WPARAM ZApp::Run()
 {
 	for (;;)
 	{
@@ -257,7 +257,7 @@ void ZApp::Run()
 
 				if (msg.message == WM_QUIT) 
 				{
-					return ;
+					return msg.wParam;
 				}
 
 				if (!IsDialogMessageEx(&msg))
@@ -342,6 +342,11 @@ void ZSignalObject::OnAbandoned()
 	__debugbreak();
 }
 
+void ZSignalObject::OnStop()
+{
+	__debugbreak();
+}
+
 BOOL ZAppEx::addWaitObject(ZSignalObject* pObject, HANDLE hObject)
 {
 	if (_nCount < RTL_NUMBER_OF(_Handles))
@@ -357,23 +362,25 @@ BOOL ZAppEx::addWaitObject(ZSignalObject* pObject, HANDLE hObject)
 
 BOOL ZAppEx::delWaitObject(ZSignalObject* pObject)
 {
-	if (DWORD nCount = _nCount)
+	if (ULONG nCount = _nCount)
 	{
 		ZSignalObject** ppObjects = _objects;
 		HANDLE* pHandles = _Handles;
 		do 
 		{
-			if (*ppObjects++ == pObject)
+			--nCount;
+			if (*ppObjects == pObject)
 			{
-				if (--nCount)
+				if (nCount)
 				{
-					memcpy(ppObjects - 1, ppObjects, nCount * sizeof(PVOID));
-					memcpy(pHandles, pHandles + 1, nCount * sizeof(PVOID));
+					memcpy(ppObjects, ppObjects + 1, nCount * sizeof(PVOID));
+					memcpy(pHandles,  pHandles  + 1, nCount * sizeof(PVOID));
 				}
+				ppObjects[nCount] = 0, pHandles[nCount] = 0;
 				_nCount--;
 				return TRUE;
 			}
-		} while (pHandles++, --nCount);
+		} while (ppObjects++, pHandles++, nCount);
 	}
 
 	return FALSE;
@@ -408,6 +415,16 @@ ZAppEx::ZAppEx()
 
 ZAppEx::~ZAppEx()
 {
+	if (ULONG nCount = _nCount)
+	{
+		_nCount = 0;
+
+		ZSignalObject** ppObjects = _objects;
+		do 
+		{
+			(*ppObjects++)->OnStop();
+		} while (--nCount);
+	}
 }
 
 //////////////////////////////////////////////////////////////////////////
