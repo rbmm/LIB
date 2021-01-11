@@ -1099,6 +1099,19 @@ NTDLL LdrVerifyImageMatchesChecksum(HANDLE hFile, DO_CHECK pfn, LPVOID Context, 
 
 NTDLL LdrGetDllHandle(LPCWSTR szPath, int, PCUNICODE_STRING DllName, HMODULE* phmod);
 
+#define LDR_GET_DLL_HANDLE_EX_UNCHANGED_REFCOUNT 0x00000001
+#define LDR_GET_DLL_HANDLE_EX_PIN 0x00000002
+
+NTDLL
+LdrGetDllHandleEx(
+				  _In_ ULONG Flags,
+				  _In_opt_ PWSTR DllPath,
+				  _In_opt_ PULONG DllCharacteristics,
+				  _In_ PUNICODE_STRING DllName,
+				  _Out_opt_ HMODULE *DllHandle
+				  );
+
+
 #define FLG_SHOW_LDR_SNAPS 0x00000002
 
 typedef NTSTATUS (CALLBACK * EnumHeapProc)(HANDLE hHeap, PVOID UserData);
@@ -1206,8 +1219,8 @@ NTDLL
 LdrGetProcedureAddress
 (
 	HMODULE hModule,
-	const ANSI_STRING* ProcedureName,
-	int Ordinal,
+	PCANSI_STRING ProcedureName,
+	ULONG Ordinal,
 	void** pAddress
 	);
 

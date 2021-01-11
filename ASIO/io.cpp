@@ -5,14 +5,7 @@ _NT_BEGIN
 
 #include "io.h"
 
-#ifdef _WINDLL
-void ReferenceDll()ASM_FUNCTION;
-void DereferenceDll()ASM_FUNCTION;
-#define IOCompletionRoutine(status, dwNumberOfBytesTransfered) IOCompletionRoutine((status), (dwNumberOfBytesTransfered));DereferenceDll()
-#else
-#define ReferenceDll()
-#define DereferenceDll()
-#endif
+IO_RUNDOWN IO_RUNDOWN::g_IoRundown;
 
 NTSTATUS (NTAPI *fnSetIoCompletionCallback)(HANDLE , LPOVERLAPPED_COMPLETION_ROUTINE , ULONG ) = 
 	(NTSTATUS (NTAPI *)(HANDLE , LPOVERLAPPED_COMPLETION_ROUTINE , ULONG ))RtlSetIoCompletionCallback;
@@ -35,15 +28,15 @@ NTSTATUS SkipCompletionOnSuccess(HANDLE hObject)
 void IO_OBJECT::operator delete(void* p)
 {
 	::operator delete(p);
-	g_IoRundown->Release();
+	IO_RUNDOWN::g_IoRundown.Release();
 }
 
 void* IO_OBJECT::operator new(size_t cb)
 {
-	if (g_IoRundown->Acquire())
+	if (IO_RUNDOWN::g_IoRundown.Acquire())
 	{
 		if (PVOID p = ::operator new(cb)) return p;
-		g_IoRundown->Release();
+		IO_RUNDOWN::g_IoRundown.Release();
 	}
 	return 0;
 }
@@ -64,7 +57,6 @@ IO_IRP::IO_IRP(IO_OBJECT* pObj, DWORD Code, CDataPacket* packet, PVOID Ptr)
 	m_pObj = pObj;
 	pObj->AddRef();
 	if (packet) packet->AddRef();
-	ReferenceDll();
 }
 
 IO_IRP::~IO_IRP()
@@ -75,13 +67,13 @@ IO_IRP::~IO_IRP()
 
 void* IO_IRP::operator new(size_t size, size_t cb)
 {
-	if (g_IoRundown->Acquire())
+	if (IO_RUNDOWN::g_IoRundown.Acquire())
 	{
 		if (PVOID p = ::operator new(size + cb)) 
 		{
 			return p;
 		}
-		g_IoRundown->Release();
+		IO_RUNDOWN::g_IoRundown.Release();
 	}
 
 	return 0;
@@ -89,12 +81,12 @@ void* IO_IRP::operator new(size_t size, size_t cb)
 
 void* IO_IRP::operator new(size_t size)
 {
-	if (g_IoRundown->Acquire())
+	if (IO_RUNDOWN::g_IoRundown.Acquire())
 	{
 		PVOID p = size == sizeof(IO_IRP) ? s_bh.alloc() : 0;
 		if (!p && !(p = ::operator new(size)))
 		{
-			g_IoRundown->Release();
+			IO_RUNDOWN::g_IoRundown.Release();
 		}
 		return p;
 	}
@@ -105,7 +97,7 @@ void* IO_IRP::operator new(size_t size)
 void IO_IRP::operator delete(PVOID p)
 {
 	s_bh.IsBlock(p) ? s_bh.free(p) : ::operator delete(p);
-	g_IoRundown->Release();
+	IO_RUNDOWN::g_IoRundown.Release();
 }
 
 DWORD IO_IRP::CheckErrorCode(DWORD dwErrorCode, BOOL bSkippedOnSynchronous)
@@ -148,13 +140,13 @@ NTSTATUS NT_IRP::CheckNtStatus(NTSTATUS status, BOOL bSkippedOnSynchronous)
 
 void* NT_IRP::operator new(size_t size, size_t cb)
 {
-	if (g_IoRundown->Acquire())
+	if (IO_RUNDOWN::g_IoRundown.Acquire())
 	{
 		if (PVOID p = ::operator new(size + cb)) 
 		{
 			return p;
 		}
-		g_IoRundown->Release();
+		IO_RUNDOWN::g_IoRundown.Release();
 	}
 
 	return 0;
@@ -162,12 +154,12 @@ void* NT_IRP::operator new(size_t size, size_t cb)
 
 void* NT_IRP::operator new(size_t size)
 {
-	if (g_IoRundown->Acquire())
+	if (IO_RUNDOWN::g_IoRundown.Acquire())
 	{
 		PVOID p = size == sizeof(NT_IRP) ? s_bh.alloc() : 0;
 		if (!p && !(p = ::operator new(size)))
 		{
-			g_IoRundown->Release();
+			IO_RUNDOWN::g_IoRundown.Release();
 		}
 		
 		return p;
@@ -179,7 +171,7 @@ void* NT_IRP::operator new(size_t size)
 void NT_IRP::operator delete(PVOID p)
 {
 	s_bh.IsBlock(p) ? s_bh.free(p) : ::operator delete(p);
-	g_IoRundown->Release();
+	IO_RUNDOWN::g_IoRundown.Release();
 }
 
 NT_IRP::NT_IRP(IO_OBJECT* pObj, DWORD Code, CDataPacket* packet, PVOID Ptr)
@@ -192,7 +184,6 @@ NT_IRP::NT_IRP(IO_OBJECT* pObj, DWORD Code, CDataPacket* packet, PVOID Ptr)
 	m_pObj = pObj;
 	pObj->AddRef();
 	if (packet) packet->AddRef();
-	ReferenceDll();
 }
 
 NT_IRP::~NT_IRP()
@@ -202,24 +193,84 @@ NT_IRP::~NT_IRP()
 }
 
 //////////////////////////////////////////////////////////////////////////
-//
+// RtlWait
+
+BOOL RtlWait::RegisterWait(HANDLE hObject, ULONG dwMilliseconds)
+{
+	AddRef();
+
+	_hObject = hObject;
+	if (RegisterWaitForSingleObject(&_hWait, hObject, _WaitCallback, this, dwMilliseconds, WT_EXECUTEINTIMERTHREAD|WT_EXECUTEONLYONCE))
+	{
+		return TRUE;
+	}
+
+	_hObject = 0;
+	Release();
+	return FALSE;
+}
+
+VOID RtlWait::WaitCallback(BOOLEAN Timeout)
+{
+	CPP_FUNCTION;
+
+	_cbExecuted = TRUE;
+	Unregister();
+	OnSignal(_hObject, Timeout ? STATUS_TIMEOUT : STATUS_WAIT_0);
+	Release();
+}
+
+void RtlWait::Unregister()
+{
+	if (HANDLE hWait = InterlockedExchangePointerNoFence(&_hWait, 0))
+	{
+		if (UnregisterWaitEx(hWait, 0))
+		{
+			// WaitOrTimerCallback or not called or already returned
+			if (_cbExecuted)
+			{
+				// WaitOrTimerCallbackalready returned
+				// it called Release() by self
+			}
+			else
+			{
+				// WaitOrTimerCallback never called
+				OnSignal(_hObject, STATUS_CANCELLED);
+				Release();
+			}
+		}
+		else
+		{
+			if (GetLastError() != ERROR_IO_PENDING)
+			{
+				__debugbreak();
+			}
+		}
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+// RtlTimer
+
 VOID RtlTimer::TimerCallback()
 {
+	CPP_FUNCTION;
+
+	_cbExecuted = TRUE;
 	Stop();
+	OnTimer(FALSE);
 	Release();
 }
 
 BOOL RtlTimer::Set(DWORD dwMilliseconds)
 {
 	AddRef();
-	ReferenceDll();
 
-	if (CreateTimerQueueTimer(&_hTimer, 0, _TimerCallback, this, dwMilliseconds, 0, WT_EXECUTEINTIMERTHREAD))
+	if (CreateTimerQueueTimer(&_hTimer, 0, _TimerCallback, this, dwMilliseconds, 0, WT_EXECUTEINTIMERTHREAD|WT_EXECUTEONLYONCE))
 	{
 		return TRUE;
 	}
 
-	DereferenceDll();
 	Release();
 	return FALSE;
 }
@@ -230,9 +281,18 @@ void RtlTimer::Stop()
 	{
 		if (DeleteTimerQueueTimer(0, hTimer, 0))
 		{
-			// will be no callback, release it reference
-			DereferenceDll();
-			Release();
+			// WaitOrTimerCallback or not called or already returned
+			if (_cbExecuted)
+			{
+				// WaitOrTimerCallbackalready returned
+				// it called Release() by self
+			}
+			else
+			{
+				// WaitOrTimerCallback never called
+				OnTimer(TRUE);
+				Release();
+			}
 		}
 		else
 		{
@@ -247,12 +307,11 @@ void RtlTimer::Stop()
 //////////////////////////////////////////////////////////////////////////
 // IO_OBJECT_TIMEOUT
 
-VOID IO_OBJECT_TIMEOUT::IoTimer::TimerCallback()
+VOID IO_OBJECT_TIMEOUT::IoTimer::OnTimer(BOOL /*bCanceled*/)
 {
 	IO_OBJECT_TIMEOUT* pObj = _pObj;
 	pObj->SetNewTimer(0);
 	pObj->OnTimeout();
-	RtlTimer::TimerCallback();
 }
 
 void IO_OBJECT_TIMEOUT::SetNewTimer(IoTimer* pTimer)

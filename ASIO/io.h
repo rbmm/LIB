@@ -5,13 +5,33 @@
 #include "packet.h"
 #include "blockheap.h"
 
+#ifdef _WINDLL
+void ReferenceDll()ASM_FUNCTION;
+void DereferenceDll()ASM_FUNCTION;
+void InitDllReference()ASM_FUNCTION;
+#else
+#define ReferenceDll()
+#define DereferenceDll()
+#define InitDllReference()
+#endif
+
 extern NTSTATUS (NTAPI *fnSetIoCompletionCallback)(HANDLE , LPOVERLAPPED_COMPLETION_ROUTINE , ULONG );
 
 NTSTATUS NTAPI BindIoCompletionEx(HANDLE hObject, LPOVERLAPPED_COMPLETION_ROUTINE CompletionRoutine);
 
 NTSTATUS NTAPI SkipCompletionOnSuccess(HANDLE hObject);
 
-extern RUNDOWN_REF * g_IoRundown;
+struct IO_RUNDOWN : public RUNDOWN_REF 
+{
+	virtual void RundownCompleted();
+
+	IO_RUNDOWN()
+	{
+		InitDllReference();
+	}
+
+	static IO_RUNDOWN g_IoRundown;
+};
 
 class __declspec(novtable) IO_OBJECT 
 {
@@ -32,12 +52,14 @@ class __declspec(novtable) IO_OBJECT
 protected:
 
 	IO_OBJECT() : m_nRef(1), m_hFile(0)
-	{ 
+	{
+		ReferenceDll();
 	}
 
 	virtual ~IO_OBJECT()
 	{
 		Close();
+		DereferenceDll();
 	}
 
 	virtual void CloseObjectHandle(HANDLE hFile)
@@ -254,12 +276,68 @@ public:
 };
 
 //////////////////////////////////////////////////////////////////////////
+// RtlWait
+
+class __declspec(novtable) RtlWait 
+{
+	HANDLE _hWait = 0;
+	HANDLE _hObject = 0;
+	BOOL _cbExecuted = FALSE;
+	LONG _dwRef = 1;
+
+#ifdef _WINDLL
+	static VOID CALLBACK _WaitCallback(PVOID pTimer, BOOLEAN Timeout)ASM_FUNCTION;
+#else
+	static VOID CALLBACK _WaitCallback(PVOID pTimer, BOOLEAN Timeout)
+	{
+		static_cast<RtlWait*>(pTimer)->WaitCallback(Timeout);
+	}
+#endif
+
+	VOID FASTCALL WaitCallback(BOOLEAN Timeout);
+
+protected:
+
+	virtual VOID OnSignal(HANDLE hObject, NTSTATUS status) = 0;
+
+	virtual ~RtlWait()
+	{
+		DereferenceDll();
+	}
+
+public:
+
+	RtlWait()
+	{
+		ReferenceDll();
+	}
+
+	void AddRef()
+	{
+		InterlockedIncrementNoFence(&_dwRef);
+	}
+
+	void Release()
+	{
+		if (!InterlockedDecrement(&_dwRef))
+		{
+			delete this;
+		}
+	}
+
+	void Unregister();
+
+	BOOL RegisterWait(HANDLE hObject, ULONG dwMilliseconds);
+};
+
+//////////////////////////////////////////////////////////////////////////
 // RtlTimer
 
-class RtlTimer 
+class __declspec(novtable) RtlTimer 
 {
-	HANDLE _hTimer;
-	LONG _dwRef;
+	HANDLE _hTimer = 0;
+	BOOL _cbExecuted = FALSE;
+	LONG _dwRef = 1;
 
 #ifdef _WINDLL
 	static VOID CALLBACK _TimerCallback(PVOID pTimer, BOOLEAN /*TimerOrWaitFired*/)ASM_FUNCTION;
@@ -269,19 +347,23 @@ class RtlTimer
 		static_cast<RtlTimer*>(pTimer)->TimerCallback();
 	}
 #endif
+	
+	VOID TimerCallback();
 
 protected:
 
-	virtual VOID TimerCallback();
+	virtual VOID OnTimer(BOOL bCanceled) = 0;
 
 	virtual ~RtlTimer()
 	{
+		DereferenceDll();
 	}
 
 public:
 
-	RtlTimer() : _hTimer(0), _dwRef(1)
+	RtlTimer()
 	{
+		ReferenceDll();
 	}
 
 	void AddRef()
@@ -316,7 +398,7 @@ class __declspec(novtable) IO_OBJECT_TIMEOUT : public IO_OBJECT
 	{
 		IO_OBJECT_TIMEOUT* _pObj;
 
-		virtual VOID TimerCallback();
+		virtual VOID OnTimer(BOOL /*bCanceled*/);
 
 		~IoTimer()
 		{
