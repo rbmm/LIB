@@ -323,7 +323,7 @@ BOOL IsDialogMessageEx(PMSG lpMsg)
 
 	while (hwnd)
 	{
-		if (ZDlg::IsDialog(hwnd))
+		if (GetClassLongW(hwnd, GCW_ATOM) == (ULONG)(ULONG_PTR)WC_DIALOG)
 		{
 			return IsDialogMessage(hwnd, lpMsg);
 		}
