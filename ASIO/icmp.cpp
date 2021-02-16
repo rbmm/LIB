@@ -7,25 +7,28 @@ _NT_BEGIN
 #include <icmpapi.h>
 #include "icmp.h"
 
-void ICMP_DATA::IOCompletionRoutine(CDataPacket* , DWORD , NTSTATUS , ULONG_PTR , PVOID )
+void ICMP::EchoRequestContext::OnApc(ULONG dwError, ULONG ReplySize)
+{
+	pObj->OnReply(dwError, (PICMP_ECHO_REPLY)ReplyBuffer, ReplySize, ctx);
+	delete this;
+}
+
+void WINAPI ICMP::EchoRequestContext::sOnApc(PVOID This, PIO_STATUS_BLOCK piosb, ULONG )
+{
+	reinterpret_cast<EchoRequestContext*>(This)->OnApc(RtlNtStatusToDosError(piosb->Status), (ULONG)piosb->Information);
+}
+
+void ICMP::IOCompletionRoutine(CDataPacket* , ULONG , NTSTATUS , ULONG_PTR , PVOID )
 {
 	__debugbreak();
 }
 
-void ICMP_DATA::CloseObjectHandle(HANDLE hFile)
+void ICMP::CloseObjectHandle(HANDLE hFile)
 {
 	IcmpCloseHandle(hFile);
 }
 
-void WINAPI ICMP_DATA::OnApc(REQUEST_DATA* pData, PIO_STATUS_BLOCK piosb, ULONG )
-{
-	pData->m_pObj->OnReply((PICMP_ECHO_REPLY)pData->m_packet->getData(), piosb->Status, 
-		(ULONG)piosb->Information, pData->m_packet, pData->m_pv, pData->m_dw);
-
-	delete pData;
-}
-
-ULONG ICMP_DATA::Create()
+ULONG ICMP::Create()
 {
 	HANDLE hFile = IcmpCreateFile();
 
@@ -39,56 +42,47 @@ ULONG ICMP_DATA::Create()
 	return NOERROR;
 }
 
-ULONG ICMP_DATA::SendEcho(IPAddr DestinationAddress, PVOID pvData, WORD cbData, CDataPacket* packet, PVOID pv, DWORD dw, DWORD Timeout, UCHAR Flags, UCHAR Ttl)
+void ICMP::SendEcho(
+						 IPAddr DestinationAddress, 
+						 const void* RequestData, 
+						 WORD RequestSize, 
+						 ULONG ReplySize, 
+						 ULONG_PTR ctx, 
+						 DWORD Timeout/* = 4000*/, 
+						 UCHAR Flags/* = IP_FLAG_DF*/, 
+						 UCHAR Ttl/* = 255*/)
 {
-	IP_OPTION_INFORMATION opt = { Ttl, 0, Flags };
-
-	ULONG err = ERROR_NO_SYSTEM_RESOURCES;
-
-	if (REQUEST_DATA* pData = new REQUEST_DATA(this, packet, pv, dw))
+	if (EchoRequestContext* pCtx = new(ReplySize) EchoRequestContext(this, ctx))
 	{
-		err = ERROR_INVALID_HANDLE;
-
 		HANDLE hFile;
+
+		ULONG dwError = ERROR_INVALID_HANDLE;
+
 		if (LockHandle(hFile))
 		{
-			err = IcmpSendEcho2Ex(hFile, 0, (PIO_APC_ROUTINE)OnApc, pData, 
-				0, DestinationAddress, 
-				pvData, cbData, 
-				&opt, 
-				packet->getFreeBuffer(), packet->getFreeSize(), 
-				Timeout);
+			IP_OPTION_INFORMATION opt = { Ttl, 0, Flags };
+
+			dwError = IcmpSendEcho2Ex(hFile, 0, EchoRequestContext::sOnApc, 
+				pCtx, 0, DestinationAddress, 
+				const_cast<void*>(RequestData), RequestSize, &opt, 
+				pCtx->ReplyBuffer, ReplySize, Timeout) ? NOERROR : GetLastError();
 
 			UnlockHandle();
 		}
 
-		switch (err)
+		switch (dwError)
 		{
 		case NOERROR:
 		case ERROR_IO_PENDING:
 			break;
 		default:
-			delete pData;
+			pCtx->OnApc(dwError, 0);
 		}
+
+		return ;
 	}
 
-	return err;
-}
-
-ICMP_DATA::REQUEST_DATA::REQUEST_DATA(ICMP_DATA* pObj, CDataPacket* packet, PVOID pv, DWORD dw)
-{
-	m_pObj = pObj;
-	pObj->AddRef();
-	m_packet = packet;
-	packet->AddRef();
-	m_pv = pv;
-	m_dw = dw;
-}
-
-ICMP_DATA::REQUEST_DATA::~REQUEST_DATA()
-{
-	m_packet->Release();
-	m_pObj->Release();
+	OnReply(ERROR_OUTOFMEMORY, 0, 0, ctx);
 }
 
 _NT_END

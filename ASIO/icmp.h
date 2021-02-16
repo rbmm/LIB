@@ -2,33 +2,60 @@
 
 #include "io.h"
 
-class __declspec(novtable) ICMP_DATA : public IO_OBJECT
+class __declspec(novtable) ICMP : public IO_OBJECT
 {
-	virtual void IOCompletionRoutine(CDataPacket* , DWORD , NTSTATUS , ULONG_PTR , PVOID );
+	virtual void IOCompletionRoutine(CDataPacket* , ULONG , NTSTATUS , ULONG_PTR , PVOID );
 
 	virtual void CloseObjectHandle(HANDLE hFile);
 
-	struct REQUEST_DATA 
+	struct EchoRequestContext 
 	{
-		ICMP_DATA* m_pObj;
-		CDataPacket* m_packet;
-		PVOID m_pv;
-		DWORD m_dw;
+		ICMP* pObj;
+		ULONG_PTR ctx;
+		UCHAR ReplyBuffer[];
 
-		REQUEST_DATA(ICMP_DATA* pObj, CDataPacket* packet, PVOID pv = 0, DWORD dw = 0);
+		EchoRequestContext(ICMP* pObj, ULONG_PTR ctx) : pObj(pObj), ctx(ctx)
+		{
+			pObj->AddRef();
+		}
 
-		~REQUEST_DATA();
+		~EchoRequestContext()
+		{
+			pObj->Release();
+		}
+
+		void* operator new(size_t s, ULONG ReplySize)
+		{
+			return IO_OBJECT::operator new(s + ReplySize);
+		}
+
+		void operator delete(void* pv)
+		{
+			IO_OBJECT::operator delete(pv);
+		}
+
+		void OnApc(ULONG dwError, ULONG ReplySize);
+
+		static void WINAPI sOnApc(PVOID This, PIO_STATUS_BLOCK piosb, ULONG );
 	};
 
-	static void WINAPI OnApc(REQUEST_DATA* pData, PIO_STATUS_BLOCK piosb, ULONG );
+	friend EchoRequestContext;
 
 protected:
 
-	virtual void OnReply(PICMP_ECHO_REPLY reply, NTSTATUS status, DWORD ReplySize, CDataPacket* packet, PVOID pv, DWORD dw) = 0;
+	virtual void OnReply(ULONG dwError, PICMP_ECHO_REPLY ReplyBuffer, ULONG ReplySize, ULONG_PTR ctx) = 0;
 
 public:
 
 	ULONG Create();
 
-	ULONG SendEcho(IPAddr DestinationAddress, PVOID pvData, WORD cbData, CDataPacket* packet, PVOID pv, DWORD dw, DWORD Timeout = 4000, UCHAR Flags = IP_FLAG_DF, UCHAR Ttl = 255);
+	void SendEcho(
+		IPAddr DestinationAddress, 
+		const void* RequestData, 
+		WORD RequestSize, 
+		ULONG ReplySize, 
+		ULONG_PTR ctx, 
+		DWORD Timeout = 4000, 
+		UCHAR Flags = IP_FLAG_DF, 
+		UCHAR Ttl = 255);
 };
