@@ -5,6 +5,15 @@ _NT_BEGIN
 #include "app.h"
 #include "window.h"
 
+ULONG GetWinVersion()
+{
+	ULONG M, m;
+	RtlGetNtVersionNumbers(&M, &m, 0);
+	return (M << 8) + m;
+}
+
+ULONG gWinVersion = GetWinVersion();
+
 ULONG GetNONCLIENTMETRICSWSize()
 {
 	static ULONG m;
@@ -65,7 +74,8 @@ NTSTATUS ZRegistry::Open(PCWSTR path)
 
 		swprintf(sz, L"%wZ\\%s", &RegistryPath, path);
 
-		status = ZwCreateKey(&_hKey, KEY_ALL_ACCESS, &CObjectAttributes(sz), 0, 0, 0, 0);
+		CObjectAttributes oa(sz);
+		status = ZwCreateKey(&_hKey, KEY_ALL_ACCESS, &oa, 0, 0, 0, 0);
 
 		RtlFreeUnicodeString(&RegistryPath);
 	}
@@ -85,7 +95,8 @@ NTSTATUS ZRegistry::Create(PCWSTR path)
 
 		swprintf(sz, L"%wZ\\%s", &RegistryPath, path);
 
-		status = ZwCreateKey(&_hKey, KEY_ALL_ACCESS, &CObjectAttributes(sz), 0, 0, 0, 0);
+		CObjectAttributes oa(sz);
+		status = ZwCreateKey(&_hKey, KEY_ALL_ACCESS, &oa, 0, 0, 0, 0);
 
 		RtlFreeUnicodeString(&RegistryPath);
 	}

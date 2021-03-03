@@ -4,6 +4,7 @@ _NT_BEGIN
 
 #include "../inc/idcres.h"
 #include "ctrl.h"
+#include "wic.h"
 
 void ZToolBar::SetBrush(HBRUSH hbr)
 {
@@ -135,22 +136,35 @@ HWND ZStatusBar::Create(HWND hwnd)
 		0, 0, 0, 0, hwnd, (HMENU)AFX_IDW_STATUS_BAR, 0, 0);
 }
 
-void CIcons::SetIcons(HWND hwnd, HINSTANCE hInstance, LPCWSTR id)
+HRESULT LoadIconEx(HINSTANCE hinst,
+				   PCWSTR pszName,
+				   int cx,
+				   int cy,
+				   HICON *phico)
 {
-	_hicon[0] = (HICON)LoadImage(hInstance, id, IMAGE_ICON, 
-		GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON), LR_SHARED);
+	if (IMAGE_SNAP_BY_ORDINAL((ULONG_PTR)pszName))
+	{
+		LIC c { 0, cx, cy };
+		HRESULT hr = c.LoadIconWithPNG((PCWSTR)IMAGE_ORDINAL((ULONG_PTR)pszName), hinst);
+		*phico = c._hi;
+		return hr;
+	}
 
-	SendMessage(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)_hicon[0]);
-
-	_hicon[1] = (HICON)LoadImage(hInstance, id, IMAGE_ICON, 
-		GetSystemMetrics(SM_CXICON), GetSystemMetrics(SM_CYICON), LR_SHARED);
-
-	SendMessage(hwnd, WM_SETICON, ICON_BIG, (LPARAM)_hicon[1]);
+	return LoadIconWithScaleDown(hinst, pszName, cx, cy, phico);
 }
 
-CIcons::CIcons()
+void CIcons::SetIcons(HWND hwnd, HINSTANCE hInstance, PCWSTR id)
 {
-	_hicon[0] = 0, _hicon[1] = 0;
+	LoadIconEx(hInstance, id, GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON), &_hicon[0]);
+	LoadIconEx(hInstance, id, GetSystemMetrics(SM_CXICON), GetSystemMetrics(SM_CYICON), &_hicon[1]);
+
+	SetIcons(hwnd);
+}
+
+void CIcons::SetIcons(HWND hwnd)
+{
+	SendMessage(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)_hicon[0]);
+	SendMessage(hwnd, WM_SETICON, ICON_BIG, (LPARAM)_hicon[1]);
 }
 
 CIcons::~CIcons()

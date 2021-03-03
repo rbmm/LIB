@@ -6,6 +6,7 @@
 #define AFX_IDW_TOOLBAR  0xE800
 #endif
 
+
 class WINZ_API ZToolBar
 {
 	HWND _hwnd;
@@ -26,7 +27,7 @@ public:
 
 class WINZ_API ZStatusBar
 {
-	HWND _hwnd;
+	HWND _hwnd = 0;
 public:
 	HWND Create(HWND hwnd);
 
@@ -35,21 +36,16 @@ public:
 		SendMessage(_hwnd, SB_SETPARTS, n, (LPARAM)parts);
 	}
 
-	ZStatusBar()
-	{
-		_hwnd = 0;
-	}
-
 	HWND getHWND(){ return _hwnd; }
 };
 
 class WINZ_API CIcons
 {
-	HICON _hicon[2];
+	HICON _hicon[2]{};
 public:
-	CIcons();
 	~CIcons();
-	void SetIcons(HWND hwnd, HINSTANCE hInstance, LPCWSTR id);
+	void SetIcons(HWND hwnd, HINSTANCE hInstance, PCWSTR id);
+	void SetIcons(HWND hwnd);
 };
 
 class WINZ_API CMenu
