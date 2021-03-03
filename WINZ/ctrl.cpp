@@ -67,6 +67,7 @@ HWND ZToolBar::Create(HWND hwnd, HINSTANCE hInstance, int x, int y, int cx, int 
 	if (!himl) return 0;
 
 	_himl = himl;
+	LIC c {0, cx, cy };
 
 	do 
 	{
@@ -76,6 +77,8 @@ HWND ZToolBar::Create(HWND hwnd, HINSTANCE hInstance, int x, int y, int cx, int 
 		
 			switch (lpButtons[k].iBitmap)
 			{
+			default:
+				return 0;
 			case I_IMAGENONE:
 				continue;
 			case IMAGE_BITMAP:
@@ -92,8 +95,13 @@ HWND ZToolBar::Create(HWND hwnd, HINSTANCE hInstance, int x, int y, int cx, int 
 					DestroyIcon(hicon);
 				}
 				break;
-			default:
-				return 0;
+			case IMAGE_ENHMETAFILE:
+				if (0 <= c.CreateBMPFromPNG(MAKEINTRESOURCE(lpButtons[k].idCommand), hInstance))
+				{
+					i = ImageList_Add(himl, c._hbmp, 0);
+					DeleteObject(c._hbmp);
+				}
+				break;
 			}
 
 			if (i < 0) return 0;
