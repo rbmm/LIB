@@ -186,39 +186,61 @@ HRESULT LIC::CreateBMPFromPNG(_In_ PCWSTR pszName, _In_ PVOID hmod, _In_ PCWSTR 
 	return 0 > status ? HRESULT_FROM_NT(status) : CreateBMPFromPNG(png.pbData, png.cbData);
 }
 
+HRESULT CreateIconFromBMP (_Out_ HICON *phico, _In_ HBITMAP hbmp, _In_ UINT cx, _In_ UINT cy)
+{
+	ICONINFO ii = { 
+		TRUE, 0, 0, CreateBitmap(cx, cy, 1, 1, 0), hbmp
+	};
+
+	if (ii.hbmMask)
+	{
+		HICON hi = CreateIconIndirect(&ii);
+
+		DeleteObject(ii.hbmMask);
+
+		if (hi)
+		{
+			*phico = hi;
+			return S_OK;
+		}
+	}
+
+	return HRESULT_FROM_WIN32(GetLastError());
+}
+
+HRESULT CreateIconFromBMP (_Out_ HICON *phico, _In_ HBITMAP hbmp)
+{
+	BITMAP bm;
+
+	return GetObject(hbmp, sizeof(bm), &bm) ?
+		CreateIconFromBMP (phico, hbmp, bm.bmWidth, bm.bmHeight) : HRESULT_FROM_WIN32(GetLastError());
+}
+
+
 HRESULT LIC::CreateIconFromPNG (_In_ PCWSTR pszName, _In_ PVOID hmod, _In_ PCWSTR pszType)
 {
 	HRESULT hr = CreateBMPFromPNG(pszName, hmod, pszType);
 
 	if (0 <= hr)
 	{
-		ICONINFO ii = { 
-			TRUE, 0, 0, CreateBitmap(_cx, _cy, 1, 1, 0), _hbmp
-		};
-
-		if (ii.hbmMask)
-		{
-			HICON hi = CreateIconIndirect(&ii);
-
-			DeleteObject(_hbmp);
-
-			DeleteObject(ii.hbmMask);
-
-			if (hi)
-			{
-				_hi = hi;
-				return S_OK;
-			}
-		}
-
-		return HRESULT_FROM_WIN32(GetLastError());
+		HBITMAP hbmp = _hbmp;
+		hr = CreateIconFromBMP(&_hi, hbmp, _cx, _cy);
+		DeleteObject(hbmp);
 	}
 
 	return hr;
 }
 
-HRESULT LIC::LoadIconWithPNG (_In_ PCWSTR pszName, _In_ PVOID hmod)
+HRESULT LIC::LoadIconWithPNG (_In_ PCWSTR pszName, _In_ PVOID hmod, _In_ UINT uType)
 {
+	switch (uType)
+	{
+	case IMAGE_ICON:
+	case IMAGE_BITMAP:
+		break;
+	default: return E_INVALIDARG;
+	}
+
 	DATA_BLOB ico;
 	NTSTATUS status = AccessResource(&ico, RT_GROUP_ICON, pszName, hmod);
 
@@ -229,7 +251,8 @@ HRESULT LIC::LoadIconWithPNG (_In_ PCWSTR pszName, _In_ PVOID hmod)
 
 	if (UINT id = LookupIconIdFromDirectoryEx(ico.pbData, TRUE, _cx, _cy, 0))
 	{
-		return CreateIconFromPNG (MAKEINTRESOURCEW(id), hmod, RT_ICON);
+		return uType == IMAGE_ICON ? 
+			CreateIconFromPNG (MAKEINTRESOURCEW(id), hmod, RT_ICON) : CreateBMPFromPNG (MAKEINTRESOURCEW(id), hmod, RT_ICON);
 	}
 
 	return HRESULT_FROM_NT(STATUS_RESOURCE_NAME_NOT_FOUND);

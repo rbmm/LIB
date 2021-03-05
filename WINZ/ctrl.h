@@ -6,6 +6,7 @@
 #define AFX_IDW_TOOLBAR  0xE800
 #endif
 
+#define ICON_PNG(name) (PWSTR)((ULONG_PTR)(name) | IMAGE_ORDINAL_FLAG)
 
 class WINZ_API ZToolBar
 {
