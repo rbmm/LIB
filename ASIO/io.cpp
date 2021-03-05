@@ -7,6 +7,26 @@ _NT_BEGIN
 
 IO_RUNDOWN IO_RUNDOWN::g_IoRundown;
 
+//void IO_RUNDOWN::RundownCompleted()
+//{
+	// x86: ?RundownCompleted@IO_RUNDOWN@NT@@MAEXXZ 
+	// x64: ?RundownCompleted@IO_RUNDOWN@NT@@MEAAXXZ
+	//__pragma(message("; " __FUNCSIG__ "\r\nextern " __FUNCDNAME__ " : PROC"));
+//}
+
+void IO_RUNDOWN::RundownCompletedNop()
+{
+	// x86: ?RundownCompletedNop@IO_RUNDOWN@NT@@AAEXXZ
+	// x64: ?RundownCompletedNop@IO_RUNDOWN@NT@@AEAAXXZ
+	//__pragma(message("; " __FUNCSIG__ "\r\nextern " __FUNCDNAME__ " : PROC"));
+}
+
+#ifdef _WIN64
+#pragma comment(linker, "/alternatename:?RundownCompleted@IO_RUNDOWN@NT@@MEAAXXZ=?RundownCompletedNop@IO_RUNDOWN@NT@@AEAAXXZ")
+#else
+#pragma comment(linker, "/alternatename:?RundownCompleted@IO_RUNDOWN@NT@@MAEXXZ=?RundownCompletedNop@IO_RUNDOWN@NT@@AAEXXZ")
+#endif
+
 NTSTATUS (NTAPI *fnSetIoCompletionCallback)(HANDLE , LPOVERLAPPED_COMPLETION_ROUTINE , ULONG ) = 
 	(NTSTATUS (NTAPI *)(HANDLE , LPOVERLAPPED_COMPLETION_ROUTINE , ULONG ))RtlSetIoCompletionCallback;
 

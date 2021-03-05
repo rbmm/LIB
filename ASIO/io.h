@@ -23,14 +23,16 @@ NTSTATUS NTAPI SkipCompletionOnSuccess(HANDLE hObject);
 
 struct IO_RUNDOWN : public RUNDOWN_REF 
 {
-	virtual void RundownCompleted();
-
 	IO_RUNDOWN()
 	{
 		InitDllReference();
 	}
 
 	static IO_RUNDOWN g_IoRundown;
+protected:
+	virtual void RundownCompleted();
+private:
+	void RundownCompletedNop();
 };
 
 class __declspec(novtable) IO_OBJECT 

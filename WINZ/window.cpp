@@ -71,7 +71,10 @@ namespace {
 	{
 		if (!UnregisterClassW(szwndcls, (HINSTANCE)&__ImageBase))
 		{
-			__debugbreak();
+			if (GetLastError() != ERROR_CLASS_DOES_NOT_EXIST)
+			{
+				__debugbreak();
+			}
 		}
 	}
 
