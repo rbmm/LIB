@@ -8,7 +8,7 @@ class WINZ_API __declspec(novtable) ZSubClass : public ZObject
 	LONG _dwCallCount;
 
 	static LRESULT CALLBACK SubClassProc(HWND hwnd, UINT uMsg, WPARAM wParam,
-		LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData); 
+		LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData)ASM_FUNCTION; 
 
 	LRESULT WrapperWindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 

@@ -16,7 +16,7 @@ class WINZ_API Z_INTERFACE("8E9D9C1D-763E-4ad0-8C68-C2D6F232BB45") ZWnd : public
 {
 	LRESULT WrapperWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
-	static LRESULT CALLBACK _WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+	static LRESULT CALLBACK _WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)ASM_FUNCTION;
 
 	static LRESULT CALLBACK StartWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
@@ -84,7 +84,7 @@ class WINZ_API Z_INTERFACE("03200284-8B53-41b5-9310-BD613171E2F3") ZDlg : public
 	LONG _dwCallCount;
 
 	INT_PTR WrapperDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam);
-	static INT_PTR CALLBACK _DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam);
+	static INT_PTR CALLBACK _DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)ASM_FUNCTION;
 
 	INT_PTR MStartDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam);
 	static INT_PTR CALLBACK StartDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam);

@@ -1,6 +1,7 @@
 #include "StdAfx.h"
 
 _NT_BEGIN
+//#define _PRINT_CPP_NAMES_
 #include "cursors.h"
 #include "window.h"
 #include "../inc/rundown.h"
@@ -137,6 +138,7 @@ LRESULT CALLBACK ZWnd::StartWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPAR
 
 LRESULT ZWnd::WrapperWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
+	CPP_FUNCTION;
 	_dwCallCount++;
 	lParam = WindowProc(hwnd, uMsg, wParam, lParam);
 	if (!--_dwCallCount)
@@ -148,10 +150,10 @@ LRESULT ZWnd::WrapperWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 	return lParam;
 }
 
-LRESULT CALLBACK ZWnd::_WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
-{
-	return reinterpret_cast<ZWnd*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA))->WrapperWindowProc(hwnd, uMsg, wParam, lParam);
-}
+//LRESULT CALLBACK ZWnd::_WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+//{
+//	return reinterpret_cast<ZWnd*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA))->WrapperWindowProc(hwnd, uMsg, wParam, lParam);
+//}
 
 LRESULT ZWnd::DefWinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
@@ -251,6 +253,7 @@ INT_PTR CALLBACK ZDlg::StartDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, L
 
 INT_PTR ZDlg::WrapperDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
+	CPP_FUNCTION;
 	_dwCallCount++;
 	lParam = DialogProc(hwndDlg, uMsg, wParam, lParam);
 	if (!--_dwCallCount)
@@ -262,10 +265,10 @@ INT_PTR ZDlg::WrapperDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM l
 	return lParam;
 }
 
-INT_PTR CALLBACK ZDlg::_DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
-{
-	return reinterpret_cast<ZDlg*>(GetWindowLongPtrW(hwndDlg, DWLP_USER))->WrapperDialogProc(hwndDlg, uMsg, wParam, lParam);
-}
+//INT_PTR CALLBACK ZDlg::_DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
+//{
+//	return reinterpret_cast<ZDlg*>(GetWindowLongPtrW(hwndDlg, DWLP_USER))->WrapperDialogProc(hwndDlg, uMsg, wParam, lParam);
+//}
 
 INT_PTR ZDlg::DialogProc(HWND /*hwndDlg*/, UINT uMsg, WPARAM /*wParam*/, LPARAM /*lParam*/)
 {

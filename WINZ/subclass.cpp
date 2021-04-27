@@ -1,7 +1,7 @@
 #include "StdAfx.h"
 
 _NT_BEGIN
-
+//#define _PRINT_CPP_NAMES_
 #include "subclass.h"
 
 //////////////////////////////////////////////////////////////////////////
@@ -17,7 +17,7 @@ BOOL ZSubClass::Subclass(HWND hWnd)
 	_dwCallCount = 1 << 31;
 	AddRef();
 
-	if (SetWindowSubclass(hWnd, SubClassProc, (UINT_PTR)this, (ULONG_PTR)this))
+	if (SetWindowSubclass(hWnd, SubClassProc, (ULONG_PTR)this, (ULONG_PTR)this))
 	{
 		_hwnd = hWnd;
 		return TRUE;
@@ -42,6 +42,8 @@ void ZSubClass::Unsubclass(HWND hWnd)
 
 LRESULT ZSubClass::WrapperWindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
+	CPP_FUNCTION;
+
 	_dwCallCount++;
 	lParam = WindowProc(hWnd, uMsg, wParam, lParam);
 	if (!--_dwCallCount)
@@ -49,14 +51,6 @@ LRESULT ZSubClass::WrapperWindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM
 		OnCallCountZero();
 	}
 	return lParam;
-}
-
-LRESULT CALLBACK ZSubClass::SubClassProc(HWND hwnd, UINT uMsg, WPARAM wParam,
-							  LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData)
-{
-	if (uIdSubclass != dwRefData) __debugbreak();
-
-	return reinterpret_cast<ZSubClass*>(dwRefData)->WrapperWindowProc(hwnd, uMsg, wParam, lParam);
 }
 
 LRESULT ZSubClass::WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)

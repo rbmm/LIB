@@ -1,8 +1,22 @@
 #pragma once
 
+#include "../inc/asmfunc.h"
 #include "winZ.h"
 
+void ReferenceDll()ASM_FUNCTION;
+void DereferenceDll()ASM_FUNCTION;
+
 #define Z_INTERFACE(x) __declspec(uuid(x)) __declspec(novtable)
+
+#ifdef _X86_
+#define VSIFN "YGXXZ"
+#else
+#define VSIFN "YAXXZ"
+#endif
+
+__pragma(comment(linker, "/alternatename:@?FastReferenceDll=@?FastReferenceDllNop" ))
+__pragma(comment(linker, "/alternatename:?ReferenceDll@NT@@" VSIFN "=@?FastReferenceDllNop" ))
+__pragma(comment(linker, "/alternatename:?DereferenceDll@NT@@" VSIFN "=@?FastReferenceDllNop" ))
 
 //#define _DBG
 
@@ -16,6 +30,7 @@ protected:
 
 	virtual ~ZObject()
 	{
+		DereferenceDll();
 	}
 
 public:
@@ -28,6 +43,7 @@ public:
 	ZObject()
 	{
 		_dwRef = 1;
+		ReferenceDll();
 	}
 
 	virtual HRESULT QI(REFIID /*riid*/, void **ppvObject)
@@ -38,7 +54,7 @@ public:
 
 	ULONG AddRef()
 	{
-		return InterlockedIncrement(&_dwRef);
+		return InterlockedIncrementNoFence(&_dwRef);
 	}
 
 	ULONG Release()
