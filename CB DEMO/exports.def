@@ -1,0 +1,6 @@
+LIBRARY	"dsr"
+
+EXPORTS
+
+DllRegisterServer	PRIVATE
+CallWndProc			PRIVATE
