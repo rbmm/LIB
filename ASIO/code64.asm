@@ -1,6 +1,6 @@
-extern __imp_LdrUnloadDll:QWORD
-extern __imp_LdrAddRefDll:QWORD
-extern __ImageBase:BYTE
+extern @?FastReferenceDll:proc
+extern ?DereferenceDll@NT@@YAXXZ:proc
+
 extern __imp_RtlNtStatusToDosError:QWORD
 
 ; void IO_IRP::IOCompletionRoutine(unsigned long,unsigned __int64)
@@ -14,9 +14,6 @@ extern ?TimerCallback@RtlTimer@NT@@AEAAXXZ : PROC
 
 ; void __cdecl NT::RtlWait::WaitCallback(unsigned char)
 extern ?WaitCallback@RtlWait@NT@@AEAAXE@Z : PROC
-
-.DATA?
-@?UsageCount DD ?
 
 .CODE 
 
@@ -33,43 +30,16 @@ extern ?WaitCallback@RtlWait@NT@@AEAAXE@Z : PROC
 ALIGN 16 ; must be 16 byte aligned !!! for not confuse with wow apc
 
 ?ApcRoutine@NT_IRP@NT@@SAXPEAXPEAU_IO_STATUS_BLOCK@2@K@Z proc
-	lock inc[@?UsageCount]
+	call @?FastReferenceDll
 	sub rsp,28h
 	mov rcx,rdx
 	mov rdx,[rcx]
 	mov r8,[rcx + 8]
 	call ?IOCompletionRoutine@NT_IRP@NT@@AEAAXJ_K@Z
-	jmp ?CommonCbRet?
+	add rsp,28h
+	jmp ?DereferenceDll@NT@@YAXXZ
 ?ApcRoutine@NT_IRP@NT@@SAXPEAXPEAU_IO_STATUS_BLOCK@2@K@Z endp
 
-?InitDllReference@NT@@YAXXZ proc
-	mov @?UsageCount,0
-	ret
-?InitDllReference@NT@@YAXXZ endp
-
-?ReferenceDll@NT@@YAXXZ proc
-	mov eax,1
-	lock xadd[@?UsageCount],eax
-	test eax,eax
-	jz @@0
-	ret
-@@0:
-	lea rdx, __ImageBase
-	xor ecx,ecx
-	jmp __imp_LdrAddRefDll
-?ReferenceDll@NT@@YAXXZ endp
-
-?CommonCbRet? proc
-	add rsp,28h
-?DereferenceDll@NT@@YAXXZ proc
-	lock dec[@?UsageCount]
-	jz @@0
-	ret
-@@0:
-	lea rcx, __ImageBase
-	jmp __imp_LdrUnloadDll
-?DereferenceDll@NT@@YAXXZ endp
-?CommonCbRet? endp
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;VOID CALLBACK _IOCompletionRoutine(NTSTATUS status, ULONG_PTR dwNumberOfBytesTransfered, LPOVERLAPPED lpOverlapped)
@@ -78,7 +48,7 @@ ALIGN 16 ; must be 16 byte aligned !!! for not confuse with wow apc
 ;}
 
 ?_IOCompletionRoutine@IO_IRP@NT@@SAXJ_KPEAU_OVERLAPPED@@@Z proc
-	lock inc[@?UsageCount]
+	call @?FastReferenceDll
 	sub rsp,28h
 	mov [rsp + 30h],rdx
 	mov [rsp + 38h],r8
@@ -87,7 +57,8 @@ ALIGN 16 ; must be 16 byte aligned !!! for not confuse with wow apc
 	mov edx,eax
 	mov rcx,[rsp + 38h]
 	call ?IOCompletionRoutine@IO_IRP@NT@@QEAAXK_K@Z
-	jmp ?CommonCbRet?
+	add rsp,28h
+	jmp ?DereferenceDll@NT@@YAXXZ
 ?_IOCompletionRoutine@IO_IRP@NT@@SAXJ_KPEAU_OVERLAPPED@@@Z endp
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -97,12 +68,13 @@ ALIGN 16 ; must be 16 byte aligned !!! for not confuse with wow apc
 ;}
 
 ?_IOCompletionRoutine@NT_IRP@NT@@SAXJ_KPEAX@Z proc
-	lock inc[@?UsageCount]
+	call @?FastReferenceDll
 	sub rsp,28h
 	xchg r8,rcx
 	xchg r8,rdx
 	call ?IOCompletionRoutine@NT_IRP@NT@@AEAAXJ_K@Z
-	jmp ?CommonCbRet?
+	add rsp,28h
+	jmp ?DereferenceDll@NT@@YAXXZ
 ?_IOCompletionRoutine@NT_IRP@NT@@SAXJ_KPEAX@Z endp
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -112,10 +84,11 @@ ALIGN 16 ; must be 16 byte aligned !!! for not confuse with wow apc
 ;}
 		
 ?_TimerCallback@RtlTimer@NT@@CAXPEAXE@Z proc
-	lock inc[@?UsageCount]
+	call @?FastReferenceDll
 	sub rsp,28h
 	call ?TimerCallback@RtlTimer@NT@@AEAAXXZ
-	jmp ?CommonCbRet?
+	add rsp,28h
+	jmp ?DereferenceDll@NT@@YAXXZ
 ?_TimerCallback@RtlTimer@NT@@CAXPEAXE@Z endp
 
 
@@ -126,10 +99,15 @@ ALIGN 16 ; must be 16 byte aligned !!! for not confuse with wow apc
 ;}
 
 ?_WaitCallback@RtlWait@NT@@CAXPEAXE@Z proc
-	lock inc[@?UsageCount]
+	call @?FastReferenceDll
 	sub rsp,28h
 	call ?WaitCallback@RtlWait@NT@@AEAAXE@Z
-	jmp ?CommonCbRet?
+	add rsp,28h
+	jmp ?DereferenceDll@NT@@YAXXZ
 ?_WaitCallback@RtlWait@NT@@CAXPEAXE@Z endp
+
+@?FastReferenceDllNopa proc
+	ret
+@?FastReferenceDllNopa endp
 
 end

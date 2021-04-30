@@ -5,15 +5,18 @@
 #include "packet.h"
 #include "blockheap.h"
 
-#ifdef _WINDLL
 void ReferenceDll()ASM_FUNCTION;
 void DereferenceDll()ASM_FUNCTION;
-void InitDllReference()ASM_FUNCTION;
+
+#ifdef _X86_
+#define VSIFN "YGXXZ"
 #else
-#define ReferenceDll()
-#define DereferenceDll()
-#define InitDllReference()
+#define VSIFN "YAXXZ"
 #endif
+
+__pragma(comment(linker, "/alternatename:@?FastReferenceDll=@?FastReferenceDllNopa" ))
+__pragma(comment(linker, "/alternatename:?ReferenceDll@NT@@" VSIFN "=@?FastReferenceDllNopa" ))
+__pragma(comment(linker, "/alternatename:?DereferenceDll@NT@@" VSIFN "=@?FastReferenceDllNopa" ))
 
 extern NTSTATUS (NTAPI *fnSetIoCompletionCallback)(HANDLE , LPOVERLAPPED_COMPLETION_ROUTINE , ULONG );
 
@@ -23,11 +26,6 @@ NTSTATUS NTAPI SkipCompletionOnSuccess(HANDLE hObject);
 
 struct IO_RUNDOWN : public RUNDOWN_REF 
 {
-	IO_RUNDOWN()
-	{
-		InitDllReference();
-	}
-
 	static IO_RUNDOWN g_IoRundown;
 protected:
 	virtual void RundownCompleted();
@@ -159,15 +157,7 @@ public:
 		delete this;
 	}
 
-#ifdef _WINDLL
 	static VOID CALLBACK _IOCompletionRoutine(NTSTATUS status, ULONG_PTR dwNumberOfBytesTransfered, LPOVERLAPPED lpOverlapped)ASM_FUNCTION;
-#else
-	static VOID CALLBACK _IOCompletionRoutine(NTSTATUS status, ULONG_PTR dwNumberOfBytesTransfered, LPOVERLAPPED lpOverlapped)
-	{
-		// we must pass IO_IRP pointer in place lpOverlapped in I/O call
-		static_cast<IO_IRP*>(lpOverlapped)->IOCompletionRoutine(RtlNtStatusToDosError(status), dwNumberOfBytesTransfered);
-	}
-#endif
 
 	PVOID SetPointer()
 	{
@@ -226,7 +216,6 @@ protected:
 
 public:
 
-#ifdef _WINDLL
 	static VOID NTAPI ApcRoutine (
 		PVOID /*ApcContext*/,
 		PIO_STATUS_BLOCK IoStatusBlock,
@@ -234,22 +223,6 @@ public:
 		)ASM_FUNCTION;
 
 	static VOID CALLBACK _IOCompletionRoutine(NTSTATUS status, ULONG_PTR dwNumberOfBytesTransfered, PVOID ApcContext)ASM_FUNCTION;
-#else
-	static VOID CALLBACK _IOCompletionRoutine(NTSTATUS status, ULONG_PTR dwNumberOfBytesTransfered, PVOID ApcContext)
-	{
-		// we must pass NT_IRP pointer in place ApcContext in I/O call
-		reinterpret_cast<NT_IRP*>(ApcContext)->IOCompletionRoutine(status, dwNumberOfBytesTransfered);
-	}
-
-	static VOID NTAPI ApcRoutine (
-		PVOID /*ApcContext*/,
-		PIO_STATUS_BLOCK IoStatusBlock,
-		ULONG /*Reserved*/
-		)
-	{
-		static_cast<NT_IRP*>(IoStatusBlock)->IOCompletionRoutine(IoStatusBlock->Status, IoStatusBlock->Information);
-	}
-#endif
 
 	PVOID SetPointer()
 	{
@@ -287,14 +260,7 @@ class __declspec(novtable) RtlWait
 	BOOL _cbExecuted = FALSE;
 	LONG _dwRef = 1;
 
-#ifdef _WINDLL
 	static VOID CALLBACK _WaitCallback(PVOID pTimer, BOOLEAN Timeout)ASM_FUNCTION;
-#else
-	static VOID CALLBACK _WaitCallback(PVOID pTimer, BOOLEAN Timeout)
-	{
-		static_cast<RtlWait*>(pTimer)->WaitCallback(Timeout);
-	}
-#endif
 
 	VOID FASTCALL WaitCallback(BOOLEAN Timeout);
 
@@ -341,14 +307,7 @@ class __declspec(novtable) RtlTimer
 	BOOL _cbExecuted = FALSE;
 	LONG _dwRef = 1;
 
-#ifdef _WINDLL
 	static VOID CALLBACK _TimerCallback(PVOID pTimer, BOOLEAN /*TimerOrWaitFired*/)ASM_FUNCTION;
-#else
-	static VOID CALLBACK _TimerCallback(PVOID pTimer, BOOLEAN /*TimerOrWaitFired*/)
-	{
-		static_cast<RtlTimer*>(pTimer)->TimerCallback();
-	}
-#endif
 	
 	VOID TimerCallback();
 

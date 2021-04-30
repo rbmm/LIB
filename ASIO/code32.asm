@@ -2,9 +2,8 @@
 
 .MODEL FLAT
 
-extern __imp__LdrUnloadDll@4:DWORD
-extern __imp__LdrAddRefDll@8:DWORD
-extern ___ImageBase:BYTE
+extern @?FastReferenceDll:proc
+extern ?DereferenceDll@NT@@YGXXZ:proc
 extern __imp__RtlNtStatusToDosError@4:DWORD
 
 ; void IO_IRP::IOCompletionRoutine(unsigned long,unsigned long)
@@ -19,9 +18,6 @@ extern ?WaitCallback@RtlWait@NT@@AAIXE@Z : PROC
 ; void __thiscall NT::RtlTimer::TimerCallback(void)
 extern ?TimerCallback@RtlTimer@NT@@AAEXXZ : PROC
 
-.DATA?
-@?UsageCount DD ?
-
 .CODE
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -35,7 +31,7 @@ extern ?TimerCallback@RtlTimer@NT@@AAEXXZ : PROC
 ;}
 
 ?ApcRoutine@NT_IRP@NT@@SGXPAXPAU_IO_STATUS_BLOCK@2@K@Z proc
-	lock inc[@?UsageCount]
+	call @?FastReferenceDll
 	pop ecx
 	mov [esp + 8],ecx
 	mov ecx,[esp + 4]
@@ -44,7 +40,7 @@ extern ?TimerCallback@RtlTimer@NT@@AAEXXZ : PROC
 	mov eax,[ecx + 4]
 	mov [esp + 4],eax
 	call ?IOCompletionRoutine@NT_IRP@NT@@AAEXJK@Z
-	jmp ?DereferenceDll@NT@@YGXXZ	
+	jmp ?DereferenceDll@NT@@YGXXZ
 ?ApcRoutine@NT_IRP@NT@@SGXPAXPAU_IO_STATUS_BLOCK@2@K@Z endp
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -54,41 +50,12 @@ extern ?TimerCallback@RtlTimer@NT@@AAEXXZ : PROC
 ;}
 
 ?_IOCompletionRoutine@NT_IRP@NT@@SGXJKPAX@Z proc
-	lock inc[@?UsageCount]
+	call @?FastReferenceDll
 	pop ecx
 	xchg ecx,[esp + 8]
 	call ?IOCompletionRoutine@NT_IRP@NT@@AAEXJK@Z
 	jmp ?DereferenceDll@NT@@YGXXZ	
 ?_IOCompletionRoutine@NT_IRP@NT@@SGXJKPAX@Z endp
-
-?InitDllReference@NT@@YGXXZ proc
-	mov @?UsageCount,0
-	ret
-?InitDllReference@NT@@YGXXZ endp
-
-?ReferenceDll@NT@@YGXXZ proc
-	mov eax,1
-	lock xadd[@?UsageCount],eax
-	test eax,eax
-	jnz @@0
-	lea eax, ___ImageBase
-	push eax
-	push 0
-	call __imp__LdrAddRefDll@8
-@@0:
-	ret
-?ReferenceDll@NT@@YGXXZ endp
-
-?DereferenceDll@NT@@YGXXZ proc
-	lock dec[@?UsageCount]
-	jz @@0
-	ret
-@@0:
-	lea eax, ___ImageBase
-	xchg [esp],eax
-	push eax
-	jmp __imp__LdrUnloadDll@4
-?DereferenceDll@NT@@YGXXZ endp
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;VOID CALLBACK _IOCompletionRoutine(NTSTATUS status, ULONG_PTR dwNumberOfBytesTransfered, LPOVERLAPPED lpOverlapped)
@@ -97,7 +64,7 @@ extern ?TimerCallback@RtlTimer@NT@@AAEXXZ : PROC
 ;}
 
 ?_IOCompletionRoutine@IO_IRP@NT@@SGXJKPAU_OVERLAPPED@@@Z proc
-	lock inc[@?UsageCount]
+	call @?FastReferenceDll
 	push [esp + 4]
 	call __imp__RtlNtStatusToDosError@4
 	pop ecx
@@ -114,7 +81,7 @@ extern ?TimerCallback@RtlTimer@NT@@AAEXXZ : PROC
 ;}
 
 ?_TimerCallback@RtlTimer@NT@@CGXPAXE@Z proc
-	lock inc[@?UsageCount]
+	call @?FastReferenceDll
 	pop eax
 	pop ecx
 	mov [esp],eax
@@ -129,12 +96,16 @@ extern ?TimerCallback@RtlTimer@NT@@AAEXXZ : PROC
 ;}
 
 ?_WaitCallback@RtlWait@NT@@CGXPAXE@Z proc
-	lock inc[@?UsageCount]
+	call @?FastReferenceDll
 	pop edx
 	pop ecx
 	xchg [esp],edx
 	call ?WaitCallback@RtlWait@NT@@AAIXE@Z
 	jmp ?DereferenceDll@NT@@YGXXZ
 ?_WaitCallback@RtlWait@NT@@CGXPAXE@Z endp
+
+@?FastReferenceDllNopa proc
+	ret
+@?FastReferenceDllNopa endp
 
 end

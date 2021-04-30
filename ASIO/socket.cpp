@@ -1,5 +1,6 @@
 #include "StdAfx.h"
 #include <ws2ipdef.h >
+#include <ws2bth.h>
 
 _NT_BEGIN
 
@@ -59,24 +60,32 @@ void CSocketObject::CloseObjectHandle(HANDLE hFile)
 	if (hFile) closesocket((SOCKET)hFile);
 }
 
-ULONG CSocketObject::GetPort(PUSHORT pPort)
+ULONG CSocketObject::GetLocalAddr(PSOCKET_ADDRESS LocalAddr )
 {
-	union {
-		sockaddr_in sai;
-		sockaddr_in6 sai6;
-		sockaddr sa;
-	};
-
-	int len = sizeof (sai6);
-
 	ULONG err = ERROR_INVALID_HANDLE;
 
 	SOCKET socket;
 	if (LockSocket(socket))
 	{
-		err = WSA_ERROR(getsockname(socket, &sa, &len));
+		err = WSA_ERROR(getsockname(socket, LocalAddr->lpSockaddr, &LocalAddr->iSockaddrLength));
 		UnlockSocket();
 	}
+
+	return err;
+}
+
+ULONG CSocketObject::GetPort(PUSHORT pPort)
+{
+	union {
+		sockaddr sa;
+		sockaddr_in sai;
+		sockaddr_in6 sai6;
+		SOCKADDR_BTH bth_address;
+	};
+
+	SOCKET_ADDRESS LocalAddr = { &sa, max(sizeof (sai6), sizeof(bth_address)) };
+
+	ULONG err = GetLocalAddr(&LocalAddr);
 
 	USHORT Port = 0;
 
@@ -89,6 +98,9 @@ ULONG CSocketObject::GetPort(PUSHORT pPort)
 			break;
 		case AF_INET6:
 			Port = sai6.sin6_port;
+			break;
+		case AF_BTH:
+			Port = (USHORT)bth_address.port;
 			break;
 		}
 	}
@@ -126,9 +138,9 @@ ULONG CSocketObject::CreateAddress(USHORT port, ULONG ip)
 	return CreateAddress((sockaddr*)&asi, sizeof(asi));
 }
 
-ULONG CSocketObject::CreateAddress(_In_reads_bytes_(namelen) const struct sockaddr * name, _In_ int namelen)
+ULONG CSocketObject::CreateAddress(_In_reads_bytes_(namelen) const struct sockaddr * name, _In_ int namelen, _In_ int protocol)
 {
-	ULONG err = Create(name->sa_family, SOCK_STREAM, IPPROTO_TCP);
+	ULONG err = Create(name->sa_family, SOCK_STREAM, protocol);
 
 	if (err == NOERROR)
 	{
@@ -368,11 +380,11 @@ void CTcpEndpoint::Disconnect(DWORD dwErrorReason)
 	}
 }
 
-ULONG CTcpEndpoint::Create(DWORD BufferSize, int af)
+ULONG CTcpEndpoint::Create(DWORD BufferSize, int af, int protocol)
 {
 	if (BufferSize && !(m_packet = allocPacket(BufferSize))) return ERROR_NO_SYSTEM_RESOURCES;
 
-	if (ULONG err = CSocketObject::Create(af, SOCK_STREAM, IPPROTO_TCP))
+	if (ULONG err = CSocketObject::Create(af, SOCK_STREAM, protocol))
 	{
 		return err;
 	}

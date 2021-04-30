@@ -33,12 +33,13 @@ public:
 
 	void DnsToIp(PCSTR Dns);
 
+	ULONG GetLocalAddr(PSOCKET_ADDRESS LocalAddr );
 	ULONG GetPort(PUSHORT Port);
 
 	ULONG Create(int af, int type, int protocol);
 
 	ULONG CreateAddress(USHORT port, ULONG ip = 0);
-	ULONG CreateAddress(_In_reads_bytes_(namelen) const struct sockaddr * name, _In_ int namelen);
+	ULONG CreateAddress(_In_reads_bytes_(namelen) const struct sockaddr * name, _In_ int namelen, _In_ int protocol = IPPROTO_TCP);
 };
 
 class CUdpEndpoint : public CSocketObject
@@ -135,7 +136,7 @@ public:
 	ULONG Recv();// usually not call it direct !
 	ULONG Recv(WSABUF* lpBuffers, DWORD dwBufferCount, PVOID buf);// usually not call it direct !
 
-	ULONG Create(DWORD BufferSize, int af = AF_INET);
+	ULONG Create(DWORD BufferSize, int af = AF_INET, int protocol = IPPROTO_TCP);
 	ULONG Listen(ULONG dwReceiveDataLength = 0);
 	
 	ULONG Connect(ULONG IpAddr, USHORT Port);
