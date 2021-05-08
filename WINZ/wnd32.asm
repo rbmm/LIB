@@ -22,6 +22,7 @@ extern ?WrapperWindowProc@ZSubClass@NT@@AAEJPAUHWND__@@IIJ@Z : PROC
 @?FastReferenceDllNop endp
 
 ?_WindowProc@ZWnd@NT@@CGJPAUHWND__@@IIJ@Z proc
+	call @?FastReferenceDll
 	mov eax,[esp]
 	xchg [esp+4*4],eax
 	xchg [esp+3*4],eax
@@ -32,12 +33,12 @@ extern ?WrapperWindowProc@ZSubClass@NT@@AAEJPAUHWND__@@IIJ@Z : PROC
 	push eax ; hwnd
 	call __imp__GetWindowLongW@8
 	mov ecx,eax
-	call @?FastReferenceDll
 	call ?WrapperWindowProc@ZWnd@NT@@AAEJPAUHWND__@@IIJ@Z
 	jmp ?DereferenceDll@NT@@YGXXZ
 ?_WindowProc@ZWnd@NT@@CGJPAUHWND__@@IIJ@Z endp
 
 ?_DialogProc@ZDlg@NT@@CGHPAUHWND__@@IIJ@Z proc
+	call @?FastReferenceDll
 	mov eax,[esp]
 	xchg [esp+4*4],eax
 	xchg [esp+3*4],eax
@@ -48,15 +49,14 @@ extern ?WrapperWindowProc@ZSubClass@NT@@AAEJPAUHWND__@@IIJ@Z : PROC
 	push eax ; hwnd
 	call __imp__GetWindowLongW@8
 	mov ecx,eax
-	call @?FastReferenceDll
 	call ?WrapperDialogProc@ZDlg@NT@@AAEHPAUHWND__@@IIJ@Z
 	jmp ?DereferenceDll@NT@@YGXXZ
 ?_DialogProc@ZDlg@NT@@CGHPAUHWND__@@IIJ@Z endp
 
 ?SubClassProc@ZSubClass@NT@@CGJPAUHWND__@@IIJIK@Z proc
+	call @?FastReferenceDll
 	pop ecx
 	xchg ecx,[esp + 14h]
-	call @?FastReferenceDll
 	call ?WrapperWindowProc@ZSubClass@NT@@AAEJPAUHWND__@@IIJ@Z
 	pop ecx
 	jmp ?DereferenceDll@NT@@YGXXZ

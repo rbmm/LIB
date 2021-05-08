@@ -286,6 +286,8 @@ BOOL RtlTimer::Set(DWORD dwMilliseconds)
 {
 	AddRef();
 
+	_cbExecuted = FALSE;
+
 	if (CreateTimerQueueTimer(&_hTimer, 0, _TimerCallback, this, dwMilliseconds, 0, WT_EXECUTEINTIMERTHREAD|WT_EXECUTEONLYONCE))
 	{
 		return TRUE;

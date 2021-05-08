@@ -31,6 +31,7 @@ _TEXT segment 'CODE'
 ?SubClassProc@ZSubClass@NT@@CA_JPEAUHWND__@@I_K_J11@Z endp
 
 ?_WindowProc@ZWnd@NT@@CA_JPEAUHWND__@@I_K_J@Z proc
+	call @?FastReferenceDll
 	mov [rsp+8],rcx
 	mov [rsp+16],rdx
 	mov [rsp+24],r8
@@ -44,13 +45,13 @@ _TEXT segment 'CODE'
 	mov r9,[rsp+64]
 	mov rax,[rsp+72]
 	mov [rsp+32],rax
-	call @?FastReferenceDll
 	call ?WrapperWindowProc@ZWnd@NT@@AEAA_JPEAUHWND__@@I_K_J@Z
 	add rsp,28h
 	jmp ?DereferenceDll@NT@@YAXXZ
 ?_WindowProc@ZWnd@NT@@CA_JPEAUHWND__@@I_K_J@Z endp
 
 ?_DialogProc@ZDlg@NT@@CA_JPEAUHWND__@@I_K_J@Z proc
+	call @?FastReferenceDll
 	mov [rsp+8],rcx
 	mov [rsp+16],rdx
 	mov [rsp+24],r8
@@ -64,7 +65,6 @@ _TEXT segment 'CODE'
 	mov r9,[rsp+64]
 	mov rax,[rsp+72]
 	mov [rsp+32],rax
-	call @?FastReferenceDll
 	call ?WrapperDialogProc@ZDlg@NT@@AEAA_JPEAUHWND__@@I_K_J@Z
 	add rsp,28h
 	jmp ?DereferenceDll@NT@@YAXXZ
