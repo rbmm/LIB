@@ -21,6 +21,11 @@ NTSTATUS AccessResource(_Out_ PDATA_BLOB blob, _In_ PCWSTR pszType, _In_ PCWSTR 
 	return status;
 }
 
+HRESULT CreateWicFactory(IWICImagingFactory** ppiFactory)
+{
+	return CoCreateInstance(CLSID_WICImagingFactory, NULL, CLSCTX_INPROC_SERVER, __uuidof(IWICImagingFactory), (void**)ppiFactory);
+}
+
 HRESULT LIC::FillBitsFromBitmapSource(IWICBitmapSource* pIBitmap, INT cx, INT cy)
 {
 	PBYTE Bits;
@@ -117,14 +122,49 @@ HRESULT LIC::FillBitsFromBitmapSource(IWICImagingFactory* piFactory, IWICBitmapS
 	return hr;
 }
 
+HRESULT LIC::CreateBMPFromDecoder(_In_ IWICImagingFactory* piFactory, _In_ IWICBitmapDecoder* pIDecoder)
+{
+	HRESULT hr;
+	IWICBitmapFrameDecode* pIBitmapFrame;
+	IWICFormatConverter* pIFormatConverter;
+
+	if (0 <= (hr = pIDecoder->GetFrame(0, &pIBitmapFrame)))
+	{
+		WICPixelFormatGUID pf;
+		if (0 <= (hr = pIBitmapFrame->GetPixelFormat(&pf)))
+		{
+			if (pf == GUID_WICPixelFormat32bppBGRA ||
+				pf == GUID_WICPixelFormat32bppBGR)
+			{
+				hr = FillBitsFromBitmapSource(piFactory, pIBitmapFrame);
+			}
+			else
+			{
+				if (0 <= (hr = piFactory->CreateFormatConverter(&pIFormatConverter)))
+				{
+					if (0 <= (hr = pIFormatConverter->Initialize(pIBitmapFrame, 
+						GUID_WICPixelFormat32bppBGRA,
+						WICBitmapDitherTypeNone, 0, 0.0, WICBitmapPaletteTypeCustom)))
+					{
+						hr = FillBitsFromBitmapSource(piFactory, pIFormatConverter);
+					}
+
+					pIFormatConverter->Release();
+				}
+			}
+		}
+
+		pIBitmapFrame->Release();
+	}
+
+	return hr;
+}
 HRESULT LIC::CreateBMPFromPNG(PVOID pvPNG, ULONG cbPNG)
 {
 	IWICBitmapDecoder *pIDecoder;
 	IWICImagingFactory *piFactory;
-	IWICBitmapFrameDecode *pIBitmapFrame;
-	IWICFormatConverter* pIFormatConverter;
 
-	HRESULT hr = CoCreateInstance(CLSID_WICImagingFactory, NULL, CLSCTX_INPROC_SERVER, IID_PPV(piFactory));
+	HRESULT hr = CreateWicFactory(&piFactory);
 
 	if (0 <= hr)
 	{
@@ -136,39 +176,35 @@ HRESULT LIC::CreateBMPFromPNG(PVOID pvPNG, ULONG cbPNG)
 				if (0 <= (hr = piFactory->CreateDecoderFromStream(pIWICStream, 0, 
 					WICDecodeMetadataCacheOnDemand, &pIDecoder)))
 				{
-					if (0 <= (hr = pIDecoder->GetFrame(0, &pIBitmapFrame)))
-					{
-						WICPixelFormatGUID pf;
-						if (0 <= (hr = pIBitmapFrame->GetPixelFormat(&pf)))
-						{
-							if (pf == GUID_WICPixelFormat32bppBGRA)
-							{
-								hr = FillBitsFromBitmapSource(piFactory, pIBitmapFrame);
-							}
-							else
-							{
-								if (0 <= (hr = piFactory->CreateFormatConverter(&pIFormatConverter)))
-								{
-									if (0 <= (hr = pIFormatConverter->Initialize(pIBitmapFrame, 
-										GUID_WICPixelFormat32bppBGRA,
-										WICBitmapDitherTypeNone, 0, 0.0, WICBitmapPaletteTypeCustom)))
-									{
-										hr = FillBitsFromBitmapSource(piFactory, pIFormatConverter);
-									}
-
-									pIFormatConverter->Release();
-								}
-							}
-						}
-
-						pIBitmapFrame->Release();
-					}
+					hr = CreateBMPFromDecoder(piFactory, pIDecoder);
 
 					pIDecoder->Release();
 				}
 			}
 
 			pIWICStream->Release();
+		}
+
+		piFactory->Release();
+	}
+
+	return hr;
+}
+
+HRESULT LIC::CreateBMPFromFile(_In_ PCWSTR pszFileName)
+{
+	IWICBitmapDecoder* pIDecoder;
+	IWICImagingFactory* piFactory;
+
+	HRESULT hr = CreateWicFactory(&piFactory);
+
+	if (0 <= hr)
+	{
+		if (0 <= (hr = piFactory->CreateDecoderFromFilename(pszFileName,
+			0, GENERIC_READ, WICDecodeMetadataCacheOnDemand, &pIDecoder)))
+		{
+			hr = CreateBMPFromDecoder(piFactory, pIDecoder);
+			pIDecoder->Release();
 		}
 
 		piFactory->Release();
