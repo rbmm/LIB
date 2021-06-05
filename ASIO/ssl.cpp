@@ -112,12 +112,20 @@ SECURITY_STATUS CSSLStream::OnRequestUserCert()
 CSSLStream::CSSLStream(SharedCred* pCred)
 {
 	m_pCred = pCred;
-	pCred->AddRef();
 	dwLower = 0;
 	dwUpper = 0;
 	m_flags = 0;
 	m_pszTargetName = 0;
 	RtlZeroMemory(static_cast<SecPkgContext_StreamSizes*>(this), sizeof(SecPkgContext_StreamSizes));
+
+	if (pCred)
+	{
+		pCred->AddRef();
+	}
+	else
+	{
+		cbMaximumMessage = MAXULONG, cbBlockSize = MAXULONG;
+	}
 }
 
 CSSLStream::~CSSLStream()
@@ -384,24 +392,31 @@ ULONG CSSLStream::SendUserData(DWORD cbBody, CDataPacket* packet)
 {
 	DbgPrint("\r\nCSSLStream::SendUserData(%x)\r\n", cbBody);
 
-	PSTR Buffer = packet->getData();
-
-	SecBuffer sb[4] = {
-		{ cbHeader, SECBUFFER_STREAM_HEADER, Buffer },
-		{ cbBody, SECBUFFER_DATA, Buffer + cbHeader },
-		{ cbTrailer, SECBUFFER_STREAM_TRAILER, Buffer + cbHeader + cbBody },
-	};
-
-	SecBufferDesc sbd = { 
-		SECBUFFER_VERSION, 4, sb
-	};
-
-	if (ULONG err = ::EncryptMessage(this, 0, &sbd, 0))
+	if (m_pCred)
 	{
-		return err;
-	}
+		PSTR Buffer = packet->getData();
 
-	packet->setDataSize(sb[0].cbBuffer + sb[1].cbBuffer + sb[2].cbBuffer + sb[3].cbBuffer);
+		SecBuffer sb[4] = {
+			{ cbHeader, SECBUFFER_STREAM_HEADER, Buffer },
+			{ cbBody, SECBUFFER_DATA, Buffer + cbHeader },
+			{ cbTrailer, SECBUFFER_STREAM_TRAILER, Buffer + cbHeader + cbBody },
+		};
+
+		SecBufferDesc sbd = { 
+			SECBUFFER_VERSION, 4, sb
+		};
+
+		if (ULONG err = ::EncryptMessage(this, 0, &sbd, 0))
+		{
+			return err;
+		}
+
+		packet->setDataSize(sb[0].cbBuffer + sb[1].cbBuffer + sb[2].cbBuffer + sb[3].cbBuffer);
+	}
+	else
+	{
+		packet->setDataSize(cbBody);
+	}
 
 	return SendData(packet);
 }

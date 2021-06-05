@@ -43,6 +43,8 @@ public:
 
 class __declspec(novtable) CSSLStream : CtxtHandle, SecPkgContext_StreamSizes
 {
+	friend class CSSLEndpointEx;
+
 protected:
 	SharedCred* m_pCred;
 	PWSTR m_pszTargetName;
@@ -188,6 +190,68 @@ protected:
 	*/
 	/************************************************************************/
 
+};
+
+class __declspec(novtable) CSSLEndpointEx : public CSSLStream, public CTcpEndpoint
+{
+protected:
+
+	CSSLEndpointEx(SharedCred* pCred = 0, CSocketObject* pAddress = 0) : CSSLStream(pCred), CTcpEndpoint(pAddress)
+	{
+	}
+
+	virtual ULONG SendData(CDataPacket* packet)
+	{
+		return Send(packet);
+	}
+
+	virtual CDataPacket* get_packet()
+	{
+		return m_packet;
+	}
+
+	virtual void OnShutdown()
+	{
+	}
+
+	virtual void OnServerConnect(ULONG /*status*/)
+	{
+	}
+
+	virtual void OnServerDisconnect()
+	{
+	}
+
+	virtual BOOL OnConnect(ULONG status)
+	{
+		OnServerConnect(status);
+		return status ? FALSE : (m_pCred ? StartSSL() : SEC_E_OK == OnEndHandshake());
+	}
+
+	virtual void OnDisconnect()
+	{
+		StopSSL();
+		OnServerDisconnect();
+	}
+
+	virtual BOOL OnRecv(PSTR Buffer, ULONG cbTransferred)
+	{
+		return m_pCred ? OnData(Buffer, cbTransferred) : OnUserData(Buffer, cbTransferred);
+	}
+
+	/************************************************************************/
+	/* implement this !
+
+	virtual PCCERT_CONTEXT GetUserCert();
+
+	virtual SECURITY_STATUS OnEndHandshake();
+
+	virtual BOOL OnUserData(PSTR buf, ULONG cb);
+
+	virtual BOOL IsServer(PBOOLEAN pbMutualAuth = 0);
+
+	*/
+	/************************************************************************/
 };
 
 PCCERT_CONTEXT CryptUIDlgGetUserCert();
