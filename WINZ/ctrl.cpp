@@ -96,6 +96,7 @@ HWND ZToolBar::Create(HWND hwnd, HINSTANCE hInstance, int x, int y, int cx, int 
 				}
 				break;
 			case IMAGE_ENHMETAFILE:
+				c._pvBits = 0;
 				if (0 <= c.CreateBMPFromPNG(MAKEINTRESOURCE(lpButtons[k].idCommand), hInstance))
 				{
 					i = ImageList_Add(himl, c._hbmp, 0);
@@ -269,26 +270,13 @@ HMENU CMenu::Load(HINSTANCE hInstance, LPCWSTR id)
 //////////////////////////////////////////////////////////////////////////
 // ZImageList
 
-ZImageList::ZImageList()
-{
-	_hdc = 0;
-}
-
-ZImageList::~ZImageList()
-{
-	if (_hdc)
-	{
-		DeleteDC(_hdc);
-	}
-}
-
 BOOL ZImageList::CreateIList(DWORD cx, DWORD cy, DWORD n)
 {
 	if (_hdc = CreateCompatibleDC(0))
 	{
 		BITMAPINFO bi = { {sizeof(bi.bmiHeader), cx, cy * n, 1, 32 } };
 
-		if (HBITMAP hbmp = CreateDIBSection(0, &bi, DIB_RGB_COLORS, &_pvBits, 0, 0))
+		if (HBITMAP hbmp = CreateDIBSection(0, &bi, DIB_RGB_COLORS, 0, 0, 0))
 		{
 			SelectObject(_hdc, hbmp);
 			DeleteObject(hbmp);
@@ -302,6 +290,12 @@ BOOL ZImageList::CreateIList(DWORD cx, DWORD cy, DWORD n)
 
 BOOL ZImageList::SetBitmap(PVOID ImageBase, PCWSTR pri[], int level, DWORD i)
 {
+	BITMAP bi;
+	if (GetObject(GetCurrentObject(_hdc, OBJ_BITMAP), sizeof(bi), &bi) != sizeof(bi) || !bi.bmBits)
+	{
+		return FALSE;
+	}
+
 	PIMAGE_RESOURCE_DATA_ENTRY pirde;
 	PBITMAPINFOHEADER pbih;
 	DWORD cb;
@@ -315,11 +309,34 @@ BOOL ZImageList::SetBitmap(PVOID ImageBase, PCWSTR pri[], int level, DWORD i)
 		pbih->biSize + 4 * pbih->biWidth * pbih->biHeight == cb
 		)
 	{
-		memcpy(RtlOffsetToPointer(_pvBits, i * _cx * _cy * 4), RtlOffsetToPointer(pbih, pbih->biSize), cb - pbih->biSize);
+		memcpy(RtlOffsetToPointer(bi.bmBits, i * _cx * _cy * 4), RtlOffsetToPointer(pbih, pbih->biSize), cb - pbih->biSize);
 		return TRUE;
 	}
 
 	return FALSE;
+}
+
+HRESULT ZImageList::LoadFromPNG(_In_ ULONG n, _In_ PCWSTR pszName, _In_ PVOID hmod /*= &__ImageBase*/, _In_ PCWSTR pszType /*= RT_RCDATA*/)
+{
+	LIC l { 0, _cx, n*_cy };
+
+	HRESULT hr = l.CreateBMPFromPNG(pszName, hmod, pszType);
+
+	if (0 <= hr)
+	{
+		if (_hdc = CreateCompatibleDC(0))
+		{
+			SelectObject(_hdc, l._hbmp);
+		}
+		else
+		{
+			hr = HRESULT_FROM_WIN32(GetLastError());
+		}
+
+		DeleteObject(l._hbmp);
+	}
+
+	return hr;
 }
 
 BOOL ZImageList::Draw(HDC hdcDest, int xoriginDest, int yoriginDest, DWORD iImage)

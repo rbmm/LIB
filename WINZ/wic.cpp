@@ -26,23 +26,12 @@ HRESULT CreateWicFactory(IWICImagingFactory** ppiFactory)
 	return CoCreateInstance(CLSID_WICImagingFactory, NULL, CLSCTX_INPROC_SERVER, __uuidof(IWICImagingFactory), (void**)ppiFactory);
 }
 
-HRESULT LIC::FillBitsFromBitmapSource(IWICBitmapSource* pIBitmap, INT cx, INT cy)
+HRESULT LIC::FillBitsFromBitmapSource(IWICBitmapSource* pIBitmap, UINT cbStride, UINT cbBufferSize, PBYTE Bits)
 {
-	PBYTE Bits;
-	BITMAPINFO bmi = { { sizeof(BITMAPINFOHEADER), cx, -cy, 1, 32, BI_RGB }};
+	HRESULT hr = pIBitmap->CopyPixels(0, cbStride, cbBufferSize, Bits);
 
-	if (HBITMAP hbmp = CreateDIBSection(0, &bmi, DIB_RGB_COLORS, (void**)&Bits, 0, 0))
+	if (0 <= hr)
 	{
-		UINT cbStride = cx << 2, cbBufferSize = cbStride * cy;
-
-		HRESULT hr = pIBitmap->CopyPixels(0, cbStride, cbBufferSize, Bits);
-
-		if (0 > hr)
-		{
-			DeleteObject(hbmp);
-			return hr;
-		}
-
 		union BGRA {
 			ULONG rgba;
 			struct
@@ -72,10 +61,32 @@ HRESULT LIC::FillBitsFromBitmapSource(IWICBitmapSource* pIBitmap, INT cx, INT cy
 				break;
 			}
 		} while (p++, --cbStride);
+	}
 
-		_hbmp = hbmp, _cx = cx, _cy = cy;
+	return hr;
+}
 
-		return S_OK;
+HRESULT LIC::FillBitsFromBitmapSource(IWICBitmapSource* pIBitmap, INT cx, INT cy)
+{
+	PVOID Bits;
+	UINT cbStride = cx << 2, cbBufferSize = cbStride * cy;
+
+	_cx = cx, _cy = cy;
+
+	if (Bits = _pvBits)
+	{
+		return FillBitsFromBitmapSource(pIBitmap, cbStride, cbBufferSize, (PBYTE)Bits);
+	}
+
+	BITMAPINFO bmi = { { sizeof(BITMAPINFOHEADER), cx, -cy, 1, 32, BI_RGB }};
+
+	if (HBITMAP hbmp = CreateDIBSection(0, &bmi, DIB_RGB_COLORS, &Bits, 0, 0))
+	{
+		HRESULT hr = FillBitsFromBitmapSource(pIBitmap, cbStride, cbBufferSize, (PBYTE)Bits);
+
+		if (0 > hr) DeleteObject(hbmp); else _hbmp = hbmp;
+
+		return hr;
 	}
 
 	return HRESULT_FROM_WIN32(GetLastError());

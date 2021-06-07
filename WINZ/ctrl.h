@@ -73,14 +73,20 @@ public:
 
 class WINZ_API ZImageList
 {
-	HDC _hdc;
-	PVOID _pvBits;
+	HDC _hdc = 0;
 	LONG _cx, _cy;
 public:
 
-	ZImageList();
+	ZImageList(LONG cx, LONG cy) : _cx(cx), _cy(cy)
+	{
+	}
 
-	~ZImageList();
+	~ZImageList()
+	{
+		if (_hdc) DeleteDC(_hdc);
+	}
+
+	HRESULT LoadFromPNG(_In_ ULONG n, _In_ PCWSTR pszName, _In_ PVOID hmod = &__ImageBase, _In_ PCWSTR pszType = RT_RCDATA);
 
 	BOOL CreateIList(DWORD cx, DWORD cy, DWORD n);
 

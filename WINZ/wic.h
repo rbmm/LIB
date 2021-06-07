@@ -3,12 +3,14 @@
 struct LIC
 {
 	union {
+		PVOID _pvBits;
 		HBITMAP _hbmp;
 		HICON _hi;
 	};
 	UINT _cx, _cy;
 
 #ifdef __wincodec_h__
+	HRESULT FillBitsFromBitmapSource(IWICBitmapSource* pIBitmap, UINT cbStride, UINT cbBufferSize, PBYTE Bits);
 	HRESULT FillBitsFromBitmapSource(IWICBitmapSource* pIBitmap, INT cx, INT cy);
 	HRESULT FillBitsFromBitmapSource(IWICImagingFactory* piFactory, IWICBitmapSource* pIBitmap);
 	HRESULT CreateBMPFromDecoder(_In_ IWICImagingFactory* piFactory, _In_ IWICBitmapDecoder* pIDecoder);
