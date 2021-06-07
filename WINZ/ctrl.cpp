@@ -51,9 +51,14 @@ void ZToolBar::IndeterminateCmd(UINT cmd, BOOL bIndeterminate)
 	SendMessage(_hwnd, TB_INDETERMINATE, cmd, bIndeterminate);  
 }
 
-HWND ZToolBar::Create(HWND hwnd, HINSTANCE hInstance, int x, int y, int cx, int cy, PTBBUTTON lpButtons, int NumButtons, BOOL bNoDivider, UINT ToolbarID)
+HWND ZToolBar::Create(HWND hwnd, HINSTANCE hInstance, int x, int y, int cx, int cy, LPCTBBUTTON lpcButtons, ULONG NumButtons, BOOL bNoDivider, UINT ToolbarID)
 {
-	int k = NumButtons, NumIcons = 0, i;
+	ULONG k = NumButtons, NumIcons = sizeof(TBBUTTON)*NumButtons;
+	LPTBBUTTON lpButtons = (LPTBBUTTON)alloca(NumIcons);
+	memcpy(lpButtons, lpcButtons, NumIcons);
+	NumIcons = 0;
+
+	int i;
 	do 
 	{
 		if (lpButtons[--k].fsStyle != BTNS_SEP && lpButtons[k].iBitmap != I_IMAGENONE)

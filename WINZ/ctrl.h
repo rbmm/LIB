@@ -15,7 +15,7 @@ class WINZ_API ZToolBar
 	HBRUSH _hbr;
 public:
 
-	HWND Create(HWND hwnd, HINSTANCE hInstance, int x, int y, int cx, int cy, PTBBUTTON lpButtons, int NumButtons, BOOL bNoDivider, UINT ToolbarID = AFX_IDW_TOOLBAR);
+	HWND Create(HWND hwnd, HINSTANCE hInstance, int x, int y, int cx, int cy, LPCTBBUTTON lpcButtons, ULONG NumButtons, BOOL bNoDivider, UINT ToolbarID = AFX_IDW_TOOLBAR);
 	void EnableCmd(UINT cmd, BOOL bEnable);
 	void CheckCmd(UINT cmd, BOOL bCheck);
 	void IndeterminateCmd(UINT cmd, BOOL bIndeterminate);
