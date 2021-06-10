@@ -107,13 +107,20 @@ HRESULT LIC::FillBitsFromBitmapSource(IWICImagingFactory* piFactory, IWICBitmapS
 
 		if (cx * cy_image != cy * cx_image)
 		{
-			double a = (double)cx / (double)cx_image, b = (double)cy / (double)cy_image;
+			struct __declspec(align(16)) __m128d_ab { double a, b; };
 
-			if (b < a) a = b;
+			union {
+				__m128d f;
+				__m128d_ab g;
+			};
 
-#pragma warning(disable : 4244)
-			cx = cx_image * a, cy = cy_image * a;
-#pragma warning(default : 4244)
+			g.a = (double)cx / (double)cx_image, g.b = (double)cy / (double)cy_image;
+
+			g.b < g.a ? g.a = g.b : g.b = g.a;
+
+			g.a *= cx_image, cx = _mm_cvttsd_si32(f);
+
+			g.a = g.b * cy_image, cy = _mm_cvttsd_si32(f);
 		}
 
 		IWICBitmapScaler* piScaler;
