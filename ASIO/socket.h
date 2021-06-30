@@ -7,10 +7,13 @@
 
 #define IP(a, b, c, d) ((DWORD)(a + (b << 8) + (c << 16) + (d << 24)))
 
-struct SOCKADDR_IN_EX : SOCKADDR_IN
+struct SOCKADDR_IN_EX 
 {
-	INT Fromlen;
-	CHAR align[16 - sizeof(INT)];
+	union {
+		SOCKADDR_INET addr;
+		SOCKADDR saAddress;
+	};
+	INT dwAddressLength;
 };
 
 class CSocketObject : public IO_OBJECT_TIMEOUT
@@ -52,7 +55,7 @@ protected:
 		recv = 'rrrr', send = 'ssss'
 	};
 
-	virtual void OnRecv(PSTR , ULONG , CDataPacket* , SOCKADDR_IN* ) //SOCKADDR_IN_EX*
+	virtual void OnRecv(PSTR , ULONG , CDataPacket* , SOCKADDR_IN_EX* )
 	{
 	}
 

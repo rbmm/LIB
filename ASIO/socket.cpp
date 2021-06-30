@@ -261,14 +261,14 @@ ULONG CUdpEndpoint::RecvFrom(CDataPacket* packet)
 	if (IO_IRP* Irp = new IO_IRP(this, recv, packet, wb.buf))
 	{
 		DWORD n;
-		addr->Fromlen = sizeof (SOCKADDR_IN);
+		addr->dwAddressLength = sizeof(addr->addr);
 		DWORD Flags = 0;
 		ULONG err = ERROR_INVALID_HANDLE;
 
 		SOCKET socket;
 		if (LockSocket(socket))
 		{
-			err = WSA_ERROR(WSARecvFrom(socket, &wb, 1, &n, &Flags, (sockaddr*)addr, &addr->Fromlen, Irp, 0));
+			err = WSA_ERROR(WSARecvFrom(socket, &wb, 1, &n, &Flags, (sockaddr*)&addr->addr, &addr->dwAddressLength, Irp, 0));
 
 			UnlockSocket();
 		}
@@ -564,8 +564,7 @@ ULONG CTcpEndpoint::Connect_l(SOCKET socket, PSOCKADDR RemoteAddress, DWORD Remo
 		RtlZeroMemory(LocalAddress, RemoteAddressLength);
 		LocalAddress->sa_family = RemoteAddress->sa_family;
 
-		err = WSA_ERROR(bind(socket, LocalAddress, RemoteAddressLength));
-		if (err)
+		if (err = WSA_ERROR(bind(socket, LocalAddress, RemoteAddressLength)))
 		{
 			Close();
 			return err;
