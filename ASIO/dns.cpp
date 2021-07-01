@@ -82,7 +82,6 @@ DWORD HashString(PCSTR lpsz, DWORD hash = 0)
 	return hash;
 }
 
-
 struct DnsCache 
 {
 	struct CRC_IP_TIME { ULONG crc, ip, time, n; };
@@ -192,7 +191,7 @@ class CDnsSocket : public CUdpEndpoint
 	USHORT _Xid;
 
 	void OnRecv(PSTR Buffer, ULONG cbTransferred);
-	virtual void OnRecv(PSTR Buffer, ULONG cbTransferred, CDataPacket* /*packet*/, SOCKADDR_IN* addr);
+	virtual void OnRecv(PSTR Buffer, ULONG cbTransferred, CDataPacket* /*packet*/, SOCKADDR_IN_EX* addr);
 
 	~CDnsSocket()
 	{
@@ -615,8 +614,9 @@ void CDnsSocket::OnRecv(PSTR Buffer, ULONG cbTransferred)
 	} while(--AnswerCount);
 }
 
-void CDnsSocket::OnRecv(PSTR Buffer, ULONG cbTransferred, CDataPacket* /*packet*/, SOCKADDR_IN* /*addr*/)
+void CDnsSocket::OnRecv(PSTR Buffer, ULONG cbTransferred, CDataPacket* /*packet*/, SOCKADDR_IN_EX* /*addr*/)
 {
+	DbgPrint("%s<%p>(%08x %04x)=%u\n", __FUNCTION__, this, _DnsServerIp, _Xid, Buffer, cbTransferred);
 	if (Buffer) OnRecv(Buffer, cbTransferred);
 	_pTask->DecRecvCount();
 }
