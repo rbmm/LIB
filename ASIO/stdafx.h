@@ -2,8 +2,11 @@
 
 #include "../inc/StdAfx.h"
 
+#include <iphlpapi.h>
+#include <WinDNS.h>
+#include <ws2ipdef.h>
+#include <mstcpip.h>
 _NT_BEGIN
-
 #include <schannel.h>
 #include <tdi.h>
 

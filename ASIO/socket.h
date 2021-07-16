@@ -1,7 +1,6 @@
 #pragma once
 
 #include <mswsock.h>
-#include <ws2ipdef.h>
 
 #include "io.h"
 
@@ -30,11 +29,16 @@ protected:
 
 public:
 
-	virtual void OnIp(DWORD /*ip*/)
+	virtual void OnIp(ULONG /*ip*/)
 	{
 	}
+	
+	virtual void OnIp(PSOCKADDR Address, DWORD /*AddressLength*/)
+	{
+		OnIp(Address && Address->sa_family == AF_INET ? reinterpret_cast<sockaddr_in*>(Address)->sin_addr.S_un.S_addr : 0);
+	}
 
-	void DnsToIp(PCSTR Dns);
+	void DnsToIp(_In_ PCSTR Dns, _In_ USHORT QueryType = DNS_RTYPE_A, _In_ LONG QueryOptions = DNS_QUERY_STANDARD);
 
 	ULONG GetLocalAddr(PSOCKET_ADDRESS LocalAddr );
 	ULONG GetPort(PUSHORT Port);

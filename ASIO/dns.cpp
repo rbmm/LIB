@@ -1,80 +1,10 @@
 #include "StdAfx.h"
 
 _NT_BEGIN
-#include <mstcpip.h>
-#include <iphlpapi.h>
-#include <WinDNS.h>
 #include "socket.h"
 #define DbgPrint /##/
-
+//
 static volatile UCHAR guz;
-
-//////////////////////////////////////////////////////////////////////////
-void ALS(PSRWLOCK SRWLock);
-void ALE(PSRWLOCK SRWLock);
-void RLS(PSRWLOCK SRWLock);
-void RLE(PSRWLOCK SRWLock);
-
-void (WINAPI*AcqSRWLockShared)(PSRWLOCK SRWLock) = ALS;
-void (WINAPI*RelSRWLockShared)(PSRWLOCK SRWLock) = RLS;
-void (WINAPI*AcqSRWLockExclusive)(PSRWLOCK SRWLock) = ALE;
-void (WINAPI*RelSRWLockExclusive)(PSRWLOCK SRWLock) = RLE;
-
-void WINAPI dummy_xp(PSRWLOCK)
-{
-}
-
-void ALS(PSRWLOCK SRWLock)
-{
-	if (PVOID pv = GetProcAddress(GetModuleHandle(L"kernel32"), "AcquireSRWLockShared"))
-	{
-		AcqSRWLockShared = (void (WINAPI*)(PSRWLOCK))pv;
-		AcqSRWLockShared(SRWLock);
-	}
-	else
-	{
-		AcqSRWLockShared = dummy_xp;
-	}
-}
-
-void ALE(PSRWLOCK SRWLock)
-{
-	if (PVOID pv = GetProcAddress(GetModuleHandle(L"kernel32"), "AcquireSRWLockExclusive"))
-	{
-		AcqSRWLockExclusive = (void (WINAPI*)(PSRWLOCK))pv;
-		AcqSRWLockExclusive(SRWLock);
-	}
-	else
-	{
-		AcqSRWLockExclusive = dummy_xp;
-	}
-}
-
-void RLS(PSRWLOCK SRWLock)
-{
-	if (PVOID pv = GetProcAddress(GetModuleHandle(L"kernel32"), "ReleaseSRWLockShared"))
-	{
-		RelSRWLockShared = (void (WINAPI*)(PSRWLOCK))pv;
-		RelSRWLockShared(SRWLock);
-	}
-	else
-	{
-		RelSRWLockShared = dummy_xp;
-	}
-}
-
-void RLE(PSRWLOCK SRWLock)
-{
-	if (PVOID pv = GetProcAddress(GetModuleHandle(L"kernel32"), "ReleaseSRWLockExclusive"))
-	{
-		RelSRWLockExclusive = (void (WINAPI*)(PSRWLOCK))pv;
-		RelSRWLockExclusive(SRWLock);
-	}
-	else
-	{
-		RelSRWLockExclusive = dummy_xp;
-	}
-}
 
 DWORD HashString(PCSTR lpsz, DWORD hash = 0)
 {
@@ -89,24 +19,20 @@ struct DnsCache
 	inline static CRC_IP_TIME g_ip_cache[64] = {};
 	inline static SRWLOCK g_icl = SRWLOCK_INIT;
 
-	static ULONG get(PCSTR name, ULONG& rcrc);
+	static ULONG get(ULONG crc);
 	static void set(ULONG crc, ULONG ip);
 };
 
-ULONG DnsCache::get(PCSTR name, ULONG& rcrc)
+ULONG DnsCache::get(ULONG crc)
 {
-	ULONG crc = HashString(name);
-
-	rcrc = crc;
-
 	CRC_IP_TIME* p = &g_ip_cache[crc & (RTL_NUMBER_OF(g_ip_cache) - 1)];
 
 	ULONG time = GetTickCount();
 
 	ULONG ip = 0;
-	AcqSRWLockShared(&g_icl);
+	AcquireSRWLockShared(&g_icl);
 	if (p->crc == crc && time < p->time) ip = p->ip;
-	RelSRWLockShared(&g_icl);
+	ReleaseSRWLockShared(&g_icl);
 
 	return ip;
 }
@@ -117,133 +43,12 @@ void DnsCache::set(ULONG crc, ULONG ip)
 
 	ULONG time = GetTickCount() + 1000*100;// 100 sec
 
-	AcqSRWLockExclusive(&g_icl);
+	AcquireSRWLockExclusive(&g_icl);
 	p->crc = crc, p->time = time, p->ip = ip, p->n++;
-	RelSRWLockExclusive(&g_icl);
+	ReleaseSRWLockExclusive(&g_icl);
 }
 
 //////////////////////////////////////////////////////////////////////////
-class CDnsSocket;
-
-class CDnsTask : public IO_OBJECT_TIMEOUT
-{
-	CSocketObject* _pEndp;
-	CDnsSocket** _ppSocks;
-	ULONG _n;
-	LONG _nRecvCount;
-	LONG _bFirstIp;
-
-	virtual void IOCompletionRoutine(CDataPacket* , DWORD , NTSTATUS , ULONG_PTR , PVOID )
-	{
-		__debugbreak();
-	}
-
-	virtual void OnTimeout()
-	{
-		DbgPrint("%s<%p>\n", __FUNCTION__, this);
-		Cleanup();
-	}
-
-	ULONG Create(ULONG n);
-
-	void Cleanup();
-
-	~CDnsTask()
-	{
-		DbgPrint("%s<%p>\n", __FUNCTION__, this);
-		Cleanup();
-		if (_bFirstIp)
-		{
-			_pEndp->OnIp(0);
-		}
-		_pEndp->Release();
-	}
-
-public:
-
-	void DecRecvCount();
-
-	void OnIp(ULONG ip)
-	{
-		if (InterlockedExchangeNoFence(&_bFirstIp, FALSE))
-		{
-			DbgPrint("%s<%p> (%08x)\n", __FUNCTION__, this, ip);
-			Cleanup();
-			_pEndp->OnIp(ip);
-		}
-	}
-
-	CDnsTask(CSocketObject* pEndp) : _ppSocks(0), _n(0), _bFirstIp(TRUE), _pEndp(pEndp)
-	{
-		DbgPrint("%s<%p>\n", __FUNCTION__, this);
-		_pEndp->AddRef();
-	}
-
-	void DnsToIp(PCSTR Dns, ULONG crc, DWORD dwMilliseconds = 3000);
-};
-
-class CDnsSocket : public CUdpEndpoint
-{
-	//LONGLONG _time;
-	CDnsTask* _pTask;
-	ULONG _crc;
-	ULONG _DnsServerIp;
-	USHORT _Xid;
-
-	void OnRecv(PSTR Buffer, ULONG cbTransferred);
-	virtual void OnRecv(PSTR Buffer, ULONG cbTransferred, CDataPacket* /*packet*/, SOCKADDR_IN_EX* addr);
-
-	~CDnsSocket()
-	{
-		DbgPrint("%s<%p>\n", __FUNCTION__, this);
-		_pTask->Release();
-	}
-
-public:
-
-	BOOL Start(PCSTR Dns, DWORD DnsServerIp, ULONG crc);
-
-	CDnsSocket(CDnsTask* pTask) : _pTask(pTask)
-	{
-		pTask->AddRef();
-		DbgPrint("%s<%p>\n", __FUNCTION__, this);
-	}
-};
-
-//////////////////////////////////////////////////////////////////////////
-
-void CDnsTask::Cleanup()
-{
-	DbgPrint("%s<%p> (%p)\n", __FUNCTION__, this, _ppSocks);
-
-	StopTimeout();
-
-	if (PVOID pv = InterlockedExchangePointerAcquire((void**)&_ppSocks, 0))
-	{
-		CDnsSocket** ppSocks = (CDnsSocket**)pv;
-
-		if (ULONG n = _n)
-		{
-			do 
-			{
-				CDnsSocket* pSocks = *ppSocks++;
-				pSocks->Close();
-				pSocks->Release();
-			} while (--n);
-		}
-
-		delete [] pv;
-	}
-}
-
-void CDnsTask::DecRecvCount()
-{
-	if (!InterlockedDecrementNoFence(&_nRecvCount))
-	{
-		DbgPrint("%s<%p> (%p)\n", __FUNCTION__, this, _ppSocks);
-		Cleanup();
-	}
-}
 
 ULONG FillDnsServerList(ULONG MaxCount, ULONG IPs[])
 {
@@ -360,23 +165,91 @@ __exit:
 	return m;
 }
 
-void CDnsTask::DnsToIp(PCSTR Dns, ULONG crc, DWORD dwMilliseconds)
+//////////////////////////////////////////////////////////////////////////
+struct DCD 
 {
-	static ULONG seed;
+	USHORT _Xid;
+	USHORT _QueryType;
+};
 
-	if (!seed)
+class CDnsSocket : public CUdpEndpoint
+{
+	CSocketObject* _pEndp;
+	ULONG _crc;
+	LONG _waitCount = 1;
+	ULONG t = GetTickCount();
+
+	~CDnsSocket()
 	{
-		seed = ~GetTickCount();
+		OnIp(0, 0);
+		DbgPrint("%s<%p> %u\n", __FUNCTION__, this, GetTickCount() - t);
 	}
+
+	void OnIp(PSOCKADDR Address, DWORD AddressLength)
+	{
+		if (CSocketObject* pEndp = (CSocketObject*)InterlockedExchangePointerNoFence((void**)&_pEndp, 0))
+		{
+			Close();
+			StopTimeout();
+			pEndp->OnIp(Address, AddressLength);
+			pEndp->Release();
+		}
+	}
+
+	void OnRecv(PSTR Buffer, ULONG cbTransferred, USHORT Xid, USHORT QueryType);
+
+	virtual void OnRecv(PSTR Buffer, ULONG cbTransferred, CDataPacket* packet, SOCKADDR_IN_EX* addr);
+
+	void SendAndRecv(
+		_In_ PSOCKADDR Address, 
+		_In_ DWORD AddressLength, 
+		_In_ PCSTR Dns, 
+		_In_ USHORT QueryType,
+		_In_ USHORT Xid,
+		_In_ bool RecursionDesired);
+
+	BOOL SendToServer(
+		_In_ PSOCKADDR Address, 
+		_In_ DWORD AddressLength, 
+		_In_ PCSTR Dns, 
+		_In_ USHORT QueryType,
+		_In_ USHORT Xid,
+		_In_ bool RecursionDesired);
+
+	void DecWaitCount()
+	{
+		if (!InterlockedDecrement(&_waitCount))
+		{
+			StopTimeout();
+		}
+	}
+public:
+
+	CDnsSocket(CSocketObject* pEndp) : _pEndp(pEndp)
+	{
+		DbgPrint("%s<%p>\n", __FUNCTION__, this);
+		_pEndp->AddRef();
+	}
+
+	void DnsToIp(_In_ PCSTR Dns, _In_ ULONG crc, _In_ WORD QueryType, _In_ LONG QueryOptions, _In_ DWORD dwMilliseconds = 4000);
+};
+
+void CDnsSocket::DnsToIp(_In_ PCSTR Dns, _In_ ULONG crc, _In_ USHORT QueryType, _In_ LONG QueryOptions, _In_ DWORD dwMilliseconds)
+{
+	_crc = crc;
+
+	ULONG seed = (ULONG)(ULONG_PTR)this ^ ~GetTickCount();
 
 	ULONG i = RtlRandomEx(&seed);
 
-	static ULONG DnsServerAddressesGroup1[] = {
+	USHORT Xid = (USHORT)i;
+
+	static const ULONG DnsServerAddressesGroup1[] = {
 		IP(8, 8, 8, 8),
 		IP(8, 8, 4, 4),
 	};
 
-	static ULONG DnsServerAddressesGroup2[] = {
+	static const ULONG DnsServerAddressesGroup2[] = {
 		IP(208, 67, 222, 222),
 		IP(208, 67, 222, 220),
 		IP(208, 67, 220, 220),
@@ -388,100 +261,62 @@ void CDnsTask::DnsToIp(PCSTR Dns, ULONG crc, DWORD dwMilliseconds)
 		DnsServerAddressesGroup2[i % RTL_NUMBER_OF(DnsServerAddressesGroup2)],
 	};
 
-	if (ULONG n = Create(2 + FillDnsServerList(RTL_NUMBER_OF(DnsServerAddresses) - 2, DnsServerAddresses + 2)))
+	i = QueryOptions & DNS_QUERY_NO_WIRE_QUERY ? 0 : 2;
+
+	i += FillDnsServerList(RTL_NUMBER_OF(DnsServerAddresses) - i, DnsServerAddresses + i);
+
+	if (i && Create(0) == NOERROR && SetTimeout(dwMilliseconds))
 	{
-		if (SetTimeout(dwMilliseconds))
-		{
-			_nRecvCount = n + 1;
-			CDnsSocket** ppSocks = (CDnsSocket**)alloca(n * sizeof(CDnsSocket*)), *pSock;
-			memcpy(ppSocks, _ppSocks, n * sizeof(CDnsSocket*));
+		SOCKADDR_IN Ipv4 = { AF_INET, DNS_PORT_NET_ORDER };
 
-			i = n;
+		if (i)
+		{
+			bool RecursionDesired = !(QueryOptions & DNS_QUERY_NO_RECURSION);
 			do 
 			{
-				(*ppSocks++)->AddRef();
-			} while (--i);
+				Ipv4.sin_addr.s_addr = DnsServerAddresses[--i];
 
-			do 
-			{
-				--n, pSock = *--ppSocks;
+				SendAndRecv((PSOCKADDR)&Ipv4, sizeof(Ipv4), Dns, QueryType, Xid++, RecursionDesired);
 
-				BOOL fOk = FALSE;
-
-				if (CDataPacket* packet = new(DNS_RFC_MAX_UDP_PACKET_LENGTH) CDataPacket)
-				{
-					DbgPrint("-->%08x\n", DnsServerAddresses[n]);
-
-					if (!pSock->RecvFrom(packet) && pSock->Start(Dns, DnsServerAddresses[n], crc))
-					{
-						fOk = TRUE;
-					}
-					packet->Release();
-				}
-
-				if (!fOk)
-				{
-					DecRecvCount();
-				}
-
-				pSock->Release();
-
-			} while (n);
-
-			DecRecvCount();
+			} while (i);
 		}
-		else
-		{
-			Cleanup();
-		}
+
+		DecWaitCount();
 	}
 }
 
-ULONG CDnsTask::Create(ULONG n)
+void CDnsSocket::SendAndRecv(_In_ PSOCKADDR Address, 
+							 _In_ DWORD AddressLength, 
+							 _In_ PCSTR Dns, 
+							 _In_ USHORT QueryType,
+							 _In_ USHORT Xid,
+							 _In_ bool RecursionDesired)
 {
-	if (!n)
+	if (CDataPacket* packet = new(DNS_RFC_MAX_UDP_PACKET_LENGTH + sizeof(DCD)) CDataPacket)
 	{
-		return 0;
-	}
+		packet->setDataSize(sizeof(DCD));
+		DCD* p = (DCD*)packet->getData();
+		p->_Xid = Xid;
+		p->_QueryType = QueryType;
 
-	if (CDnsSocket** ppSocks = new CDnsSocket*[n])
-	{
-		CDnsSocket** ppSocks2 = ppSocks;
-		ULONG m = 0;
+		InterlockedIncrementNoFence(&_waitCount);
 
-		do 
+		if (RecvFrom(packet) || !SendToServer(Address, AddressLength, Dns, QueryType, Xid, RecursionDesired))
 		{
-			if (CDnsSocket* pSocks = new CDnsSocket(this))
-			{
-				if (pSocks->Create(0))
-				{
-					pSocks->Release();
-				}
-				else
-				{
-					*ppSocks++ = pSocks;
-					m++;
-				}
-			}
-		} while (--n);
-
-		_ppSocks = ppSocks2;		
-		// -- memory_order_release
-
-		if (m)
-		{
-			_n = m;
-			return m;
+			DecWaitCount();
 		}
-	}
 
-	return 0;
+		packet->Release();
+	}
 }
 
-BOOL CDnsSocket::Start(PCSTR Dns, DWORD DnsServerIp, ULONG crc)
+BOOL CDnsSocket::SendToServer(_In_ PSOCKADDR Address, 
+							  _In_ DWORD AddressLength, 
+							  _In_ PCSTR Dns, 
+							  _In_ USHORT QueryType,
+							  _In_ USHORT Xid,
+							  _In_ bool RecursionDesired)
 {
-	_crc = crc;
-
 	if (CDataPacket* packet = new(DNS_RFC_MAX_UDP_PACKET_LENGTH) CDataPacket)
 	{
 		union {
@@ -494,15 +329,9 @@ BOOL CDnsSocket::Start(PCSTR Dns, DWORD DnsServerIp, ULONG crc)
 		PSTR _lpsz, __lpsz = lpsz;
 		char c, i;
 		RtlZeroMemory(pdh, sizeof(DNS_HEADER));
-		ULONG seed = (ULONG)(ULONG_PTR)this ^ ~GetTickCount();
-		pdh->Xid = _Xid = (USHORT)RtlRandomEx(&seed);
-		pdh->RecursionDesired = 1;
+		pdh->Xid = Xid;
+		pdh->RecursionDesired = RecursionDesired;
 		pdh++->QuestionCount = 0x0100; //_byteswap_ushort(1);
-
-		_DnsServerIp = DnsServerIp;
-
-		// { _byteswap_ushort(DNS_TYPE_A), _byteswap_ushort(DNS_CLASS_INTERNET) }
-		static const DNS_WIRE_QUESTION dwq = { 0x0100, 0x0100 };
 
 		do 
 		{
@@ -521,13 +350,12 @@ mm:
 
 		*lpsz++ = 0;
 
+		DNS_WIRE_QUESTION dwq = { QueryType, DNS_RCLASS_INTERNET };
 		memcpy(lpsz, &dwq, sizeof(dwq));
 
 		packet->setDataSize(RtlPointerToOffset(__lpsz, lpsz) + sizeof(dwq));
 
-		//GetSystemTimeAsFileTime((PFILETIME)&_time);
-
-		ULONG err = SendTo(DnsServerIp, DNS_PORT_NET_ORDER, packet);
+		ULONG err = SendTo(Address, AddressLength, packet);
 
 		packet->Release();
 
@@ -537,10 +365,10 @@ mm:
 	return FALSE;
 }
 
-void CDnsSocket::OnRecv(PSTR Buffer, ULONG cbTransferred)
+void CDnsSocket::OnRecv(PSTR Buffer, ULONG cbTransferred, USHORT Xid, USHORT QueryType)
 {
 	if (cbTransferred < sizeof(DNS_HEADER) || 
-		reinterpret_cast<DNS_HEADER*>(Buffer)->Xid != _Xid ||
+		reinterpret_cast<DNS_HEADER*>(Buffer)->Xid != Xid ||
 		reinterpret_cast<DNS_HEADER*>(Buffer)->ResponseCode != DNS_RCODE_NOERROR) return ;
 
 	ULONG AnswerCount = _byteswap_ushort(reinterpret_cast<DNS_HEADER*>(Buffer)->AnswerCount);
@@ -591,62 +419,96 @@ void CDnsSocket::OnRecv(PSTR Buffer, ULONG cbTransferred)
 		cbTransferred -= sizeof (DNS_WIRE_RECORD), Buffer += sizeof (DNS_WIRE_RECORD);
 		
 		if (cbTransferred < (dwr.DataLength = _byteswap_ushort(dwr.DataLength))) return;
+	
+		SOCKADDR_INET si;
 
-		DbgPrint("[%08x]{ %04x %04x : %04x }\n", _DnsServerIp, dwr.RecordType, dwr.RecordClass, dwr.DataLength);
-		
-		if (dwr.RecordType == 0x100/*DNS_TYPE_A*/ && dwr.DataLength == sizeof(IP4_ADDRESS))
+		if (QueryType == dwr.RecordType) switch (dwr.RecordType)
 		{
-			IP4_ADDRESS ip;
-			memcpy(&ip, Buffer, sizeof(IP4_ADDRESS));
-
-			if (ip)
+		case DNS_RTYPE_A:
+			if (dwr.DataLength == sizeof(IP4_ADDRESS))
 			{
-				//LONGLONG time;
-				//GetSystemTimeAsFileTime((PFILETIME)&time);, time - _time [%016Iu]
-				DbgPrint("[%08x]->%08x\n", _DnsServerIp, ip);
-				DnsCache::set(_crc, ip);
-				_pTask->OnIp(ip);
+				RtlZeroMemory(&si.Ipv4, sizeof(si.Ipv4));
+				si.Ipv4.sin_family = AF_INET;
+				memcpy(&si.Ipv4.sin_addr, Buffer, sizeof(IP4_ADDRESS));
+
+				if (si.Ipv4.sin_addr.S_un.S_addr)
+				{
+					DnsCache::set(_crc, si.Ipv4.sin_addr.S_un.S_addr);
+					OnIp((PSOCKADDR)&si.Ipv4, sizeof(si.Ipv4));
+					return;
+				}
+			}
+			break;
+		case DNS_RTYPE_AAAA:
+			if (dwr.DataLength == sizeof(IP6_ADDRESS))
+			{
+				RtlZeroMemory(&si.Ipv6, sizeof(si.Ipv6));
+				si.Ipv6.sin6_family = AF_INET6;
+				memcpy(&si.Ipv6.sin6_addr, Buffer, sizeof(IP6_ADDRESS));
+				OnIp((PSOCKADDR)&si.Ipv6, sizeof(si.Ipv6));
 				return;
 			}
+			break;
 		}
+
 		cbTransferred -= dwr.DataLength, Buffer += dwr.DataLength;
 
 	} while(--AnswerCount);
 }
 
-void CDnsSocket::OnRecv(PSTR Buffer, ULONG cbTransferred, CDataPacket* /*packet*/, SOCKADDR_IN_EX* /*addr*/)
+void CDnsSocket::OnRecv(PSTR Buffer, ULONG cbTransferred, CDataPacket* packet, SOCKADDR_IN_EX* addr)
 {
-	DbgPrint("%s<%p>(%08x %04x)=%u\n", __FUNCTION__, this, _DnsServerIp, _Xid, Buffer, cbTransferred);
-	if (Buffer) OnRecv(Buffer, cbTransferred);
-	_pTask->DecRecvCount();
+	DCD* p = (DCD*)packet->getData();
+
+	DbgPrint("%s<%p>[%08x]->%u,%p\n", __FUNCTION__, this, addr->addr.Ipv4.sin_addr.s_addr, cbTransferred, Buffer);
+	if (Buffer) OnRecv(Buffer, cbTransferred, p->_Xid, p->_QueryType);
+	DecWaitCount();
 }
 
 //////////////////////////////////////////////////////////////////////////
 
-void CSocketObject::DnsToIp(PCSTR Dns)
+void CSocketObject::DnsToIp(_In_ PCSTR Dns, _In_ USHORT QueryType/* = DNS_RTYPE_A*/, _In_ LONG QueryOptions /*= DNS_QUERY_STANDARD*/)
 {
-	ULONG crc, ip;
-	PCSTR c;
-	if (0 <= RtlIpv4StringToAddressA(Dns, TRUE, &c, (in_addr*)&ip) || (ip = DnsCache::get(Dns, crc)))
-	{
-		OnIp(ip);
-		return;
-	}
-
 	if (strlen(Dns) > DNS_MAX_TEXT_STRING_LENGTH)
 	{
-		OnIp(0);
+		OnIp(0, 0);
 		return;
 	}
 
-	if (CDnsTask* pTask = new CDnsTask(this))
+	ULONG crc = HashString(Dns);
+	PCSTR c;
+
+	SOCKADDR_INET si{};
+
+	switch (QueryType)
 	{
-		pTask->DnsToIp(Dns, crc);
-		pTask->Release();
+	case DNS_RTYPE_A:
+		if (0 <= RtlIpv4StringToAddressA(Dns, TRUE, &c, &si.Ipv4.sin_addr) || 
+			(si.Ipv4.sin_addr.S_un.S_addr = DnsCache::get(crc)))
+		{
+			si.Ipv4.sin_family = AF_INET;
+			OnIp((PSOCKADDR)&si.Ipv4, sizeof(si.Ipv4));
+			return;
+		}
+		break;
+	case DNS_RTYPE_AAAA:
+		if (0 <= RtlIpv6StringToAddressA(Dns, &c, &si.Ipv6.sin6_addr))
+		{
+			si.Ipv6.sin6_family = AF_INET6;
+			OnIp((PSOCKADDR)&si.Ipv6, sizeof(si.Ipv6));
+			return;
+		}
+		break;
+	}
+
+	if (CDnsSocket* pDns = new CDnsSocket(this))
+	{
+		pDns->DnsToIp(Dns, crc, QueryType, QueryOptions);
+		pDns->Release();
 	}
 	else
 	{
-		OnIp(0);
+		OnIp(0, 0);
 	}
 }
 

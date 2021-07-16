@@ -1,5 +1,4 @@
 #include "StdAfx.h"
-#include <ws2ipdef.h >
 #include <ws2bth.h>
 
 _NT_BEGIN
