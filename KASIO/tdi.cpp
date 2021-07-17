@@ -18,28 +18,28 @@ static OBJECT_ATTRIBUTES oaUdp = {
 	sizeof oaUdp, 0, (PUNICODE_STRING)&Udp, OBJ_CASE_INSENSITIVE|OBJ_KERNEL_HANDLE 
 };
 
-NTSTATUS CTdiAddress::Create(POBJECT_ATTRIBUTES DeviceName, USHORT port, ULONG ip)
+NTSTATUS CTdiAddress::Create(POBJECT_ATTRIBUTES DeviceName, USHORT AddressType, PVOID Address, USHORT AddressLength)
 {
 	IO_STATUS_BLOCK iosb;
 
-	enum{
-		EaSize = sizeof FILE_FULL_EA_INFORMATION + TDI_TRANSPORT_ADDRESS_LENGTH + sizeof TA_IP_ADDRESS
-	};
+	USHORT EaValueLength = (USHORT)FIELD_OFFSET(TRANSPORT_ADDRESS, Address->Address[AddressLength]);
+
+	ULONG EaSize = sizeof(FILE_FULL_EA_INFORMATION) + TDI_TRANSPORT_ADDRESS_LENGTH + EaValueLength;
+
 	PFILE_FULL_EA_INFORMATION fei = (PFILE_FULL_EA_INFORMATION)alloca(EaSize);
 
 	RtlZeroMemory(fei, EaSize);
 
-	memcpy(fei->EaName, TdiTransportAddress, fei->EaNameLength = TDI_TRANSPORT_ADDRESS_LENGTH);
+	PTRANSPORT_ADDRESS pta = (PTRANSPORT_ADDRESS)&fei->EaName[sizeof (TdiTransportAddress)];
 
-	PTA_IP_ADDRESS pip = (PTA_IP_ADDRESS)&fei->EaName[TDI_TRANSPORT_ADDRESS_LENGTH + 1];
+	pta->TAAddressCount = 1;
+	pta->Address->AddressType = AddressType;
+	pta->Address->AddressLength = AddressLength;
+	memcpy(pta->Address->Address, Address, AddressLength);
+	memcpy(fei->EaName, TdiTransportAddress, sizeof (TdiTransportAddress));
 
-	pip->TAAddressCount = 1;
-	pip->Address->AddressType = TDI_ADDRESS_TYPE_IP;
-	pip->Address->AddressLength = TDI_ADDRESS_LENGTH_IP;
-	pip->RA->sin_port = port;
-	pip->RA->in_addr = ip;
-
-	fei->EaValueLength = sizeof (TA_IP_ADDRESS);
+	fei->EaValueLength = EaValueLength;
+	fei->EaNameLength = TDI_TRANSPORT_ADDRESS_LENGTH;
 
 	HANDLE hFile;
 
@@ -52,6 +52,12 @@ NTSTATUS CTdiAddress::Create(POBJECT_ATTRIBUTES DeviceName, USHORT port, ULONG i
 	}
 
 	return status;
+}
+
+NTSTATUS CTdiAddress::Create(POBJECT_ATTRIBUTES DeviceName, USHORT port, ULONG ip)
+{
+	TDI_ADDRESS_IP tai = { port, ip };
+	return Create(DeviceName, TDI_ADDRESS_TYPE_IP, &tai, sizeof(tai));
 }
 
 NTSTATUS CTdiAddress::Create(USHORT port, ULONG ip)
@@ -138,21 +144,7 @@ NTSTATUS CUdpEndpoint::Create(USHORT port, ULONG ip)
 	return CTdiAddress::Create(&oaUdp, port, ip);
 }
 
-NTSTATUS CUdpEndpoint::SendTo(ULONG ip, USHORT port, const void* lpData, DWORD cbData)	
-{
-	if (CDataPacket* packet = new(cbData) CDataPacket)
-	{
-		memcpy(packet->getData(), lpData, cbData);
-		packet->setDataSize(cbData);
-		NTSTATUS status = SendTo(ip, port, packet);
-		packet->Release();
-		return status;
-	}
-
-	return STATUS_INSUFFICIENT_RESOURCES;
-}
-
-NTSTATUS CUdpEndpoint::SendTo(ULONG ip, USHORT port, CDataPacket* packet )
+NTSTATUS CUdpEndpoint::SendTo(USHORT AddressType, PVOID Address, USHORT AddressLength, CDataPacket* packet)
 {
 	ULONG pad = packet->getPad();
 
@@ -160,13 +152,14 @@ NTSTATUS CUdpEndpoint::SendTo(ULONG ip, USHORT port, CDataPacket* packet )
 
 	if (!SendLength) return STATUS_INVALID_DEVICE_REQUEST;
 
-	struct CONNECTION_INFO   
+	struct CONNECTION_INFO
 	{
 		TDI_CONNECTION_INFORMATION info;
-		TA_IP_ADDRESS address;
+		TRANSPORT_ADDRESS address;
+		UCHAR buf[sizeof(TA_IP6_ADDRESS) - sizeof(TRANSPORT_ADDRESS)];
 	} *pci ,ci = {
-		{  0, 0, 0, 0, sizeof(TA_IP_ADDRESS) },
-		{ 1, { TDI_ADDRESS_LENGTH_IP, TDI_ADDRESS_TYPE_IP, { port, ip } } }
+		{  0, 0, 0, 0, FIELD_OFFSET(TRANSPORT_ADDRESS, Address->Address[AddressLength]) },
+		{ 1, { AddressLength, AddressType } }
 	};
 
 	NTSTATUS status = STATUS_INVALID_HANDLE;
@@ -187,6 +180,8 @@ NTSTATUS CUdpEndpoint::SendTo(ULONG ip, USHORT port, CDataPacket* packet )
 
 			pci->info.RemoteAddress = &pci->address;
 
+			memcpy(pci->address.Address->Address, Address, AddressLength);
+
 			PIO_STACK_LOCATION irpSp = IoGetNextIrpStackLocation(Irp);
 
 			irpSp->MinorFunction = TDI_SEND_DATAGRAM;
@@ -205,22 +200,42 @@ NTSTATUS CUdpEndpoint::SendTo(ULONG ip, USHORT port, CDataPacket* packet )
 	return status;
 }
 
+NTSTATUS CUdpEndpoint::SendTo(ULONG ip, USHORT port, const void* lpData, DWORD cbData)	
+{
+	if (CDataPacket* packet = new(cbData) CDataPacket)
+	{
+		memcpy(packet->getData(), lpData, cbData);
+		packet->setDataSize(cbData);
+		NTSTATUS status = SendTo(ip, port, packet);
+		packet->Release();
+		return status;
+	}
+
+	return STATUS_INSUFFICIENT_RESOURCES;
+}
+
+NTSTATUS CUdpEndpoint::SendTo(ULONG ip, USHORT port, CDataPacket* packet )
+{
+	TDI_ADDRESS_IP tai = { port, ip };
+	return SendTo(TDI_ADDRESS_TYPE_IP, &tai, sizeof(tai), packet);
+}
+
 NTSTATUS CUdpEndpoint::RecvFrom( CDataPacket* packet)
 {
 	ULONG ReceiveLength = packet->getFreeSize();
 
-	if (ReceiveLength <= sizeof(TA_IP_ADDRESS)) return STATUS_BUFFER_TOO_SMALL;
+	if (ReceiveLength <= sizeof(TA_INET_ADDRESS)) return STATUS_BUFFER_TOO_SMALL;
 
-	TA_IP_ADDRESS* addr = (TA_IP_ADDRESS*)packet->getFreeBuffer();
+	TA_INET_ADDRESS* addr = (TA_INET_ADDRESS*)packet->getFreeBuffer();
 
 	PSTR buf = (PSTR)(addr + 1);
 
-	ReceiveLength -= sizeof(TA_IP_ADDRESS);
+	ReceiveLength -= sizeof(TA_INET_ADDRESS);
 
 	static TDI_CONNECTION_INFORMATION ReceiveDatagramInformation;
 
 	TDI_CONNECTION_INFORMATION ReturnConnectionInformation = {
-		0, 0, 0, 0, sizeof(TA_IP_ADDRESS), addr
+		0, 0, 0, 0, sizeof(TA_INET_ADDRESS), addr
 	};
 
 	NTSTATUS status = STATUS_INVALID_HANDLE;
@@ -263,7 +278,7 @@ void CUdpEndpoint::IOCompletionRoutine(CDataPacket* packet, DWORD Code, NTSTATUS
 	switch(Code)
 	{
 	case recv:
-		OnRecv(status ? 0 : (PSTR)Pointer, status ? status : (ULONG)dwNumberOfBytesTransfered, packet, (TA_IP_ADDRESS*)Pointer - 1);
+		OnRecv(status ? 0 : (PSTR)Pointer, status ? status : (ULONG)dwNumberOfBytesTransfered, packet, (TA_INET_ADDRESS*)Pointer - 1);
 		break;
 
 	case send:
@@ -414,7 +429,7 @@ NTSTATUS CTcpEndpoint::Listen()
 		static TDI_CONNECTION_INFORMATION RequestConnectionInformation;
 
 		TDI_CONNECTION_INFORMATION ReturnConnectionInformation = {
-			0, 0, 0, 0, sizeof(TA_IP_ADDRESS), static_cast<TA_IP_ADDRESS*>(this)
+			0, 0, 0, 0, sizeof(TA_INET_ADDRESS), static_cast<TA_INET_ADDRESS*>(this)
 		};
 
 		PIRP Irp = BuildDeviceIoControlRequest(METHOD_BUFFERED, DeviceObject, 
@@ -456,6 +471,50 @@ NTSTATUS CTcpEndpoint::Connect(ULONG ip, USHORT port)
 		return STATUS_INVALID_PIPE_STATE;
 	}
 
+	AddressType = TDI_ADDRESS_TYPE_IP;
+	AddressLength = TDI_ADDRESS_LENGTH_IP;
+	Ipv4.sin_port = port;
+	Ipv4.in_addr = ip;
+	return Connect();
+}
+
+NTSTATUS CTcpEndpoint::Connect(PIN6_ADDR ip6, USHORT port)
+{
+	if (InterlockedBitTestAndSetNoFence(&m_flags, flListenActive))
+	{
+		return STATUS_INVALID_PIPE_STATE;
+	}
+
+	AddressType = TDI_ADDRESS_TYPE_IP6;
+	AddressLength = TDI_ADDRESS_LENGTH_IP6;
+	Ipv6.sin6_port = port;
+	Ipv6.sin6_flowinfo = 0;
+	Ipv6.sin6_scope_id = 0;
+	memcpy(Ipv6.sin6_addr, ip6, sizeof(IN6_ADDR));
+
+	return Connect();
+}
+
+NTSTATUS CTcpEndpoint::Connect(USHORT AddrType, PVOID Addr, USHORT AddrLength)
+{
+	if (AddressLength > sizeof(tp_addr))
+	{
+		return STATUS_INVALID_PARAMETER;
+	}
+
+	if (InterlockedBitTestAndSetNoFence(&m_flags, flListenActive))
+	{
+		return STATUS_INVALID_PIPE_STATE;
+	}
+
+	AddressType = AddrType;
+	AddressLength = AddrLength;
+	memcpy(tp_addr, Addr, AddrLength);
+	return Connect();
+}
+
+NTSTATUS CTcpEndpoint::Connect()
+{
 	NTSTATUS status = STATUS_INVALID_HANDLE;
 
 	HANDLE hFile;
@@ -468,14 +527,10 @@ NTSTATUS CTcpEndpoint::Connect(ULONG ip, USHORT port)
 		PDEVICE_OBJECT DeviceObject = IoGetRelatedDeviceObject(FileObject);
 
 		TDI_CONNECTION_INFORMATION ConnectionInformation = {
-			0, 0, 0, 0, sizeof(TA_IP_ADDRESS), static_cast<TA_IP_ADDRESS*>(this)
+			0, 0, 0, 0, FIELD_OFFSET(TRANSPORT_ADDRESS, Address->Address[AddressLength]), static_cast<TA_INET_ADDRESS*>(this)
 		};
 
 		TAAddressCount = 1;
-		Address->AddressType = TDI_ADDRESS_TYPE_IP;
-		Address->AddressLength = TDI_ADDRESS_LENGTH_IP;
-		RA->sin_port = port;
-		RA->in_addr = ip;
 
 		PIRP Irp = BuildDeviceIoControlRequest(METHOD_BUFFERED, DeviceObject, 
 			&ConnectionInformation, sizeof(TDI_CONNECTION_INFORMATION), 0, 0, TRUE, cnct, 0, 0);

@@ -165,11 +165,6 @@ protected:
 		return m_packet;
 	}
 
-	virtual void OnRenegotiateError()
-	{
-		Disconnect();
-	}
-
 	virtual void OnShutdown()
 	{
 	}

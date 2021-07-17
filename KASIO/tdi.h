@@ -3,7 +3,19 @@
 #include "io.h"
 
 #define IP(a, b, c, d) ((DWORD)(a + (b << 8) + (c << 16) + (d << 24)))
-#define RA Address->Address
+
+typedef struct TA_INET_ADDRESS {
+	LONG TAAddressCount;
+	struct {
+		USHORT AddressLength;       // length in bytes of this address == 14
+		USHORT AddressType;         // this will == TDI_ADDRESS_TYPE_IP
+		union {
+			UCHAR tp_addr[ISO_MAX_ADDR_LENGTH];
+			TDI_ADDRESS_IP Ipv4;
+			TDI_ADDRESS_IP6 Ipv6;
+		};
+	};
+} *PTA_INET_ADDRESS;
 
 class __declspec(novtable) CTdiObject : public IO_OBJECT_TIMEOUT
 {
@@ -13,10 +25,10 @@ class __declspec(novtable) CTdiObject : public IO_OBJECT_TIMEOUT
 	}
 
 public:
-	virtual void OnIp(DWORD /*ip*/)
+	virtual void OnIp(USHORT /*AddrType*/, PVOID /*Addr*/, USHORT /*AddrLength*/)
 	{
 	}
-	void DnsToIp(PCSTR Dns);
+	void DnsToIp(_In_ PCSTR Dns, _In_ USHORT QueryType = DNS_RTYPE_A, _In_ LONG QueryOptions = DNS_QUERY_STANDARD);
 };
 
 class CTdiAddress : public CTdiObject
@@ -26,6 +38,7 @@ class CTdiAddress : public CTdiObject
 	NTSTATUS QueryInfo(LONG QueryType, PVOID buf, ULONG cb, ULONG_PTR& Information);
 protected:
 	NTSTATUS Create(POBJECT_ATTRIBUTES DeviceName, USHORT port, ULONG ip);
+	NTSTATUS Create(POBJECT_ATTRIBUTES DeviceName, USHORT AddressType, PVOID Address, USHORT AddressLength);
 
 public:
 
@@ -43,7 +56,7 @@ protected:
 		recv = 'rrrr', send = 'ssss'
 	};
 
-	virtual void OnRecv(PSTR , ULONG , CDataPacket* , TA_IP_ADDRESS*  )
+	virtual void OnRecv(PSTR , ULONG , CDataPacket* , TA_INET_ADDRESS*  )
 	{
 	}
 
@@ -55,11 +68,12 @@ public:
 
 	NTSTATUS Create(USHORT port, ULONG ip = 0);
 	NTSTATUS RecvFrom(CDataPacket* packet);
+	NTSTATUS SendTo(USHORT AddressType, PVOID Address, USHORT AddressLength, CDataPacket* packet);	
 	NTSTATUS SendTo(ULONG ip, USHORT port, CDataPacket* packet);	
-	NTSTATUS SendTo(ULONG ip, USHORT port, const void* lpData, DWORD cbData);	
+	NTSTATUS SendTo(ULONG ip, USHORT port, const void* lpData, ULONG cbData);	
 };
 
-class __declspec(novtable) CTcpEndpoint : public CTdiObject, public TA_IP_ADDRESS
+class __declspec(novtable) CTcpEndpoint : public CTdiObject, public TA_INET_ADDRESS
 {
 	friend class CDnsSocket;
 	friend class CTcpEndpointTest;
@@ -106,7 +120,11 @@ public:
 
 	NTSTATUS Create(DWORD BufferSize);
 	NTSTATUS Listen();
+
 	NTSTATUS Connect(ULONG ip, USHORT port);
+	NTSTATUS Connect(PIN6_ADDR ip6, USHORT port);
+	NTSTATUS Connect(USHORT AddrType, PVOID Addr, USHORT AddrLength);
+
 	NTSTATUS Recv();
 	NTSTATUS Recv(PVOID Buffer, ULONG ReceiveLength);
 	NTSTATUS Send(CDataPacket* packet);	
@@ -118,6 +136,7 @@ public:
 
 private:
 
+	NTSTATUS Connect();
 	NTSTATUS Associate(PFILE_OBJECT FileObject, HANDLE AddressHandle);
 
 	_NODISCARD BOOL LockConnection()

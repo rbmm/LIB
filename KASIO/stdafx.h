@@ -9,6 +9,9 @@
 #define _NTOS_
 #define _NTDRIVER_
 #include "../inc/stdafx.h"
+#include <WinDNS.h>
+#include <ws2ipdef.h>
+#include <mstcpip.h>
 
 _NT_BEGIN
 #include <tdikrnl.h>
