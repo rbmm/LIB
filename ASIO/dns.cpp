@@ -177,12 +177,11 @@ class CDnsSocket : public CUdpEndpoint
 	CSocketObject* _pEndp;
 	ULONG _crc;
 	LONG _waitCount = 1;
-	ULONG t = GetTickCount();
 
 	~CDnsSocket()
 	{
 		OnIp(0, 0);
-		DbgPrint("%s<%p> %u\n", __FUNCTION__, this, GetTickCount() - t);
+		DbgPrint("%s<%p>\n", __FUNCTION__, this);
 	}
 
 	void OnIp(PSOCKADDR Address, DWORD AddressLength)
@@ -231,7 +230,7 @@ public:
 		_pEndp->AddRef();
 	}
 
-	void DnsToIp(_In_ PCSTR Dns, _In_ ULONG crc, _In_ WORD QueryType, _In_ LONG QueryOptions, _In_ DWORD dwMilliseconds = 4000);
+	void DnsToIp(_In_ PCSTR Dns, _In_ ULONG crc, _In_ WORD QueryType, _In_ LONG QueryOptions, _In_ DWORD dwMilliseconds = 3000);
 };
 
 void CDnsSocket::DnsToIp(_In_ PCSTR Dns, _In_ ULONG crc, _In_ USHORT QueryType, _In_ LONG QueryOptions, _In_ DWORD dwMilliseconds)
@@ -422,33 +421,36 @@ void CDnsSocket::OnRecv(PSTR Buffer, ULONG cbTransferred, USHORT Xid, USHORT Que
 	
 		SOCKADDR_INET si;
 
-		if (QueryType == dwr.RecordType) switch (dwr.RecordType)
+		if (QueryType == dwr.RecordType) 
 		{
-		case DNS_RTYPE_A:
-			if (dwr.DataLength == sizeof(IP4_ADDRESS))
+			switch (dwr.RecordType)
 			{
-				RtlZeroMemory(&si.Ipv4, sizeof(si.Ipv4));
-				si.Ipv4.sin_family = AF_INET;
-				memcpy(&si.Ipv4.sin_addr, Buffer, sizeof(IP4_ADDRESS));
-
-				if (si.Ipv4.sin_addr.S_un.S_addr)
+			case DNS_RTYPE_A:
+				if (dwr.DataLength == sizeof(IP4_ADDRESS))
 				{
-					DnsCache::set(_crc, si.Ipv4.sin_addr.S_un.S_addr);
-					OnIp((PSOCKADDR)&si.Ipv4, sizeof(si.Ipv4));
+					RtlZeroMemory(&si.Ipv4, sizeof(si.Ipv4));
+					si.Ipv4.sin_family = AF_INET;
+					memcpy(&si.Ipv4.sin_addr, Buffer, sizeof(IP4_ADDRESS));
+
+					if (si.Ipv4.sin_addr.S_un.S_addr)
+					{
+						DnsCache::set(_crc, si.Ipv4.sin_addr.S_un.S_addr);
+						OnIp((PSOCKADDR)&si.Ipv4, sizeof(si.Ipv4));
+						return;
+					}
+				}
+				break;
+			case DNS_RTYPE_AAAA:
+				if (dwr.DataLength == sizeof(IP6_ADDRESS))
+				{
+					RtlZeroMemory(&si.Ipv6, sizeof(si.Ipv6));
+					si.Ipv6.sin6_family = AF_INET6;
+					memcpy(&si.Ipv6.sin6_addr, Buffer, sizeof(IP6_ADDRESS));
+					OnIp((PSOCKADDR)&si.Ipv6, sizeof(si.Ipv6));
 					return;
 				}
+				break;
 			}
-			break;
-		case DNS_RTYPE_AAAA:
-			if (dwr.DataLength == sizeof(IP6_ADDRESS))
-			{
-				RtlZeroMemory(&si.Ipv6, sizeof(si.Ipv6));
-				si.Ipv6.sin6_family = AF_INET6;
-				memcpy(&si.Ipv6.sin6_addr, Buffer, sizeof(IP6_ADDRESS));
-				OnIp((PSOCKADDR)&si.Ipv6, sizeof(si.Ipv6));
-				return;
-			}
-			break;
 		}
 
 		cbTransferred -= dwr.DataLength, Buffer += dwr.DataLength;
