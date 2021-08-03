@@ -319,11 +319,16 @@ BOOL CDnsSocket::SendToServer(_In_ PSOCKADDR Address,
 	if (CDataPacket* packet = new(DNS_RFC_MAX_UDP_PACKET_LENGTH) CDataPacket)
 	{
 		union {
+			// PDNS_MESSAGE_BUFFER pDnsBuffer;
 			DNS_HEADER* pdh;
 			PSTR lpsz;
 			PBYTE pb;
 		};
 		
+		// ULONG dwBufferSize = DNS_RFC_MAX_UDP_PACKET_LENGTH;
+		// DnsWriteQuestionToBuffer_UTF8(pDnsBuffer, &dwBufferSize, Dns, 
+		//     _byteswap_ushort(QueryType), _byteswap_ushort(Xid), RecursionDesired);
+
 		lpsz = packet->getData();
 		PSTR _lpsz, __lpsz = lpsz;
 		char c, i;
@@ -364,6 +369,58 @@ mm:
 	return FALSE;
 }
 
+ULONG IsNameValid(PSTR* pBuf, ULONG cb, PSTR _buf, ULONG _cb)
+{
+	PSTR buf = *pBuf;
+
+	union {
+		USHORT ofs;
+		struct {
+			UCHAR b, c;
+		};
+	};
+
+	if (cb)
+	{
+		do 
+		{
+			cb--;
+
+			if (!(c = *buf++))
+			{
+				break;
+			}
+
+			if ((c & 0xc0) == 0xc0)
+			{
+				//compressed question name
+				if (!cb) return 0;
+				b = *buf++, cb--;
+				ofs &= 0x3ff;
+				if (ofs >= _cb)
+				{
+					return 0;
+				}
+				PSTR psz = _buf + ofs;
+				if (!IsNameValid(&psz, _cb - ofs, _buf, _cb))
+				{
+					return 0;
+				}
+				break;
+			}
+
+			if (cb < c) return 0;
+			//DbgPrint("%.*s.", c, buf);
+			cb -= c, buf += c;
+
+		} while (cb);
+	}
+
+	*pBuf = buf;
+	//DbgPrint("\n");
+	return cb;
+}
+
 void CDnsSocket::OnRecv(PSTR Buffer, ULONG cbTransferred, USHORT Xid, USHORT QueryType)
 {
 	if (cbTransferred < sizeof(DNS_HEADER) || 
@@ -374,14 +431,14 @@ void CDnsSocket::OnRecv(PSTR Buffer, ULONG cbTransferred, USHORT Xid, USHORT Que
 
 	if (!AnswerCount) return ;
 
+	ULONG _cb = cbTransferred;
+	PSTR _buf = Buffer;
+
 	Buffer += sizeof(DNS_HEADER), cbTransferred -= sizeof(DNS_HEADER);
 
-	UCHAR c;
-
-	while (cbTransferred-- && (c = *Buffer++))
+	if (!(cbTransferred = IsNameValid(&Buffer, cbTransferred, _buf, _cb)))
 	{
-		if (cbTransferred < c) return;
-		cbTransferred -= c, Buffer += c;
+		return ;
 	}
 
 	if (cbTransferred < sizeof(DNS_WIRE_QUESTION)) return ;
@@ -389,25 +446,7 @@ void CDnsSocket::OnRecv(PSTR Buffer, ULONG cbTransferred, USHORT Xid, USHORT Que
 
 	do 
 	{
-		if (!cbTransferred)
-		{
-			return;
-		}
-		
-		if ((*Buffer & 0xc0) == 0xc0)
-		{
-			//compressed question name
-			if (cbTransferred < sizeof(USHORT)) return ;
-			Buffer += sizeof(USHORT), cbTransferred -= sizeof(USHORT);
-		}
-		else
-		{
-			while (cbTransferred-- && (c = *Buffer++))
-			{
-				if (cbTransferred < c) return;
-				cbTransferred -= c, Buffer += c;
-			}
-		}
+		cbTransferred = IsNameValid(&Buffer, cbTransferred, _buf, _cb);
 
 		if (cbTransferred < sizeof(DNS_WIRE_RECORD)) return;
 
