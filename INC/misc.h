@@ -80,11 +80,14 @@ inline void _freea(PVOID pv)
 	if (pv < tib->StackLimit || tib->StackBase <= pv) delete [] pv;
 }
 
-#define C_HRESULT_FROM_WIN32(x) ((0x80000000 | (FACILITY_WIN32 << 16)) | (x))
-
 inline HRESULT GetLastHr(ULONG dwError = GetLastError())
 {
-	return dwError ? C_HRESULT_FROM_WIN32(dwError) : S_OK;
+	return dwError ? HRESULT_FROM_WIN32(dwError) : S_OK;
+}
+
+inline HRESULT GetLastHr(BOOL fOk)
+{
+	return fOk ? S_OK : HRESULT_FROM_WIN32(GetLastError());
 }
 
 inline HRESULT VtoHr(ULONG_PTR r)

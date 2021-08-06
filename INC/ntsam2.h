@@ -3,9 +3,12 @@
 #ifndef _NTSAM_H
 #define _NTSAM_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+EXTERN_C_START
+
+#define _NTSAM_USER_ACCOUNT_FLAGS_
+#define _NTSAM_USER_ALL_INFO_
+#define _NTSAM_SAM_USER_PARMS_ 
+#define _NTSAM_SAM_HANDLE_
 
 #define SAM_MAXIMUM_LOOKUP_COUNT (1000)
 #define SAM_MAXIMUM_LOOKUP_LENGTH (32000)
@@ -415,7 +418,7 @@ NTAPI
 SamEnumerateDomainsInSamServer(
     _In_ SAM_HANDLE ServerHandle,
     _Inout_ PSAM_ENUMERATE_HANDLE EnumerationContext,
-    _Outptr_ PVOID *Buffer, // PSAM_SID_ENUMERATION *Buffer
+    _Outptr_ PSAM_SID_ENUMERATION *Buffer, // 
     _In_ ULONG PreferedMaximumLength,
     _Out_ PULONG CountReturned
     );
@@ -454,7 +457,7 @@ NTAPI
 SamLookupNamesInDomain(
     _In_ SAM_HANDLE DomainHandle,
     _In_ ULONG Count,
-    _In_reads_(Count) PUNICODE_STRING Names,
+    _In_reads_(Count) PCUNICODE_STRING Names,
     _Out_ _Deref_post_count_(Count) PULONG *RelativeIds,
     _Out_ _Deref_post_count_(Count) PSID_NAME_USE *Use
     );
@@ -563,7 +566,7 @@ NTAPI
 SamEnumerateGroupsInDomain(
     _In_ SAM_HANDLE DomainHandle,
     _Inout_ PSAM_ENUMERATE_HANDLE EnumerationContext,
-    _Outptr_ PVOID *Buffer, // PSAM_RID_ENUMERATION *
+    _Outptr_ PSAM_RID_ENUMERATION *Buffer,
     _In_ ULONG PreferedMaximumLength,
     _Out_ PULONG CountReturned
     );
@@ -723,7 +726,7 @@ NTAPI
 SamEnumerateAliasesInDomain(
     _In_ SAM_HANDLE DomainHandle,
     _Inout_ PSAM_ENUMERATE_HANDLE EnumerationContext,
-    _Outptr_ PVOID *Buffer, // PSAM_RID_ENUMERATION *Buffer
+    _Outptr_ PSAM_RID_ENUMERATION *Buffer, 
     _In_ ULONG PreferedMaximumLength,
     _Out_ PULONG CountReturned
     );
@@ -1369,7 +1372,7 @@ SamEnumerateUsersInDomain(
     _In_ SAM_HANDLE DomainHandle,
     _Inout_ PSAM_ENUMERATE_HANDLE EnumerationContext,
     _In_ ULONG UserAccountControl,
-    _Outptr_ PVOID *Buffer, // PSAM_RID_ENUMERATION *
+    _Outptr_ PSAM_RID_ENUMERATION *Buffer, 
     _In_ ULONG PreferedMaximumLength,
     _Out_ PULONG CountReturned
     );
@@ -1738,8 +1741,6 @@ SamPerformGenericOperation(
     _Out_ PSAM_GENERIC_OPERATION_OUTPUT *OperationOut
     );
 
-#endif
+EXTERN_C_END
 
-#ifdef __cplusplus
-}
 #endif

@@ -1219,7 +1219,7 @@ NTDLL
 LdrGetProcedureAddress
 (
 	HMODULE hModule,
-	PCANSI_STRING ProcedureName,
+	const ANSI_STRING * ProcedureName,
 	ULONG Ordinal,
 	void** pAddress
 	);
