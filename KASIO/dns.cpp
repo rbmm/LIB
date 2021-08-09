@@ -300,7 +300,7 @@ void CDnsSocket::SendAndRecv(_In_ USHORT AddressType,
 							 _In_ USHORT Xid,
 							 _In_ bool RecursionDesired)
 {
-	if (CDataPacket* packet = new(DNS_RFC_MAX_UDP_PACKET_LENGTH + sizeof(DCD)) CDataPacket)
+	if (CDataPacket* packet = new(DNS_RFC_MAX_UDP_PACKET_LENGTH + sizeof(DCD) + sizeof(sizeof(TA_INET_ADDRESS))) CDataPacket)
 	{
 		packet->setDataSize(sizeof(DCD));
 		DCD* p = (DCD*)packet->getData();
