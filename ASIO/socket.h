@@ -137,6 +137,7 @@ protected:
 	}
 
 	/************************************************************************/
+	virtual void CloseObjectHandle(HANDLE hFile);
 
 public:
 

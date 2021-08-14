@@ -69,20 +69,9 @@ protected:
 
 public:
 
-	_NODISCARD BOOL LockHandle(HANDLE& hFile)
-	{
-		BOOL f = LockHandle();
-		hFile = m_hFile;
-		return f;
-	}
+	_NODISCARD BOOL LockHandle(HANDLE& hFile);
 
-	void UnlockHandle()
-	{
-		if (m_HandleLock.Release())
-		{
-			CloseObjectHandle(m_hFile), m_hFile = 0;
-		}
-	}
+	void UnlockHandle();
 
 	HANDLE getHandleNoLock() { return m_hFile; }
 
@@ -122,14 +111,7 @@ public:
 		m_HandleLock.Rundown_l();
 	}
 
-	void Close()
-	{
-		if (LockHandle())
-		{
-			Close_l();
-			UnlockHandle();
-		}
-	}
+	void Close();
 };
 
 //////////////////////////////////////////////////////////////////////////

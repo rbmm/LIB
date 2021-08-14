@@ -61,6 +61,32 @@ void* IO_OBJECT::operator new(size_t cb)
 	return 0;
 }
 
+_NODISCARD BOOL IO_OBJECT::LockHandle(HANDLE& hFile)
+{
+	BOOL f = LockHandle();
+	hFile = m_hFile;
+	return f;
+}
+
+void IO_OBJECT::UnlockHandle()
+{
+	if (m_HandleLock.Release())
+	{
+		HANDLE hFile = m_hFile;
+		m_hFile = 0;
+		CloseObjectHandle(hFile); 
+	}
+}
+
+void IO_OBJECT::Close()
+{
+	if (LockHandle())
+	{
+		Close_l();
+		UnlockHandle();
+	}
+}
+
 //////////////////////////////////////////////////////////////////////////
 // IO_IRP
 

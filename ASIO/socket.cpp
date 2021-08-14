@@ -308,6 +308,12 @@ CTcpEndpoint::~CTcpEndpoint()
 	if (m_pAddress) m_pAddress->Release();
 }
 
+void CTcpEndpoint::CloseObjectHandle(HANDLE hFile)
+{
+	m_flags = 0;
+	__super::CloseObjectHandle(hFile);
+}
+
 ULONG CTcpEndpoint::GetConnectionTime(PULONG seconds)
 {
 	int bytes = sizeof(ULONG);
@@ -325,13 +331,12 @@ ULONG CTcpEndpoint::GetConnectionTime(PULONG seconds)
 
 void CTcpEndpoint::Close()
 {
-	IO_OBJECT::Close();
-
 	if (LockConnection())
 	{
 		RunDownConnection_l();
 		UnlockConnection();
 	}
+	IO_OBJECT::Close();
 }
 
 void CTcpEndpoint::Disconnect(DWORD dwErrorReason)
