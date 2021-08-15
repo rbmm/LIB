@@ -2,6 +2,8 @@
 
 _NT_BEGIN
 
+#define DbgPrint /##/
+
 #include "CiclicBuffer.h"
 
 void ZRingBuffer::Init(void* BaseAddress, ULONG Size)
@@ -15,8 +17,9 @@ void ZRingBuffer::Start()
 	{
 		__debugbreak();
 	}
-	_readOffset = 0, _dataSize = 0, _ioCount = 0;
+	_readOffset = 0, _dataSize = 0, _ioCount = 1;
 	WriteAsync(0, 0);
+	DbgPrint("\n[%x]:Start::EndIo<%p>\n\n", GetCurrentThreadId(), this, _ioCount);
 }
 
 ULONG ZRingBuffer::BuildBuffers(WSABUF wb[2], ULONG from, ULONG to)
@@ -58,12 +61,14 @@ void ZRingBuffer::ReadAsync(ULONG ReadOffset, ULONG DataSize)
 {
 	if (CanRead(DataSize))
 	{
-		StartIo();
+		DbgPrint("\n[%x]:%s<%p>{%x}(%x, %x)+++++++++++++++\n\n", GetCurrentThreadId(), __FUNCTION__, this, _ioCount, ReadOffset, DataSize);
+		if (!StartIo()) __debugbreak();//$$$
 
 		WSABUF wb[2];
 		if (!BeginRead(wb, BuildBuffers(wb, ReadOffset, ReadOffset + DataSize)))
 		{
 			EndRead(0);
+			DbgPrint("\n[%x]:ReadAsync::EndRead<%p>{%x}!!!!!!!!!!!!!!!!!!!\n\n", GetCurrentThreadId(), this, _ioCount);
 		}
 	}
 }
@@ -72,18 +77,24 @@ void ZRingBuffer::WriteAsync(ULONG ReadOffset, ULONG DataSize)
 {
 	if (CanWrite(DataSize))
 	{
-		StartIo();
+		DbgPrint("\n[%x]:%s<%p>{%x}(%x, %x)\n\n", GetCurrentThreadId(), __FUNCTION__, this, _ioCount, ReadOffset, DataSize);
+
+		if (!StartIo()) __debugbreak();//$$$
+		//StartIo();
 
 		WSABUF wb[2];
 		if (!BeginWrite(wb, BuildBuffers(wb, ReadOffset + DataSize, ReadOffset + _Size)))
 		{
 			EndWrite(0);
+			DbgPrint("\n[%x]:WriteAsync::EndRead<%p>{%x}!!!!!!!!!!!!!!!!!!!\n\n", GetCurrentThreadId(), __FUNCTION__, this, _ioCount);
 		}
 	}
 }
 
 void ZRingBuffer::EndWrite(ULONG NumberOfBytesWrite )
 {
+	DbgPrint("\n[%x]:%s<%p>{%x}(%x)\n\n", GetCurrentThreadId(), __FUNCTION__, this, _ioCount, NumberOfBytesWrite);
+	
 	if (NumberOfBytesWrite)
 	{
 		union {
@@ -125,10 +136,13 @@ void ZRingBuffer::EndWrite(ULONG NumberOfBytesWrite )
 	}
 
 	EndIo();
+	DbgPrint("\n[%x]:EndWrite::EndIo<%p>{%x}-----------\n\n", GetCurrentThreadId(), this, _ioCount);
 }
 
 void ZRingBuffer::EndRead(ULONG NumberOfBytesRead )
 {
+	DbgPrint("\n[%x]:%s<%p>{%x}(%x)\n\n", GetCurrentThreadId(), __FUNCTION__, this, _ioCount, NumberOfBytesRead);
+
 	if (NumberOfBytesRead)
 	{
 		union {
@@ -170,6 +184,7 @@ void ZRingBuffer::EndRead(ULONG NumberOfBytesRead )
 	}
 
 	EndIo();
+	DbgPrint("\n[%x]:EndRead::EndIo<%p>{%x}-----------\n\n", GetCurrentThreadId(), this, _ioCount);
 }
 
 _NT_END

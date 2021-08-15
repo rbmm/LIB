@@ -10,7 +10,7 @@ class __declspec(novtable) ZRingBuffer
 	};
 	void* _BaseAddress;
 	ULONG _Size;
-	LONG _ioCount;
+	volatile LONG _ioCount;
 
 	// must always return the same value
 	virtual ULONG GetMinReadBufferSize(){ return 1; }
@@ -49,9 +49,9 @@ class __declspec(novtable) ZRingBuffer
 		return _Size - DataSize >= GetMinWriteBufferSize();
 	}
 
-	void StartIo()
+	LONG StartIo()
 	{
-		InterlockedIncrementNoFence(&_ioCount);
+		return InterlockedExchangeAddNoFence(&_ioCount, 1);
 	}
 
 	void EndIo()
@@ -76,4 +76,12 @@ public:
 	void Init(void* BaseAddress, ULONG Size);
 
 	void Start();
+
+	void Stop()
+	{
+		EndIo();
+	}
+
+	// for debug only
+	ULONG getIOcount() { return _ioCount; };
 };
