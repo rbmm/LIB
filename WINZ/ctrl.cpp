@@ -331,6 +331,7 @@ HRESULT ZImageList::LoadFromPNG(_In_ ULONG n, _In_ PCWSTR pszName, _In_ PVOID hm
 	{
 		if (_hdc = CreateCompatibleDC(0))
 		{
+			_cx = l._cx, _cy = l._cy/n;
 			SelectObject(_hdc, l._hbmp);
 		}
 		else
