@@ -267,7 +267,7 @@ ULONG CUdpEndpoint::RecvFrom(CDataPacket* packet)
 		SOCKET socket;
 		if (LockSocket(socket))
 		{
-			err = WSA_ERROR(WSARecvFrom(socket, &wb, 1, &n, &Flags, (sockaddr*)&addr->addr, &addr->dwAddressLength, Irp, 0));
+			err = WSA_ERROR(WSARecvFrom(socket, &wb, 1, &n, &Flags, &addr->saAddress, &addr->dwAddressLength, Irp, 0));
 
 			UnlockSocket();
 		}

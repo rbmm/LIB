@@ -195,7 +195,7 @@ class CDnsSocket : public CUdpEndpoint
 		}
 	}
 
-	void OnRecv(PSTR Buffer, ULONG cbTransferred, USHORT Xid, USHORT QueryType);
+	ULONG OnRecv(PDNS_MESSAGE_BUFFER pDnsBuffer, ULONG wMessageLength, USHORT Xid, USHORT QueryType);
 
 	virtual void OnRecv(PSTR Buffer, ULONG cbTransferred, CDataPacket* packet, SOCKADDR_IN_EX* addr);
 
@@ -249,22 +249,22 @@ void CDnsSocket::DnsToIp(_In_ PCSTR Dns, _In_ ULONG crc, _In_ USHORT QueryType, 
 	};
 
 	static const ULONG DnsServerAddressesGroup2[] = {
-		IP(208, 67, 222, 222),
-		IP(208, 67, 222, 220),
-		IP(208, 67, 220, 220),
-		IP(208, 67, 220, 222),
+		IP(1, 1, 1, 1),
+		IP(1, 0, 0, 1),
 	};
 
 	ULONG DnsServerAddresses[16] = { 
-		DnsServerAddressesGroup1[i % RTL_NUMBER_OF(DnsServerAddressesGroup1)],
-		DnsServerAddressesGroup2[i % RTL_NUMBER_OF(DnsServerAddressesGroup2)],
+		DnsServerAddressesGroup1[i % _countof(DnsServerAddressesGroup1)],
+		DnsServerAddressesGroup2[i % _countof(DnsServerAddressesGroup2)],
 	};
 
 	i = QueryOptions & DNS_QUERY_NO_WIRE_QUERY ? 0 : 2;
 
-	i += FillDnsServerList(RTL_NUMBER_OF(DnsServerAddresses) - i, DnsServerAddresses + i);
+	i += FillDnsServerList(_countof(DnsServerAddresses) - i, DnsServerAddresses + i);
 
-	if (i && Create(0) == NOERROR && SetTimeout(dwMilliseconds))
+	if (!i) i = 2;
+
+	if (Create(0) == NOERROR && SetTimeout(dwMilliseconds))
 	{
 		SOCKADDR_IN Ipv4 = { AF_INET, DNS_PORT_NET_ORDER };
 
@@ -309,59 +309,91 @@ void CDnsSocket::SendAndRecv(_In_ PSOCKADDR Address,
 	}
 }
 
+ULONG
+DnsWriteQuestionToBuffer(
+						 _Inout_     PDNS_MESSAGE_BUFFER pDnsBuffer,
+						 _Inout_     PDWORD              pdwBufferSize,
+						 _In_        PCSTR               pszName,
+						 _In_        WORD                wType,
+						 _In_        WORD                Xid,
+						 _In_        BOOL                fRecursionDesired
+						 )
+{
+	ULONG dwBufferSize = *pdwBufferSize;
+
+	if (dwBufferSize < sizeof(DNS_RFC_MAX_UDP_PACKET_LENGTH))
+	{
+		*pdwBufferSize = DNS_RFC_MAX_UDP_PACKET_LENGTH;
+		return ERROR_INSUFFICIENT_BUFFER;
+	}
+
+	union {
+		PDNS_HEADER MessageHead;
+		PSTR MessageBody;
+	};
+
+	RtlZeroMemory(MessageHead = &pDnsBuffer->MessageHead, sizeof(DNS_HEADER));
+	MessageHead->Xid = Xid;
+	MessageHead->RecursionDesired = fRecursionDesired;
+	MessageHead->QuestionCount = 0x0100; //_byteswap_ushort(1);
+
+	MessageBody = pDnsBuffer->MessageBody;
+
+	ULONG cb = DNS_MAX_NAME_LENGTH;
+	CHAR *pLabelLen, Len, c;
+	do 
+	{
+		pLabelLen = MessageBody++, Len = 0, cb--;
+mm:
+		switch (c = *pszName++)
+		{
+		case '.':
+		case 0:
+			break;
+		default:
+			if (++Len > DNS_MAX_LABEL_LENGTH || !--cb)
+			{
+				return ERROR_INVALID_NAME;
+			}
+			*MessageBody++ = c;
+			goto mm;
+		}
+		*pLabelLen = Len;
+	} while (c);
+
+	*MessageBody++ = 0;
+
+	DNS_WIRE_QUESTION dwq = { wType, DNS_RCLASS_INTERNET };// DNS_RTYPE_A
+	memcpy(MessageBody, &dwq, sizeof(dwq));
+
+	*pdwBufferSize = RtlPointerToOffset(pDnsBuffer, MessageBody + sizeof(DNS_WIRE_QUESTION));
+
+	return NOERROR;
+}
+
 BOOL CDnsSocket::SendToServer(_In_ PSOCKADDR Address, 
 							  _In_ DWORD AddressLength, 
 							  _In_ PCSTR Dns, 
 							  _In_ USHORT QueryType,
 							  _In_ USHORT Xid,
-							  _In_ bool RecursionDesired)
+							  _In_ bool fRecursionDesired)
 {
 	if (CDataPacket* packet = new(DNS_RFC_MAX_UDP_PACKET_LENGTH) CDataPacket)
-	{
-		union {
-			// PDNS_MESSAGE_BUFFER pDnsBuffer;
-			DNS_HEADER* pdh;
-			PSTR lpsz;
-			PBYTE pb;
-		};
+	{	
+		ULONG dwBufferSize = DNS_RFC_MAX_UDP_PACKET_LENGTH;
+
+		ULONG err = DnsWriteQuestionToBuffer((PDNS_MESSAGE_BUFFER)packet->getData(), 
+			&dwBufferSize, Dns, QueryType, Xid, fRecursionDesired);
 		
-		// ULONG dwBufferSize = DNS_RFC_MAX_UDP_PACKET_LENGTH;
-		// DnsWriteQuestionToBuffer_UTF8(pDnsBuffer, &dwBufferSize, Dns, 
-		//     _byteswap_ushort(QueryType), _byteswap_ushort(Xid), RecursionDesired);
-
-		lpsz = packet->getData();
-		PSTR _lpsz, __lpsz = lpsz;
-		char c, i;
-		RtlZeroMemory(pdh, sizeof(DNS_HEADER));
-		pdh->Xid = Xid;
-		pdh->RecursionDesired = RecursionDesired;
-		pdh++->QuestionCount = 0x0100; //_byteswap_ushort(1);
-
-		do 
+		if (err == NOERROR)
 		{
-			_lpsz = lpsz++, i = 0;
-mm:
-			switch (c = *Dns++)
-			{
-			case '.':
-			case 0:
-				break;
-			default:*lpsz++ = c, ++i;
-				goto mm;
-			}
-			*_lpsz = i;
-		} while (c);
+			packet->setDataSize(dwBufferSize);
 
-		*lpsz++ = 0;
+			err = SendTo(Address, AddressLength, packet);
 
-		DNS_WIRE_QUESTION dwq = { QueryType, DNS_RCLASS_INTERNET };
-		memcpy(lpsz, &dwq, sizeof(dwq));
+			packet->Release();
 
-		packet->setDataSize(RtlPointerToOffset(__lpsz, lpsz) + sizeof(dwq));
-
-		ULONG err = SendTo(Address, AddressLength, packet);
-
-		packet->Release();
+		}
 
 		return err == NOERROR;
 	}
@@ -421,47 +453,54 @@ ULONG IsNameValid(PSTR* pBuf, ULONG cb, PSTR _buf, ULONG _cb)
 	return cb;
 }
 
-void CDnsSocket::OnRecv(PSTR Buffer, ULONG cbTransferred, USHORT Xid, USHORT QueryType)
+ULONG CDnsSocket::OnRecv(PDNS_MESSAGE_BUFFER pDnsBuffer, ULONG wMessageLength, USHORT Xid, USHORT QueryType)
 {
-	if (cbTransferred < sizeof(DNS_HEADER) || 
-		reinterpret_cast<DNS_HEADER*>(Buffer)->Xid != Xid ||
-		reinterpret_cast<DNS_HEADER*>(Buffer)->ResponseCode != DNS_RCODE_NOERROR) return ;
-
-	ULONG AnswerCount = _byteswap_ushort(reinterpret_cast<DNS_HEADER*>(Buffer)->AnswerCount);
-
-	if (!AnswerCount) return ;
-
-	ULONG _cb = cbTransferred;
-	PSTR _buf = Buffer;
-
-	Buffer += sizeof(DNS_HEADER), cbTransferred -= sizeof(DNS_HEADER);
-
-	if (!(cbTransferred = IsNameValid(&Buffer, cbTransferred, _buf, _cb)))
+	if (wMessageLength < sizeof(DNS_HEADER))
 	{
-		return ;
+		return ERROR_INSUFFICIENT_BUFFER;
 	}
 
-	if (cbTransferred < sizeof(DNS_WIRE_QUESTION)) return ;
-	Buffer += sizeof(DNS_WIRE_QUESTION), cbTransferred -= sizeof(DNS_WIRE_QUESTION);
+	ULONG ResponseCode = pDnsBuffer->MessageHead.ResponseCode;
+
+	if (ResponseCode != DNS_RCODE_NOERROR)
+	{
+		return DNS_ERROR_RESPONSE_CODES_BASE + ResponseCode;
+	}
+
+	if (pDnsBuffer->MessageHead.Xid != Xid) return DNS_ERROR_BAD_PACKET;
+
+	ULONG AnswerCount = _byteswap_ushort(pDnsBuffer->MessageHead.AnswerCount);
+
+	if (!AnswerCount) return DNS_ERROR_RCODE_SERVER_FAILURE;
+
+	PSTR MessageBody = pDnsBuffer->MessageBody;
+	ULONG Length = wMessageLength - sizeof(DNS_HEADER);
+
+	if ((Length = IsNameValid(&MessageBody, Length, (PSTR)pDnsBuffer, wMessageLength)) < sizeof(DNS_WIRE_QUESTION))
+	{
+		return DNS_ERROR_BAD_PACKET;
+	}
+
+	MessageBody += sizeof(DNS_WIRE_QUESTION), Length -= sizeof(DNS_WIRE_QUESTION);
 
 	do 
 	{
-		cbTransferred = IsNameValid(&Buffer, cbTransferred, _buf, _cb);
+		Length = IsNameValid(&MessageBody, Length, (PSTR)pDnsBuffer, wMessageLength);
 
-		if (cbTransferred < sizeof(DNS_WIRE_RECORD)) return;
+		if (Length < sizeof(DNS_WIRE_RECORD)) return DNS_ERROR_BAD_PACKET;
 
 		DNS_WIRE_RECORD dwr;
 
-		memcpy(&dwr, Buffer, sizeof(dwr));
+		memcpy(&dwr, MessageBody, sizeof(dwr));
 
-		cbTransferred -= sizeof (DNS_WIRE_RECORD), Buffer += sizeof (DNS_WIRE_RECORD);
-		
-		if (cbTransferred < (dwr.DataLength = _byteswap_ushort(dwr.DataLength))) return;
-	
-		SOCKADDR_INET si;
+		Length -= sizeof (DNS_WIRE_RECORD), MessageBody += sizeof (DNS_WIRE_RECORD);
+
+		if (Length < (dwr.DataLength = _byteswap_ushort(dwr.DataLength))) return DNS_ERROR_BAD_PACKET;
 
 		if (QueryType == dwr.RecordType) 
 		{
+			SOCKADDR_INET si;
+
 			switch (dwr.RecordType)
 			{
 			case DNS_RTYPE_A:
@@ -469,13 +508,13 @@ void CDnsSocket::OnRecv(PSTR Buffer, ULONG cbTransferred, USHORT Xid, USHORT Que
 				{
 					RtlZeroMemory(&si.Ipv4, sizeof(si.Ipv4));
 					si.Ipv4.sin_family = AF_INET;
-					memcpy(&si.Ipv4.sin_addr, Buffer, sizeof(IP4_ADDRESS));
+					memcpy(&si.Ipv4.sin_addr, MessageBody, sizeof(IP4_ADDRESS));
 
 					if (si.Ipv4.sin_addr.S_un.S_addr)
 					{
 						DnsCache::set(_crc, si.Ipv4.sin_addr.S_un.S_addr);
 						OnIp((PSOCKADDR)&si.Ipv4, sizeof(si.Ipv4));
-						return;
+						return NOERROR;
 					}
 				}
 				break;
@@ -484,17 +523,19 @@ void CDnsSocket::OnRecv(PSTR Buffer, ULONG cbTransferred, USHORT Xid, USHORT Que
 				{
 					RtlZeroMemory(&si.Ipv6, sizeof(si.Ipv6));
 					si.Ipv6.sin6_family = AF_INET6;
-					memcpy(&si.Ipv6.sin6_addr, Buffer, sizeof(IP6_ADDRESS));
+					memcpy(&si.Ipv6.sin6_addr, MessageBody, sizeof(IP6_ADDRESS));
 					OnIp((PSOCKADDR)&si.Ipv6, sizeof(si.Ipv6));
-					return;
+					return NOERROR;
 				}
 				break;
 			}
 		}
 
-		cbTransferred -= dwr.DataLength, Buffer += dwr.DataLength;
+		Length -= dwr.DataLength, MessageBody += dwr.DataLength;
 
-	} while(--AnswerCount);
+	} while(Length && --AnswerCount);
+
+	return NOERROR;
 }
 
 void CDnsSocket::OnRecv(PSTR Buffer, ULONG cbTransferred, CDataPacket* packet, SOCKADDR_IN_EX* addr)
@@ -502,7 +543,7 @@ void CDnsSocket::OnRecv(PSTR Buffer, ULONG cbTransferred, CDataPacket* packet, S
 	DCD* p = (DCD*)packet->getData();
 
 	DbgPrint("%s<%p>[%08x]->%u,%p\n", __FUNCTION__, this, addr->addr.Ipv4.sin_addr.s_addr, cbTransferred, Buffer);
-	if (Buffer) OnRecv(Buffer, cbTransferred, p->_Xid, p->_QueryType);
+	if (Buffer) OnRecv((PDNS_MESSAGE_BUFFER)Buffer, cbTransferred, p->_Xid, p->_QueryType);
 	DecWaitCount();
 }
 
