@@ -157,7 +157,7 @@ NTSTATUS NTAPI TrInit(PVOID ImageBase)
 	return STATUS_NOT_FOUND;
 }
 
-NTSTATUS TrUnHook(T_HOOK_ENTRY* entry)
+NTSTATUS NTAPI TrUnHook(T_HOOK_ENTRY* entry)
 {
 	if (Z_DETOUR_TRAMPOLINE* pTramp = entry->pTramp)
 	{

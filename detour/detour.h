@@ -15,7 +15,7 @@ struct TR_HOOK_DLL
 };
 
 #define _DECLARE_TR_HOOK(pfn) extern "C" { extern PVOID __imp_##pfn; }
-#define DECLARE_TR_HOOK_X86(pfn, n) _DECLARE_TR_HOOK(pfn) __pragma(comment(linker, astring(/alternatename:___imp_##pfn##=__imp__##pfn##@##n)))
+#define DECLARE_TR_HOOK_X86(pfn, n) _DECLARE_TR_HOOK(pfn) __pragma(comment(linker, _CRT_STRINGIZE(/alternatename:___imp_##pfn##=__imp__##pfn##@##n)))
 
 #ifdef _M_IX86
 #define DECLARE_TR_HOOK(pfn, n) DECLARE_TR_HOOK_X86(pfn, n)
@@ -41,3 +41,4 @@ void NTAPI TrHook(PCUNICODE_STRING DllName, TR_HOOK_DLL* pphDLL[]);// hmod = Ldr
 void NTAPI TrHook(PVOID hmod, PCUNICODE_STRING DllName, TR_HOOK_DLL* pphDLL[]);// if we already have hmod
 void NTAPI TrUnHook(TR_HOOK_DLL* pphDLL[]);
 NTSTATUS NTAPI TrHook(PVOID pv, T_HOOK_ENTRY* entry);// pv address for hook
+NTSTATUS NTAPI TrUnHook(T_HOOK_ENTRY* entry);
