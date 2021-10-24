@@ -16,7 +16,7 @@ struct __declspec(uuid("305104AD-98B5-11CF-BB82-00AA00BDCE0B")) IHTMLPrivateWind
 	virtual HRESULT STDMETHODCALLTYPE NavigateEx2 (PCWSTR url, PCWSTR, PCWSTR, PCWSTR referer, PCWSTR, PCWSTR, PCWSTR, VARIANT, ULONGLONG, ULONG, ULONG, ULONG, ULONG, ULONG, GUID);
 };
 
-extern volatile UCHAR guz;
+extern volatile const UCHAR guz;
 
 HRESULT NavigateEx(IHTMLDocument2* pDoc, PCWSTR url, PCWSTR referer)
 {
@@ -660,23 +660,28 @@ BOOL ZContainer::AttachControl(IUnknown* pControl, HWND hwnd, PVOID lpCreatePara
 	return fOk;
 }
 
+void ZContainer::DettachControl(IUnknown* pControl, HWND hwnd)
+{
+	IOleObject* pOleObj;
+
+	if (!pControl->QueryInterface(IID_PPV_ARGS(&pOleObj)))
+	{
+		RECT rcClient = {};
+
+		pOleObj->DoVerb(OLEIVERB_HIDE , NULL, this, 0, hwnd, &rcClient);
+
+		pOleObj->SetClientSite(0);
+
+		pOleObj->Release();
+	}
+
+}
+
 void ZContainer::DettachControl(HWND hwnd)
 {
 	if (IUnknown* pControl = (IUnknown*)_InterlockedExchangePointer((void**)&m_pControl, 0))
 	{
-		IOleObject* pOleObj;
-
-		if (!pControl->QueryInterface(IID_PPV_ARGS(&pOleObj)))
-		{
-			RECT rcClient = {};
-
-			pOleObj->DoVerb(OLEIVERB_HIDE , NULL, this, 0, hwnd, &rcClient);
-
-			pOleObj->SetClientSite(0);
-
-			pOleObj->Release();
-		}
-
+		DettachControl(pControl, hwnd);
 		pControl->Release();
 	}
 }
@@ -714,7 +719,7 @@ HRESULT ZContainer::LoadTypeInfo(ITypeInfo **ppTinfo)
 	{
 		_LDR_DATA_TABLE_ENTRY* ldte;
 
-		if (0 <= (hr = LdrFindEntryForAddress(&__ImageBase, ldte)))
+		if (0 <= (hr = LdrFindEntryForAddress(&__ImageBase, &ldte)))
 		{
 			ITypeLib* pTL;
 			if (S_OK == (hr = LoadTypeLibEx(ldte->FullDllName.Buffer, REGKIND_NONE, &pTL)))

@@ -43,6 +43,8 @@ protected:
 	ZMDIFrameWnd* _pFrame;
 	HWND _hwndView;
 
+	virtual LRESULT OnNotify(LPNMHDR lpnm);
+
 	virtual void DoResize(WPARAM wParam, LPARAM lParam);
 
 	virtual LRESULT DefWinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);

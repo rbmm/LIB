@@ -260,12 +260,20 @@ BOOL ZMDIChildFrame::CanClose()
 	return ZView::CanClose(_hwndView);
 }
 
+LRESULT ZMDIChildFrame::OnNotify( LPNMHDR /*lpnm*/ )
+{
+	return 0;
+}
+
 LRESULT ZMDIChildFrame::WindowProc( HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam )
 {
 	RECT rc;
 
 	switch (uMsg)
 	{
+	case WM_NOTIFY:
+		return OnNotify((LPNMHDR)lParam);
+
 	case WM_CLOSE:
 		if (!CanClose()) return 0;
 		break;
