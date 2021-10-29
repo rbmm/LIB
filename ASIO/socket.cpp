@@ -435,14 +435,16 @@ void CTcpEndpoint::GetSockaddrs(PVOID buf)
 	PSOCKADDR LocalSockaddr, RemoteSockaddr;
 	INT LocalSockaddrLength, RemoteSockaddrLength;
 
-	GetAcceptExSockaddrs(buf, m_dwReceiveDataLength, sizeof(sockaddr_in6) + 16, sizeof(sockaddr_in6) + 16, 
+	GetAcceptExSockaddrs(buf, m_dwReceiveDataLength, sizeof(m_addr) + 16, sizeof(m_addr) + 16, 
 		&LocalSockaddr, &LocalSockaddrLength, &RemoteSockaddr, &RemoteSockaddrLength);
 
 	m_RemoteSockaddr.sin_family = AF_UNSPEC;
+	m_RemoteAddrLen = 0;
 
-	if (RemoteSockaddrLength <= sizeof(m_RemoteSockaddr6))
+	if (RemoteSockaddrLength <= sizeof(m_addr))
 	{
-		memcpy(&m_RemoteSockaddr6, RemoteSockaddr, RemoteSockaddrLength);
+		memcpy(m_addr, RemoteSockaddr, RemoteSockaddrLength);
+		m_RemoteAddrLen = RemoteSockaddrLength;
 	}
 }
 
@@ -476,7 +478,7 @@ ULONG CTcpEndpoint::Listen(ULONG dwReceiveDataLength)
 			if (m_pAddress->LockSocket(address))
 			{
 				err = BOOL_TO_ERR(AcceptEx(address, socket, 
-					buf, dwReceiveDataLength, sizeof(sockaddr_in6) + 16, sizeof(sockaddr_in6) + 16, &dwBytes, Irp));
+					buf, dwReceiveDataLength, sizeof(m_addr) + 16, sizeof(m_addr) + 16, &dwBytes, Irp));
 
 				m_pAddress->UnlockSocket();
 			}

@@ -3,7 +3,6 @@
 _NT_BEGIN
 
 #include "tdi.h"
-
 //////////////////////////////////////////////////////////////////////////
 // CTdiAddress
 
@@ -497,7 +496,7 @@ NTSTATUS CTcpEndpoint::Connect(PIN6_ADDR ip6, USHORT port)
 
 NTSTATUS CTcpEndpoint::Connect(USHORT AddrType, PVOID Addr, USHORT AddrLength)
 {
-	if (AddressLength > sizeof(tp_addr))
+	if (AddrLength > sizeof(tp_addr))
 	{
 		return STATUS_INVALID_PARAMETER;
 	}

@@ -91,11 +91,17 @@ private:
 	RundownProtection	m_connectionLock;
 protected:
 	LONG				m_flags;
+	ULONG				m_RemoteAddrLen;
 
 	union {
 		ULONG			m_dwReceiveDataLength;
+		sockaddr		m_RemoteAddr;
 		sockaddr_in		m_RemoteSockaddr;
 		sockaddr_in6	m_RemoteSockaddr6;
+#ifdef __WS2BTH__H
+		SOCKADDR_BTH	m_bthAddr;
+#endif
+		UCHAR			m_addr[32];
 	};
 
 	enum {
