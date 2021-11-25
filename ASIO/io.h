@@ -135,8 +135,9 @@ public:
 	VOID IOCompletionRoutine(DWORD dwErrorCode, ULONG_PTR dwNumberOfBytesTransfered)
 	{
 		CPP_FUNCTION;
+		BOOL bDelete = Pointer != this;
 		m_pObj->IOCompletionRoutine(m_packet, m_Code, dwErrorCode, dwNumberOfBytesTransfered, Pointer);
-		delete this;
+		if (bDelete) delete this;
 	}
 
 	static VOID CALLBACK _IOCompletionRoutine(NTSTATUS status, ULONG_PTR dwNumberOfBytesTransfered, LPOVERLAPPED lpOverlapped)ASM_FUNCTION;
@@ -144,6 +145,19 @@ public:
 	PVOID SetPointer()
 	{
 		return Pointer = m_buf;
+	}
+
+	void NotDelete()
+	{
+		Pointer = this;
+	}
+
+	void Delete()
+	{
+		if (Pointer == this)
+		{
+			delete this;
+		}
 	}
 
 	static BOOL _init(DWORD count)
@@ -188,8 +202,9 @@ class NT_IRP : public IO_STATUS_BLOCK
 	VOID IOCompletionRoutine(NTSTATUS status, ULONG_PTR dwNumberOfBytesTransfered)
 	{
 		CPP_FUNCTION;
+		BOOL bDelete = Pointer != this;
 		m_pObj->IOCompletionRoutine(m_packet, m_Code, status, dwNumberOfBytesTransfered, Pointer);
-		delete this;
+		if (bDelete) delete this;
 	}
 
 protected:
@@ -209,6 +224,19 @@ public:
 	PVOID SetPointer()
 	{
 		return Pointer = m_buf;
+	}
+
+	void NotDelete()
+	{
+		Pointer = this;
+	}
+
+	void Delete()
+	{
+		if (Pointer == this)
+		{
+			delete this;
+		}
 	}
 
 	static BOOL _init(DWORD count)
