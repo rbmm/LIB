@@ -450,7 +450,16 @@ void CTcpEndpoint::GetSockaddrs(PVOID buf)
 
 ULONG CTcpEndpoint::Listen(ULONG dwReceiveDataLength)
 {
-	ULONG cb = m_packet->getBufferSize(), cbNeed = 2*(sizeof(sockaddr_in6) + 16) + dwReceiveDataLength;
+	PVOID buf;
+	WSABUF wb[2];
+	DWORD dwBufferCount = GetRecvBuffers(wb, &buf);
+
+	if (!dwBufferCount)
+	{
+		return ERROR_INSUFFICIENT_BUFFER;
+	}
+
+	ULONG cb = wb->len, cbNeed = 2*(sizeof(sockaddr_in6) + 16) + dwReceiveDataLength;
 
 	if (cb < cbNeed || cbNeed < dwReceiveDataLength)
 	{
@@ -461,8 +470,6 @@ ULONG CTcpEndpoint::Listen(ULONG dwReceiveDataLength)
 	{
 		return ERROR_BAD_PIPE;
 	}
-
-	PVOID buf = m_packet->getData();
 
 	if (IO_IRP* Irp = new IO_IRP(this, lstn, m_packet, buf))
 	{
