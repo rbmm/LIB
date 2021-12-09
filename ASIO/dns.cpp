@@ -233,6 +233,14 @@ public:
 	void DnsToIp(_In_ PCSTR Dns, _In_ ULONG crc, _In_ WORD QueryType, _In_ LONG QueryOptions, _In_ DWORD dwMilliseconds = 3000);
 };
 
+int __cdecl compareDWORD(const void* pa, const void* pb)
+{
+	ULONG a = *(ULONG*)pa, b = *(ULONG*)pb;
+	if (a < b) return -1;
+	if (a > b) return +1;
+	return 0;
+}
+
 void CDnsSocket::DnsToIp(_In_ PCSTR Dns, _In_ ULONG crc, _In_ USHORT QueryType, _In_ LONG QueryOptions, _In_ DWORD dwMilliseconds)
 {
 	_crc = crc;
@@ -264,18 +272,31 @@ void CDnsSocket::DnsToIp(_In_ PCSTR Dns, _In_ ULONG crc, _In_ USHORT QueryType, 
 
 	if (!i) i = 2;
 
+	qsort(DnsServerAddresses, i, sizeof(ULONG), compareDWORD);
+
 	if (Create(0) == NOERROR && SetTimeout(dwMilliseconds))
 	{
 		SOCKADDR_IN Ipv4 = { AF_INET, DNS_PORT_NET_ORDER };
+
+		ULONG prevAddr = 0, ServerAddr;
 
 		if (i)
 		{
 			bool RecursionDesired = !(QueryOptions & DNS_QUERY_NO_RECURSION);
 			do 
 			{
-				Ipv4.sin_addr.s_addr = DnsServerAddresses[--i];
+				ServerAddr = DnsServerAddresses[--i];
 
-				SendAndRecv((PSOCKADDR)&Ipv4, sizeof(Ipv4), Dns, QueryType, Xid++, RecursionDesired);
+				if (ServerAddr == prevAddr)
+				{
+					break;
+				}
+
+				prevAddr = ServerAddr;
+
+				Ipv4.sin_addr.s_addr = ServerAddr;
+
+				SendAndRecv((PSOCKADDR)&Ipv4, sizeof(Ipv4), Dns, QueryType, Xid, RecursionDesired);
 
 			} while (i);
 		}
