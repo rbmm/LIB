@@ -173,18 +173,6 @@ NTDLL_(VOID) CsrProbeForRead
 	ULONG Alignment
 	);
 
-NTDLL
-RtlDeNormalizeProcessParams
-(
-	_RTL_USER_PROCESS_PARAMETERS* pp
-	);
-
-NTDLL
-RtlNormalizeProcessParams
-(
-	_RTL_USER_PROCESS_PARAMETERS* pp
-	);
-
 NTDLL_(void*) PsGetThreadWin32Thread(PKTHREAD Thread);
 NTDLL_(void) PsSetThreadWin32Thread(PKTHREAD Thread, void *Win32Thread, void *Win32Thread0);
 
@@ -1186,7 +1174,7 @@ NTDLL
 LdrFindEntryForAddress
 (
 	LPCVOID Address,
-	_LDR_DATA_TABLE_ENTRY*& mod
+	_LDR_DATA_TABLE_ENTRY** mod
 	);
 
 #define LDR_DONT_RESOLVE_DLL_REFERENCES 2
@@ -1312,32 +1300,77 @@ ZwQuerySection
 	OUT PSIZE_T ResultLength OPTIONAL
 );
 
-NTDLL
-RtlCreateProcessParameters
-(
-	OUT _RTL_USER_PROCESS_PARAMETERS** ProcessParametrs,
-	IN const UNICODE_STRING* ImageFile,
-	IN const UNICODE_STRING* DllPath OPTIONAL,
-	IN const UNICODE_STRING* CurrentDirectory OPTIONAL,
-	IN const UNICODE_STRING* CommandLine OPTIONAL,
-	IN ULONG CreationFlags OPTIONAL,
-	IN const UNICODE_STRING* WindowTitle OPTIONAL,
-	IN const UNICODE_STRING* DeskTop OPTIONAL,
-	IN const UNICODE_STRING* OPTIONAL,
-	IN const UNICODE_STRING* OPTIONAL
-);
+#define RTL_USER_PROC_PARAMS_NORMALIZED 0x00000001
+#define RTL_USER_PROC_PROFILE_USER 0x00000002
+#define RTL_USER_PROC_PROFILE_KERNEL 0x00000004
+#define RTL_USER_PROC_PROFILE_SERVER 0x00000008
+#define RTL_USER_PROC_RESERVE_1MB 0x00000020
+#define RTL_USER_PROC_RESERVE_16MB 0x00000040
+#define RTL_USER_PROC_CASE_SENSITIVE 0x00000080
+#define RTL_USER_PROC_DISABLE_HEAP_DECOMMIT 0x00000100
+#define RTL_USER_PROC_DLL_REDIRECTION_LOCAL 0x00001000
+#define RTL_USER_PROC_APP_MANIFEST_PRESENT 0x00002000
+#define RTL_USER_PROC_IMAGE_KEY_MISSING 0x00004000
+#define RTL_USER_PROC_OPTIN_PROCESS 0x00020000
 
-NTDLL
-RtlDestroyProcessParameters
-(
-	_RTL_USER_PROCESS_PARAMETERS* ProcessParametrs
-);
+EXTERN_C
+NTSYSAPI
+NTSTATUS
+NTAPI
+RtlCreateProcessParameters(
+						   _Out_ PRTL_USER_PROCESS_PARAMETERS *pProcessParameters,
+						   _In_ PCUNICODE_STRING ImagePathName,
+						   _In_opt_ PCUNICODE_STRING DllPath,
+						   _In_opt_ PCUNICODE_STRING CurrentDirectory,
+						   _In_opt_ PCUNICODE_STRING CommandLine,
+						   _In_opt_ PVOID Environment,
+						   _In_opt_ PCUNICODE_STRING WindowTitle,
+						   _In_opt_ PCUNICODE_STRING DesktopInfo,
+						   _In_opt_ PCUNICODE_STRING ShellInfo,
+						   _In_opt_ PCUNICODE_STRING RuntimeData
+						   );
 
-NTDLL
-RtlNormalizeProcessParams
-(
- _RTL_USER_PROCESS_PARAMETERS* ProcessParametrs
- );
+EXTERN_C
+NTSYSAPI
+NTSTATUS
+NTAPI
+RtlCreateProcessParametersEx(
+							 _Out_ PRTL_USER_PROCESS_PARAMETERS *pProcessParameters,
+							 _In_ PCUNICODE_STRING ImagePathName,
+							 _In_opt_ PCUNICODE_STRING DllPath,
+							 _In_opt_ PCUNICODE_STRING CurrentDirectory,
+							 _In_opt_ PCUNICODE_STRING CommandLine,
+							 _In_opt_ PVOID Environment,
+							 _In_opt_ PCUNICODE_STRING WindowTitle,
+							 _In_opt_ PCUNICODE_STRING DesktopInfo,
+							 _In_opt_ PCUNICODE_STRING ShellInfo,
+							 _In_opt_ PCUNICODE_STRING RuntimeData,
+							 _In_ ULONG Flags // pass RTL_USER_PROC_PARAMS_NORMALIZED to keep parameters normalized
+							 );
+
+EXTERN_C
+NTSYSAPI
+NTSTATUS
+NTAPI
+RtlDestroyProcessParameters(
+							_In_ _Post_invalid_ PRTL_USER_PROCESS_PARAMETERS ProcessParameters
+							);
+
+EXTERN_C
+NTSYSAPI
+PRTL_USER_PROCESS_PARAMETERS
+NTAPI
+RtlNormalizeProcessParams(
+						  _Inout_ PRTL_USER_PROCESS_PARAMETERS ProcessParameters
+						  );
+
+EXTERN_C
+NTSYSAPI
+PRTL_USER_PROCESS_PARAMETERS
+NTAPI
+RtlDeNormalizeProcessParams(
+							_Inout_ PRTL_USER_PROCESS_PARAMETERS ProcessParameters
+							);
 
 NTDLL
 RtlQueryProcessDebugInformation(

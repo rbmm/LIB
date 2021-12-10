@@ -50,12 +50,9 @@ public:
 	{
 	}
 
-	void Init()
+	BOOL Init()
 	{
-		if (InterlockedCompareExchange(&_Value, v_init, v_complete) != v_complete)
-		{
-			__debugbreak();
-		}
+		return InterlockedCompareExchange(&_Value, v_init, v_complete) == v_complete;
 	}
 };
 

@@ -61,51 +61,78 @@ struct _LDR_DATA_TABLE_ENTRY
 	void *PatchInformation;
 };
 
-struct _CURDIR
+#define DOS_MAX_COMPONENT_LENGTH 255
+#define DOS_MAX_PATH_LENGTH (DOS_MAX_COMPONENT_LENGTH + 5)
+
+typedef struct _CURDIR
 {
 	UNICODE_STRING DosPath;
-	void *Handle;
-};
+	HANDLE Handle;
+} CURDIR, *PCURDIR;
 
-struct _RTL_DRIVE_LETTER_CURDIR
+#define RTL_USER_PROC_CURDIR_CLOSE 0x00000002
+#define RTL_USER_PROC_CURDIR_INHERIT 0x00000003
+
+typedef struct _RTL_DRIVE_LETTER_CURDIR
 {
 	USHORT Flags;
 	USHORT Length;
 	ULONG TimeStamp;
 	STRING DosPath;
-};
+} RTL_DRIVE_LETTER_CURDIR, *PRTL_DRIVE_LETTER_CURDIR;
 
-struct _RTL_USER_PROCESS_PARAMETERS
+#define RTL_MAX_DRIVE_LETTERS 32
+#define RTL_DRIVE_LETTER_VALID (USHORT)0x0001
+
+typedef struct _RTL_USER_PROCESS_PARAMETERS
 {
-	/*000*/	   ULONG MaximumLength;
-	/*004*/	   ULONG Length;
-	/*008*/	   ULONG Flags;
-	/*00C*/	   ULONG DebugFlags;
-	/*010*/	   void *ConsoleHandle;
-	/*018*/	   ULONG ConsoleFlags;
-	/*020*/	   void *StandardInput;
-	/*028*/	   void *StandardOutput;
-	/*030*/	   void *StandardError;
-	/*038*/	   _CURDIR CurrentDirectory;
-	/*050*/	   _UNICODE_STRING DllPath;
-	/*060*/	   _UNICODE_STRING ImagePathName;
-	/*070*/	   _UNICODE_STRING CommandLine;
-	/*080*/	   void *Environment;
-	/*088*/	   ULONG StartingX;
-	/*08C*/	   ULONG StartingY;
-	/*090*/	   ULONG CountX;
-	/*094*/	   ULONG CountY;
-	/*098*/	   ULONG CountCharsX;
-	/*09C*/	   ULONG CountCharsY;
-	/*0A0*/	   ULONG FillAttribute;
-	/*0A4*/	   ULONG WindowFlags;
-	/*0A8*/	   ULONG ShowWindowFlags;
-	/*0B0*/	   _UNICODE_STRING WindowTitle;
-	/*0C0*/	   _UNICODE_STRING DesktopInfo;
-	/*0D0*/	   _UNICODE_STRING ShellInfo;
-	/*0E0*/	   _UNICODE_STRING RuntimeData;
-	/*0F0*/	   _RTL_DRIVE_LETTER_CURDIR CurrentDirectores[0x20];
-};
+	ULONG MaximumLength;
+	ULONG Length;
+
+	ULONG Flags;
+	ULONG DebugFlags;
+
+	HANDLE ConsoleHandle;
+	ULONG ConsoleFlags;
+	HANDLE StandardInput;
+	HANDLE StandardOutput;
+	HANDLE StandardError;
+
+	CURDIR CurrentDirectory;
+	UNICODE_STRING DllPath;
+	UNICODE_STRING ImagePathName;
+	UNICODE_STRING CommandLine;
+	PVOID Environment;
+
+	ULONG StartingX;
+	ULONG StartingY;
+	ULONG CountX;
+	ULONG CountY;
+	ULONG CountCharsX;
+	ULONG CountCharsY;
+	ULONG FillAttribute;
+
+	ULONG WindowFlags;
+	ULONG ShowWindowFlags;
+	UNICODE_STRING WindowTitle;
+	UNICODE_STRING DesktopInfo;
+	UNICODE_STRING ShellInfo;
+	UNICODE_STRING RuntimeData;
+	RTL_DRIVE_LETTER_CURDIR CurrentDirectories[RTL_MAX_DRIVE_LETTERS];
+
+	ULONG_PTR EnvironmentSize;
+	ULONG_PTR EnvironmentVersion;
+
+	PVOID PackageDependencyData;
+	ULONG ProcessGroupId;
+	ULONG LoaderThreads;
+
+	UNICODE_STRING RedirectionDllName; // REDSTONE4
+	UNICODE_STRING HeapPartitionName; // 19H1
+	ULONG_PTR DefaultThreadpoolCpuSetMasks;
+	ULONG DefaultThreadpoolCpuSetMaskCount;
+} RTL_USER_PROCESS_PARAMETERS, *PRTL_USER_PROCESS_PARAMETERS;
+
 
 struct _PEB_FREE_BLOCK
 {
