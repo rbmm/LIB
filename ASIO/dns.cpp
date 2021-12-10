@@ -289,7 +289,7 @@ void CDnsSocket::DnsToIp(_In_ PCSTR Dns, _In_ ULONG crc, _In_ USHORT QueryType, 
 
 				if (ServerAddr == prevAddr)
 				{
-					break;
+					continue;
 				}
 
 				prevAddr = ServerAddr;
