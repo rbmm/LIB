@@ -226,9 +226,15 @@ public:
 		return Pointer = m_buf;
 	}
 
-	void NotDelete()
+	PVOID NotDelete()
 	{
 		Pointer = this;
+		return m_buf;
+	}
+
+	PVOID GetBuf()
+	{
+		return m_buf;
 	}
 
 	void Delete()

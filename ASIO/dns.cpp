@@ -230,7 +230,7 @@ public:
 		_pEndp->AddRef();
 	}
 
-	void DnsToIp(_In_ PCSTR Dns, _In_ ULONG crc, _In_ WORD QueryType, _In_ LONG QueryOptions, _In_ DWORD dwMilliseconds = 3000);
+	void DnsToIp(_In_ PCSTR Dns, _In_ ULONG crc, _In_ WORD QueryType, _In_ LONG QueryOptions, _In_ DWORD dwMilliseconds = 5000);
 };
 
 int __cdecl compareDWORD(const void* pa, const void* pb)
