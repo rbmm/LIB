@@ -142,6 +142,9 @@ protected:
 	{
 	}
 
+	virtual void OnEmptyRecv()
+	{
+	}
 	/************************************************************************/
 	virtual void CloseObjectHandle(HANDLE hFile);
 

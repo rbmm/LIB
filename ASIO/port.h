@@ -45,10 +45,10 @@ class Port : LIST_ENTRY, CRITICAL_SECTION
 	LIST_ENTRY _entry;
 	PortList* _List;
 	PortContext* _pCtx;
-	CSocketObject* _pAddress;
-	LONG _nListenCount, _nConnectedCount, _nEndpointCount, _nMinListen, _nMaxListen;
-	LONG _dwRefCount;
-	BOOLEAN _bStop;
+	CSocketObject* _pAddress = 0;
+	LONG _nListenCount = 0, _nConnectedCount = 0, _nEndpointCount = 0, _nMinListen, _nMaxListen;
+	LONG _dwRefCount = 1;
+	BOOLEAN _bStop = FALSE;
 
 	void StartListen(CTcpEndpoint* pSocket, ULONG dwReceiveDataLength);
 
@@ -60,7 +60,7 @@ class Port : LIST_ENTRY, CRITICAL_SECTION
 
 	void Stop();
 
-	ULONG Create(WORD port, ULONG ip = 0);
+	ULONG Create(_In_reads_bytes_(namelen) const sockaddr * name, _In_ int namelen, _In_ int protocol = IPPROTO_TCP);
 
 	Port(PortList* List);
 
@@ -79,12 +79,12 @@ public:
 
 	void AddRef()
 	{
-		_InterlockedIncrement(&_dwRefCount);
+		InterlockedIncrementNoFence(&_dwRefCount);
 	}
 
 	void Release()
 	{
-		if (!_InterlockedDecrement(&_dwRefCount))
+		if (!InterlockedDecrement(&_dwRefCount))
 		{
 			delete this;
 		}
@@ -103,7 +103,8 @@ public:
 class PortList : LIST_ENTRY, CRITICAL_SECTION
 {
 	friend Port;
-	HANDLE _hTimer;
+	HANDLE _hTimer = 0;
+	LONG _dwRefCount = 1;
 
 	static VOID CALLBACK WaitOrTimerCallback(PVOID lpParameter, BOOLEAN /*TimerOrWaitFired*/)
 	{
@@ -112,12 +113,26 @@ class PortList : LIST_ENTRY, CRITICAL_SECTION
 
 	void AddPort(PLIST_ENTRY Entry);
 	void RemovePort(PLIST_ENTRY Entry);
+	~PortList();
 public:
 
 	PortList();
-	~PortList();
 
-	ULONG CreatePort(Port** pPort, WORD port, ULONG ip = 0);
+	void AddRef()
+	{
+		InterlockedIncrementNoFence(&_dwRefCount);
+	}
+	
+	void Release()
+	{
+		if (!InterlockedDecrement(&_dwRefCount))
+		{
+			delete this;
+		}
+	}
+
+	ULONG CreatePort(_Out_ Port** pPort, _In_ WORD port, _In_opt_ ULONG ip = 0);
+	ULONG CreatePort(_Out_ Port** pPort, _In_ const sockaddr * name, _In_ int namelen, _In_opt_ int protocol = IPPROTO_TCP);
 
 	void OnTimer();
 	void Stop();

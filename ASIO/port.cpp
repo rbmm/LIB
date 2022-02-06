@@ -20,14 +20,23 @@ PortList::~PortList()
 	}
 }
 
-ULONG PortList::CreatePort(Port** pPort, WORD port, ULONG ip /*= 0*/)
+ULONG PortList::CreatePort(_Out_ Port** pPort, _In_ WORD port, _In_opt_ ULONG ip /*= 0*/)
+{
+	sockaddr_in asi = { AF_INET, port };
+
+	asi.sin_addr.S_un.S_addr = ip;
+
+	return CreatePort(pPort, (sockaddr*)&asi, sizeof(asi));
+}
+
+ULONG PortList::CreatePort(_Out_ Port** pPort, _In_ const sockaddr * name, _In_ int namelen, _In_opt_ int protocol /*= IPPROTO_TCP*/)
 {
 	if (Port* p = new Port(this))
 	{
-		if (ULONG err = p->Create(port, ip))
+		if (ULONG dwError = p->Create(name, namelen, protocol))
 		{
 			p->Release();
-			return err;
+			return dwError;
 		}
 
 		*pPort = p;
@@ -119,27 +128,24 @@ ULONG PortList::Start(ULONG Period)
 
 Port::~Port()
 {
-	_List->RemovePort(&_entry);
+	PortList* List = _List;
+	List->RemovePort(&_entry);
+	List->Release();
 
-	if (_pAddress)
+	if (CSocketObject* pAddress = _pAddress)
 	{
-		_pAddress->Release();
+		pAddress->Release();
 	}
 
 	DeleteCriticalSection(this);
 }
 
-Port::Port(PortList* List)
+Port::Port(PortList* List) : _List(List)
 {
 	InitializeListHead(this);
-	_List = List;
-	_nListenCount = 0, _nConnectedCount = 0, _nEndpointCount = 0;
-	_dwRefCount = 1;
-	_bStop = FALSE;
-	_pAddress = 0;
-
 	InitializeCriticalSection(this);
-	_List->AddPort(&_entry);
+	List->AddRef();
+	List->AddPort(&_entry);
 }
 
 ULONG Port::Start(LONG nMinListen, LONG nMaxListen, PortContext* pCtx)
@@ -200,10 +206,10 @@ void Port::OnConnect(ULONG dwError)
 {
 	if (!dwError)
 	{
-		_InterlockedIncrement(&_nConnectedCount);
+		InterlockedIncrementNoFence(&_nConnectedCount);
 	}
 
-	if (_InterlockedDecrement(&_nListenCount) < _nMinListen)
+	if (InterlockedDecrementNoFence(&_nListenCount) < _nMinListen)
 	{
 		AddEndpoint();
 	}
@@ -211,21 +217,21 @@ void Port::OnConnect(ULONG dwError)
 
 void Port::StartListen(CTcpEndpoint* pSocket, ULONG dwReceiveDataLength )
 {
-	_InterlockedIncrement(&_nListenCount);
+	InterlockedIncrementNoFence(&_nListenCount);
 
 	if (pSocket->Listen(dwReceiveDataLength))
 	{
-		_InterlockedDecrement(&_nListenCount);
+		InterlockedDecrementNoFence(&_nListenCount);
 	}
 }
 
 void Port::OnDisconnect(ENDPOINT_ENTRY* Entry)
 {
-	_InterlockedDecrement(&_nConnectedCount);
+	InterlockedDecrementNoFence(&_nConnectedCount);
 
 	if (!_bStop && _nListenCount < _nMaxListen)
 	{
-		if (_InterlockedExchange(&Entry->_DisconnectTime, MAXULONG))
+		if (InterlockedExchange(&Entry->_DisconnectTime, MAXULONG))
 		{
 			StartListen(_pCtx->getEndpoint(Entry), _pCtx->GetReceiveDataLength());
 		}
@@ -296,11 +302,16 @@ void Port::Stop()
 	LeaveCriticalSection(this);
 }
 
-ULONG Port::Create(WORD Port, ULONG ip /*= 0*/)
+ULONG Port::Create(_In_reads_bytes_(namelen) const sockaddr * name, _In_ int namelen, _In_ int protocol)
 {
-	if (_pAddress = new CSocketObject)
+	if (CSocketObject* pAddress = new CSocketObject)
 	{
-		return _pAddress->CreateAddress(Port, ip);
+		if (ULONG dwError = pAddress->CreateAddress(name, namelen, protocol))
+		{
+			return dwError;
+		}
+		_pAddress = pAddress;
+		return NOERROR;
 	}
 
 	return ERROR_NO_SYSTEM_RESOURCES;
@@ -323,7 +334,7 @@ void ENDPOINT_ENTRY::CheckTimeout(CTcpEndpoint* pSocket, ULONG time)
 __0:
 		if (DisconnectTime && time > DisconnectTime)
 		{		
-			ULONG Value = _InterlockedCompareExchange(&_DisconnectTime, 0, DisconnectTime);
+			ULONG Value = InterlockedCompareExchange(&_DisconnectTime, 0, DisconnectTime);
 
 			if (Value != DisconnectTime)
 			{

@@ -780,6 +780,10 @@ void CTcpEndpoint::IOCompletionRoutine(CDataPacket* packet, DWORD Code, NTSTATUS
 	{
 	default: __debugbreak();
 	case recv:
+		if (!dwError && !dwNumberOfBytesTransfered)
+		{
+			OnEmptyRecv();
+		}
 		dwNumberOfBytesTransfered && (f = OnRecv((PSTR)Pointer, (ULONG)dwNumberOfBytesTransfered))
 			? 0 < f && Recv() : (Disconnect(dwError),0);
 		break;
