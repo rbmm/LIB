@@ -68,6 +68,11 @@ class Port : LIST_ENTRY, CRITICAL_SECTION
 
 public:
 
+	ULONG GetPort(PUSHORT Port)
+	{
+		return _pAddress->GetPort(Port);
+	}
+
 	void OnConnect(ULONG dwError);
 
 	void OnDisconnect(ENDPOINT_ENTRY* Entry);

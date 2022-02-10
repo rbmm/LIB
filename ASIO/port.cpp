@@ -310,7 +310,9 @@ ULONG Port::Create(_In_reads_bytes_(namelen) const sockaddr * name, _In_ int nam
 		{
 			return dwError;
 		}
+
 		_pAddress = pAddress;
+
 		return NOERROR;
 	}
 
