@@ -4,6 +4,22 @@ _NT_BEGIN
 
 #include "port.h"
 
+void PortContext::AddRef()
+{
+	InterlockedIncrementNoFence(&_dwRefCount);
+}
+
+void PortContext::Release()
+{
+	if (!InterlockedDecrement(&_dwRefCount))
+	{
+		delete this;
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+//
+
 PortList::PortList()
 {
 	InitializeCriticalSection(this);
@@ -20,18 +36,18 @@ PortList::~PortList()
 	}
 }
 
-ULONG PortList::CreatePort(_Out_ Port** pPort, _In_ WORD port, _In_opt_ ULONG ip /*= 0*/)
+ULONG PortList::CreatePort(_Out_ Port** pPort, PortContext* pCtx, _In_ WORD port, _In_opt_ ULONG ip /*= 0*/)
 {
 	sockaddr_in asi = { AF_INET, port };
 
 	asi.sin_addr.S_un.S_addr = ip;
 
-	return CreatePort(pPort, (sockaddr*)&asi, sizeof(asi));
+	return CreatePort(pPort, pCtx, (sockaddr*)&asi, sizeof(asi));
 }
 
-ULONG PortList::CreatePort(_Out_ Port** pPort, _In_ const sockaddr * name, _In_ int namelen, _In_opt_ int protocol /*= IPPROTO_TCP*/)
+ULONG PortList::CreatePort(_Out_ Port** pPort, PortContext* pCtx, _In_ const sockaddr * name, _In_ int namelen, _In_opt_ int protocol /*= IPPROTO_TCP*/)
 {
-	if (Port* p = new Port(this))
+	if (Port* p = new Port(this, pCtx))
 	{
 		if (ULONG dwError = p->Create(name, namelen, protocol))
 		{
@@ -131,6 +147,7 @@ Port::~Port()
 	PortList* List = _List;
 	List->RemovePort(&_entry);
 	List->Release();
+	_pCtx->Release();
 
 	if (CSocketObject* pAddress = _pAddress)
 	{
@@ -140,22 +157,22 @@ Port::~Port()
 	DeleteCriticalSection(this);
 }
 
-Port::Port(PortList* List) : _List(List)
+Port::Port(PortList* List, PortContext* pCtx) : _pCtx(pCtx), _List(List)
 {
 	InitializeListHead(this);
 	InitializeCriticalSection(this);
 	List->AddRef();
+	pCtx->AddRef();
 	List->AddPort(&_entry);
 }
 
-ULONG Port::Start(LONG nMinListen, LONG nMaxListen, PortContext* pCtx)
+ULONG Port::Start(LONG nMinListen, LONG nMaxListen)
 {
 	if (nMinListen > nMaxListen || nMaxListen < 1)
 	{
 		return ERROR_INVALID_PARAMETER;
 	}
 
-	_pCtx = pCtx;
 	_nMaxListen = nMaxListen, _nMinListen = nMinListen;
 
 	if (ULONG n = (_nMaxListen + _nMinListen) >> 1)

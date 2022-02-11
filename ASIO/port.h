@@ -30,8 +30,14 @@ protected:
 	~ENDPOINT_ENTRY();
 };
 
-struct __declspec(novtable) PortContext
+class __declspec(novtable) PortContext
 {
+	LONG _dwRefCount = 1;
+protected:
+	virtual ~PortContext() = default;
+public:
+	virtual void AddRef();
+	virtual void Release();
 	virtual CTcpEndpoint* getEndpoint(ENDPOINT_ENTRY*) = 0;
 	virtual ENDPOINT_ENTRY* CreateEntry(CSocketObject* pAddress) = 0;
 	virtual ULONG GetReceiveDataLength() = 0;
@@ -62,7 +68,7 @@ class Port : LIST_ENTRY, CRITICAL_SECTION
 
 	ULONG Create(_In_reads_bytes_(namelen) const sockaddr * name, _In_ int namelen, _In_ int protocol = IPPROTO_TCP);
 
-	Port(PortList* List);
+	Port(PortList* List, PortContext* pCtx);
 
 	~Port();
 
@@ -95,7 +101,7 @@ public:
 		}
 	}
 
-	ULONG Start(LONG nMinListen, LONG nMaxListen, PortContext* pCtx);
+	ULONG Start(LONG nMinListen, LONG nMaxListen);
 
 	void get_stat(LONG& nListenCount, LONG& nConnectedCount, LONG& nEndpointCount)
 	{
@@ -136,8 +142,8 @@ public:
 		}
 	}
 
-	ULONG CreatePort(_Out_ Port** pPort, _In_ WORD port, _In_opt_ ULONG ip = 0);
-	ULONG CreatePort(_Out_ Port** pPort, _In_ const sockaddr * name, _In_ int namelen, _In_opt_ int protocol = IPPROTO_TCP);
+	ULONG CreatePort(_Out_ Port** pPort, PortContext* pCtx, _In_ WORD port, _In_opt_ ULONG ip = 0);
+	ULONG CreatePort(_Out_ Port** pPort, PortContext* pCtx, _In_ const sockaddr * name, _In_ int namelen, _In_opt_ int protocol = IPPROTO_TCP);
 
 	void OnTimer();
 	void Stop();
