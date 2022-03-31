@@ -177,6 +177,7 @@ class CDnsSocket : public CUdpEndpoint
 	CSocketObject* _pEndp;
 	ULONG _crc;
 	LONG _waitCount = 1;
+	ULONG _dwError = ERROR_TIMEOUT;
 
 	~CDnsSocket()
 	{
@@ -190,6 +191,7 @@ class CDnsSocket : public CUdpEndpoint
 		{
 			Close();
 			StopTimeout();
+			if (!Address) SetLastError(_dwError);
 			pEndp->OnIp(Address, AddressLength);
 			pEndp->Release();
 		}
@@ -207,7 +209,7 @@ class CDnsSocket : public CUdpEndpoint
 		_In_ USHORT Xid,
 		_In_ bool RecursionDesired);
 
-	BOOL SendToServer(
+	ULONG SendToServer(
 		_In_ PSOCKADDR Address, 
 		_In_ DWORD AddressLength, 
 		_In_ PCSTR Dns, 
@@ -274,7 +276,13 @@ void CDnsSocket::DnsToIp(_In_ PCSTR Dns, _In_ ULONG crc, _In_ USHORT QueryType, 
 
 	qsort(DnsServerAddresses, i, sizeof(ULONG), compareDWORD);
 
-	if (Create(0) == NOERROR && SetTimeout(dwMilliseconds))
+	if (ULONG dwError = Create(0))
+	{
+		_dwError = dwError;
+		return ;
+	}
+	
+	if (SetTimeout(dwMilliseconds))
 	{
 		SOCKADDR_IN Ipv4 = { AF_INET, DNS_PORT_NET_ORDER };
 
@@ -321,8 +329,11 @@ void CDnsSocket::SendAndRecv(_In_ PSOCKADDR Address,
 
 		InterlockedIncrementNoFence(&_waitCount);
 
-		if (RecvFrom(packet) || !SendToServer(Address, AddressLength, Dns, QueryType, Xid, RecursionDesired))
+		ULONG dwError;
+
+		if ((dwError = RecvFrom(packet)) || (dwError = SendToServer(Address, AddressLength, Dns, QueryType, Xid, RecursionDesired)))
 		{
+			_dwError = dwError;
 			DecWaitCount();
 		}
 
@@ -392,7 +403,7 @@ mm:
 	return NOERROR;
 }
 
-BOOL CDnsSocket::SendToServer(_In_ PSOCKADDR Address, 
+ULONG CDnsSocket::SendToServer(_In_ PSOCKADDR Address, 
 							  _In_ DWORD AddressLength, 
 							  _In_ PCSTR Dns, 
 							  _In_ USHORT QueryType,
@@ -416,10 +427,10 @@ BOOL CDnsSocket::SendToServer(_In_ PSOCKADDR Address,
 
 		}
 
-		return err == NOERROR;
+		return err;
 	}
 
-	return FALSE;
+	return ERROR_OUTOFMEMORY;
 }
 
 ULONG IsNameValid(PSTR* pBuf, ULONG cb, PSTR _buf, ULONG _cb)
@@ -564,7 +575,7 @@ void CDnsSocket::OnRecv(PSTR Buffer, ULONG cbTransferred, CDataPacket* packet, S
 	DCD* p = (DCD*)packet->getData();
 
 	DbgPrint("%s<%p>[%08x]->%u,%p\n", __FUNCTION__, this, addr->addr.Ipv4.sin_addr.s_addr, cbTransferred, Buffer);
-	if (Buffer) OnRecv((PDNS_MESSAGE_BUFFER)Buffer, cbTransferred, p->_Xid, p->_QueryType);
+	_dwError = Buffer ? OnRecv((PDNS_MESSAGE_BUFFER)Buffer, cbTransferred, p->_Xid, p->_QueryType) : cbTransferred;
 	DecWaitCount();
 }
 
@@ -574,6 +585,7 @@ void CSocketObject::DnsToIp(_In_ PCSTR Dns, _In_ USHORT QueryType/* = DNS_RTYPE_
 {
 	if (strlen(Dns) > DNS_MAX_TEXT_STRING_LENGTH)
 	{
+		SetLastError(DNS_ERROR_NON_RFC_NAME);
 		OnIp(0, 0);
 		return;
 	}
@@ -611,6 +623,7 @@ void CSocketObject::DnsToIp(_In_ PCSTR Dns, _In_ USHORT QueryType/* = DNS_RTYPE_
 	}
 	else
 	{
+		SetLastError(ERROR_OUTOFMEMORY);
 		OnIp(0, 0);
 	}
 }
