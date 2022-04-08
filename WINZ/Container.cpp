@@ -670,16 +670,17 @@ void ZContainer::DettachControl(IUnknown* pControl, HWND hwnd)
 
 		pOleObj->DoVerb(OLEIVERB_HIDE , NULL, this, 0, hwnd, &rcClient);
 
+		pOleObj->Close(OLECLOSE_PROMPTSAVE);
+
 		pOleObj->SetClientSite(0);
 
 		pOleObj->Release();
 	}
-
 }
 
 void ZContainer::DettachControl(HWND hwnd)
 {
-	if (IUnknown* pControl = (IUnknown*)_InterlockedExchangePointer((void**)&m_pControl, 0))
+	if (IUnknown* pControl = (IUnknown*)InterlockedExchangePointer((void**)&m_pControl, 0))
 	{
 		DettachControl(pControl, hwnd);
 		pControl->Release();
@@ -700,7 +701,7 @@ HRESULT ZContainer::CreateTypeInfo()
 			return hr;
 		}
 
-		if (_InterlockedCompareExchangePointer((void**)&m_pTI, (void*)pTInfo, 0))
+		if (InterlockedCompareExchangePointer((void**)&m_pTI, (void*)pTInfo, 0))
 		{
 			pTInfo->Release();
 		}
