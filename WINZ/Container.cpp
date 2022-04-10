@@ -768,17 +768,60 @@ BOOL ZContainer::PreTranslateMessage(PMSG lpMsg)
 //////////////////////////////////////////////////////////////////////////
 //
 
-void ZContainer::OnSizeChanged(PRECT prc )
+void ZContainer::OnSizeChanged(IOleInPlaceActiveObject* pActiveObject, PRECT prc )
 {
-	if (m_pActiveObject)
+	if (pActiveObject)
 	{
 		IOleInPlaceObject* p;
-		if (!m_pActiveObject->QueryInterface(IID_PPV(p)))
+		if (!pActiveObject->QueryInterface(IID_PPV(p)))
 		{
 			p->SetObjectRects(prc, prc);
 			p->Release();
 		}
 	}
+
+	if (IUnknown* pControl = m_pControl)
+	{
+		IOleObject* pOleObj;
+
+		if (0 <= pControl->QueryInterface(IID_PPV_ARGS(&pOleObj)))
+		{
+			pOleObj->DoVerb(OLEIVERB_PRIMARY, NULL, this, 0, getHWND(), prc);
+			pOleObj->Release();
+		}
+	}
+}
+
+void ZContainer::OnWmSize(WPARAM wParam, LPARAM lParam)
+{
+	switch (wParam)
+	{
+	case SIZE_MAXIMIZED:
+	case SIZE_RESTORED:
+		RECT rc = { 0, 0, GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
+		OnSizeChanged(m_pActiveObject, &rc);
+		break;
+	}
+}
+
+LRESULT ZContainer::OnCreate(HWND hwnd, PVOID lpCreateParams)
+{
+	BOOL fOk = FALSE;
+
+	IUnknown* pControl;
+	if (CreateControl(&pControl))
+	{
+		fOk = AttachControl(pControl, hwnd, lpCreateParams);
+		pControl->Release();
+	}
+
+	if (fOk)
+	{
+		ZTranslateMsg::Insert();
+		return 0;
+	}
+
+	return -1;
 }
 
 LRESULT ZContainer::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
@@ -791,22 +834,7 @@ LRESULT ZContainer::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPara
 		break;
 
 	case WM_CREATE:
-		{
-			BOOL fOk = FALSE;
-			IUnknown* pControl;
-			if (CreateControl(&pControl))
-			{
-				fOk = AttachControl(pControl, hwnd, ((LPCREATESTRUCT)lParam)->lpCreateParams);
-				pControl->Release();
-			}
-
-			if (!fOk)
-			{
-				return -1;
-			}
-			ZTranslateMsg::Insert();
-		}
-		break;
+		return OnCreate(hwnd, ((LPCREATESTRUCT)lParam)->lpCreateParams);
 
 	case WM_ERASEBKGND:
 		return TRUE;
@@ -816,14 +844,7 @@ LRESULT ZContainer::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPara
 		break;
 
 	case WM_SIZE:
-		switch (wParam)
-		{
-		case SIZE_MAXIMIZED:
-		case SIZE_RESTORED:
-			RECT rc = { 0, 0, GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
-			OnSizeChanged(&rc);
-			break;
-		}
+		OnWmSize(wParam, lParam);
 		break;
 	}
 

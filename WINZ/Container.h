@@ -7,17 +7,17 @@ HRESULT NavigateEx(IHTMLDocument2* pDoc, PCWSTR url, PCWSTR referer = 0);
 
 class __declspec(novtable) ZContainer : public ZWnd,
 	public IDispatch,
-	IServiceProvider,
-	IOleClientSite,
-	IOleInPlaceSite, 
-	IOleInPlaceFrame,
-	IOleCommandTarget,
-	IDocHostUIHandler,
-	IInternetSecurityManager,
-	INewWindowManager,
-	IHttpSecurity,
-	IDocHostShowUI,
-	IHostDialogHelper,
+	public IServiceProvider,
+	public IOleClientSite,
+	public IOleInPlaceSite, 
+	public IOleInPlaceFrame,
+	public IOleCommandTarget,
+	public IDocHostUIHandler,
+	public IInternetSecurityManager,
+	public INewWindowManager,
+	public IHttpSecurity,
+	public IDocHostShowUI,
+	public IHostDialogHelper,
 	ZTranslateMsg
 {
 	HWND m_hwndCtrl;
@@ -32,7 +32,6 @@ class __declspec(novtable) ZContainer : public ZWnd,
 public:
 	ZContainer();
 
-
 protected:
 	virtual ~ZContainer();
 
@@ -45,7 +44,8 @@ protected:
 
 	IUnknown* getControl() { return m_pControl; }
 
-private:
+	virtual void DettachControl(IUnknown* pControl, HWND hwnd);
+	virtual void OnSizeChanged(IOleInPlaceActiveObject* pActiveObject, PRECT prc );
 
 	virtual LRESULT WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
@@ -58,6 +58,7 @@ public:
 	virtual DWORD STDMETHODCALLTYPE AddRef();
 
 	virtual DWORD STDMETHODCALLTYPE Release();
+
 protected:
 	//////////////////////////////////////////////////////////////////////
 	// IDispatch
@@ -231,7 +232,8 @@ protected:
 	//////////////////////////////////////////////////////////////////////////
 	//
 
-	void OnSizeChanged(PRECT prc );
+	void OnWmSize(WPARAM wParam, LPARAM lParam);
+	LRESULT OnCreate(HWND hwnd, PVOID lpCreateParams);
 };
 
 class ZHtmlContainer : public ZContainer
