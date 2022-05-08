@@ -65,7 +65,7 @@ class WINZ_API ZTabBar
 public:
 	HWND Create(HWND hwnd, int x, int y, int cx);
 	HWND getHWND(){ return _hwnd; }
-	int addItem(PWSTR pszText, LPARAM lParam);
+	int addItem(PCWSTR pszText, LPARAM lParam);
 	int delItem(LPARAM lParam);
 	int findItem(LPARAM lParam, DWORD* pTabCount = 0);
 	LPARAM getCurParam();

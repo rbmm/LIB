@@ -121,7 +121,7 @@ LRESULT ZMDIFrameWnd::DefWinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPa
 			{
 				if (TabCtrl_GetItem(hwndTB, --n, &item))
 				{
-					SendMessage((HWND)item.lParam, WM_CLOSE, 0, 0);
+					SendMessage((HWND)item.lParam, WM_CLOSE, (WPARAM)hwndTB, -1);
 				}
 			} while (n);
 
@@ -145,7 +145,10 @@ ZMDIFrameWnd::ZMDIFrameWnd()
 void ZMDIFrameWnd::OnCreateChild(HWND hwnd)
 {
 	WCHAR sz[64];
-	GetWindowText(hwnd, sz, RTL_NUMBER_OF(sz));
+	if (!GetWindowText(hwnd, sz, _countof(sz)))
+	{
+		*sz = 0;
+	}
 	if (int cy = ZTabBar::addItem(sz, (LPARAM)hwnd))
 	{
 		if (_bClientEdge)
@@ -267,7 +270,10 @@ LRESULT ZMDIChildFrame::OnNotify( LPNMHDR /*lpnm*/ )
 
 LRESULT ZMDIChildFrame::WindowProc( HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam )
 {
-	RECT rc;
+	union {
+		HWND hwndView;
+		RECT rc;
+	};
 
 	switch (uMsg)
 	{
@@ -293,6 +299,7 @@ LRESULT ZMDIChildFrame::WindowProc( HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM 
 		{
 			_hwndView = 0;
 		}
+		_pFrame->_hwndView = 0;
 		break;
 	
 	case WM_DESTROY:
@@ -318,10 +325,14 @@ LRESULT ZMDIChildFrame::WindowProc( HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM 
 	case WM_SYSKEYDOWN:
 	case WM_CHAR:
 	case WM_SYSCHAR:
-		if (_hwndView)
+		if (hwndView = _hwndView) 
 		{
-			return SendMessage(_hwndView, uMsg, wParam, lParam);
+			return SendMessage(hwndView, uMsg, wParam, lParam);
 		}
+		break;
+
+	case WM_SETFOCUS:
+		if (hwndView = _hwndView) SetFocus(hwndView);
 		break;
 
 	case WM_SIZE:

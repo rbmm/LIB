@@ -212,9 +212,9 @@ LPARAM ZTabBar::getCurParam()
 	return 0;
 }
 
-int ZTabBar::addItem(PWSTR pszText, LPARAM lParam)
+int ZTabBar::addItem(PCWSTR pszText, LPARAM lParam)
 {
-	TCITEM item = { TCIF_PARAM|TCIF_TEXT, 0, 0, pszText, 0, 0, lParam };
+	TCITEM item = { TCIF_PARAM|TCIF_TEXT, 0, 0, const_cast<PWSTR>(pszText), 0, 0, lParam };
 
 	if (0 <= TabCtrl_InsertItem(_hwnd, MAXLONG, &item) && 1 == TabCtrl_GetItemCount(_hwnd))
 	{
