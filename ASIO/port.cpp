@@ -325,6 +325,7 @@ ULONG Port::Create(_In_reads_bytes_(namelen) const sockaddr * name, _In_ int nam
 	{
 		if (ULONG dwError = pAddress->CreateAddress(name, namelen, protocol))
 		{
+			pAddress->Release();
 			return dwError;
 		}
 
