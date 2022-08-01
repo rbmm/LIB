@@ -870,6 +870,18 @@ ZwYieldExecution
 (
 );
 
+NTDLL
+NtAccessCheck(
+			  _In_ PSECURITY_DESCRIPTOR SecurityDescriptor,
+			  _In_ HANDLE ClientToken,
+			  _In_ ACCESS_MASK DesiredAccess,
+			  _In_ PGENERIC_MAPPING GenericMapping,
+			  _Out_writes_bytes_(*PrivilegeSetLength) PPRIVILEGE_SET PrivilegeSet,
+			  _Inout_ PULONG PrivilegeSetLength,
+			  _Out_ PACCESS_MASK GrantedAccess,
+			  _Out_ PNTSTATUS AccessStatus
+			  );
+
 //NTDLL
 //ZwQueryVirtualMemory
 //(
