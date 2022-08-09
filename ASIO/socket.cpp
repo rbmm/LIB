@@ -1,5 +1,6 @@
 #include "StdAfx.h"
 #include <ws2bth.h>
+#include "..\NtVer\nt_ver.h"
 
 _NT_BEGIN
 
@@ -27,16 +28,7 @@ SOCKET _WSASocket(
 				 _In_ DWORD              dwFlags
 				 )
 {
-	static char flag_supported = -1;
-
-	if (flag_supported < 0)
-	{
-		ULONG dwMajorVersion, dwMinorVersion, dwBuildNumber;
-		RtlGetNtVersionNumbers(&dwMajorVersion, &dwMinorVersion, &dwBuildNumber);
-		flag_supported = (0x06010000|7601) <= ((dwMajorVersion << 24)|(dwMinorVersion << 16)|(dwBuildNumber & 0xffff));
-	}
-
-	if (flag_supported)
+	if (g_nt_ver.Version >= (NTDDI_WIN7|7601))
 	{
 		return WSASocket(af, type, protocol, lpProtocolInfo, g, dwFlags | WSA_FLAG_NO_HANDLE_INHERIT);
 	}

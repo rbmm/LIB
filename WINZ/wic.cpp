@@ -2,12 +2,10 @@
 
 #include <initguid.h>
 #include <wincodec.h>
-
+#include "..\NtVer\nt_ver.h"
 _NT_BEGIN
 
 #include "wic.h"
-
-extern ULONG gWinVersion;
 
 NTSTATUS AccessResource(_Out_ PDATA_BLOB blob, _In_ PCWSTR pszType, _In_ PCWSTR pszName, _In_ PVOID hmod)
 {
@@ -128,7 +126,7 @@ HRESULT LIC::FillBitsFromBitmapSource(IWICImagingFactory* piFactory, IWICBitmapS
 		if (0 <= (hr = piFactory->CreateBitmapScaler(&piScaler)))
 		{
 			if (0 <= (hr = piScaler->Initialize(pIBitmap, cx, cy, 
-				gWinVersion < _WIN32_WINNT_WIN10 ? WICBitmapInterpolationModeFant : WICBitmapInterpolationModeHighQualityCubic)))
+				g_nt_ver.Version < _WIN32_WINNT_WIN10 ? WICBitmapInterpolationModeFant : WICBitmapInterpolationModeHighQualityCubic)))
 			{
 				hr = FillBitsFromBitmapSource(piScaler, cx, cy);
 			}

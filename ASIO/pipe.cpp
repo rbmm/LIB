@@ -1,4 +1,5 @@
 #include "StdAfx.h"
+#include "..\NtVer\nt_ver.h"
 
 _NT_BEGIN
 
@@ -58,16 +59,7 @@ NTSTATUS CreatePipeAnonymousPairPre7(PHANDLE phServerPipe, PHANDLE phClientPipe,
 // win7+
 NTSTATUS CreatePipeAnonymousPair(PHANDLE phServerPipe, PHANDLE phClientPipe, ULONG Flags, DWORD nInBufferSize)
 {
-	static char flag_supported = -1;
-
-	if (flag_supported < 0)
-	{
-		ULONG dwMajorVersion, dwMinorVersion;
-		RtlGetNtVersionNumbers(&dwMajorVersion, &dwMinorVersion, 0);
-		flag_supported = _WIN32_WINNT_WIN7 <= ((dwMajorVersion << 8)| dwMinorVersion);
-	}
-
-	if (!flag_supported)
+	if (g_nt_ver.Version < _WIN32_WINNT_WIN7)
 	{
 		return CreatePipeAnonymousPairPre7(phServerPipe, phClientPipe, Flags, nInBufferSize);
 	}

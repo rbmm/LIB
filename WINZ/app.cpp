@@ -1,28 +1,13 @@
 #include "StdAfx.h"
-
+#include "..\NtVer\nt_ver.h"
 _NT_BEGIN
 
 #include "app.h"
 #include "window.h"
 
-ULONG GetWinVersion()
-{
-	ULONG M, m;
-	RtlGetNtVersionNumbers(&M, &m, 0);
-	return (M << 8) + m;
-}
-
-ULONG gWinVersion = GetWinVersion();
-
 ULONG GetNONCLIENTMETRICSWSize()
 {
-	static ULONG m;
-	if (!m)
-	{
-		RtlGetNtVersionNumbers(&m, 0, 0);
-	}
-
-	return m < 6 ? sizeof(NONCLIENTMETRICS) - 4 : sizeof(NONCLIENTMETRICS);
+	return g_nt_ver.Major < 6 ? sizeof(NONCLIENTMETRICS) - 4 : sizeof(NONCLIENTMETRICS);
 }
 //////////////////////////////////////////////////////////////////////////
 // ZRegistry

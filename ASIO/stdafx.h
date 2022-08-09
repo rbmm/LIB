@@ -7,6 +7,7 @@
 #include <ws2ipdef.h>
 #include <mstcpip.h>
 _NT_BEGIN
+#define SCHANNEL_USE_BLACKLISTS
 #include <schannel.h>
 #include <tdi.h>
 
