@@ -27,6 +27,7 @@ struct TR_HOOK_DLL
 #define HOOK_NAME(pfn) hook_##pfn
 
 #define BEGIN_TR_HOOK(dllname) TR_HOOK_DLL TR_DLL_NAME(dllname) = { L ## #dllname L".dll", {
+#define BEGIN_TR_HOOK2(dllname, name) TR_HOOK_DLL TR_DLL_NAME(dllname) = { _CRT_WIDE(name), {
 #define TR_HOOK_ENTRY(pfn) { #pfn, HOOK_NAME(pfn), (void**)&__imp_##pfn },
 #define TR_HOOK_ENTRY_ORD(i, pfn) { (PCSTR)(i), HOOK_NAME(pfn), (void**)&__imp_##pfn },
 #define END_TR_HOOK() {}}};
