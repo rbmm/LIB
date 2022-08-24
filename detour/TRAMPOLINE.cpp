@@ -260,7 +260,7 @@ void Z_DETOUR_TRAMPOLINE::operator delete(PVOID pv)
 	Z_DETOUR_REGION::_free((Z_DETOUR_TRAMPOLINE*)pv);
 }
 
-NTSTATUS Z_DETOUR_TRAMPOLINE::Set()
+NTSTATUS Z_DETOUR_TRAMPOLINE::Set(_In_opt_ BOOLEAN bProtect/* = TRUE*/)
 {
 	struct {
 		ULONG op;
@@ -298,7 +298,8 @@ NTSTATUS Z_DETOUR_TRAMPOLINE::Set()
 #endif//#ifdef _M_IX86
 
 	SIZE_T size = cbRestore;
-	NTSTATUS status = ZwProtectVirtualMemory(NtCurrentProcess(), &pv, &size, PAGE_EXECUTE_READWRITE, &j.op);
+	NTSTATUS status = bProtect ? 
+		ZwProtectVirtualMemory(NtCurrentProcess(), &pv, &size, PAGE_EXECUTE_READWRITE, &j.op) : STATUS_SUCCESS;
 
 	if (0 > status)
 	{
@@ -309,7 +310,7 @@ NTSTATUS Z_DETOUR_TRAMPOLINE::Set()
 
 	memcpy(pvJmp, &j.jmp_e9, cbRestore);
 
-	if (j.op != PAGE_EXECUTE_READWRITE)
+	if (bProtect && j.op != PAGE_EXECUTE_READWRITE)
 	{
 		ZwProtectVirtualMemory(NtCurrentProcess(), &pv, &size, j.op, &j.op);
 	}

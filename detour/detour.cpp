@@ -216,7 +216,7 @@ NTSTATUS NTAPI TrHook(HMODULE hmod, T_HOOK_ENTRY* entry)
 	return TrHook(pv, entry);
 }
 
-NTSTATUS NTAPI TrHook(PVOID pv, T_HOOK_ENTRY* entry)
+NTSTATUS NTAPI TrHook(PVOID pv, T_HOOK_ENTRY* entry, _In_opt_ BOOLEAN bProtect/* = TRUE*/)
 {
 	NTSTATUS status = STATUS_UNSUCCESSFUL;
 
@@ -229,7 +229,7 @@ NTSTATUS NTAPI TrHook(PVOID pv, T_HOOK_ENTRY* entry)
 			PVOID pThunk = *entry->pThunk;
 			*entry->pThunk = pv;
 
-			if (0 <= (status = pTramp->Set()))
+			if (0 <= (status = pTramp->Set(bProtect)))
 			{
 				DbgPrint("%p[%p -> %p]\n", pTramp, pThunk, pv);
 				entry->hook = pThunk;

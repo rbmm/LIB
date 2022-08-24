@@ -41,5 +41,5 @@ void NTAPI TrHook(TR_HOOK_DLL* pphDLL[]);
 void NTAPI TrHook(PCUNICODE_STRING DllName, TR_HOOK_DLL* pphDLL[]);// hmod = LdrGetDllHandle(DllName)
 void NTAPI TrHook(PVOID hmod, PCUNICODE_STRING DllName, TR_HOOK_DLL* pphDLL[]);// if we already have hmod
 void NTAPI TrUnHook(TR_HOOK_DLL* pphDLL[]);
-NTSTATUS NTAPI TrHook(PVOID pv, T_HOOK_ENTRY* entry);// pv address for hook
+NTSTATUS NTAPI TrHook(PVOID pv, T_HOOK_ENTRY* entry, _In_opt_ BOOLEAN bProtect = TRUE);// pv address for hook
 NTSTATUS NTAPI TrUnHook(T_HOOK_ENTRY* entry);
