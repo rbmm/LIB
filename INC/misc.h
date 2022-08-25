@@ -56,13 +56,33 @@ RtlInterlockedCompareExchange64 (
 #endif
 
 //////////////////////////////////////////////////////////////////////////
-#define Get_Err(err, fn) err = (fn ? NOERROR : GetLastError())
-#define No_Err(err, fn) NOERROR == (Get_Err(err, fn))
-#define No_Err_V(err, q, p, fn) NOERROR == (err = ((p = fn) == q ? GetLastError() : NOERROR))
+
+template <typename T>
+T ToError(ULONG& dwError, T v)
+{
+	dwError = v ? NOERROR : GetLastError();
+	return v;
+}
+
+#define GLE(x) ToError(dwError, x)
+
+template <typename T>
+T ToHr(HRESULT& hr, T v)
+{
+	hr = v ? S_OK : HRESULT_FROM_WIN32(GetLastError());
+	return v;
+}
+
+#define GLH(x) ToHr(hr, x)
 
 inline ULONG BOOL_TO_ERROR(BOOL f)
 {
 	return f ? NOERROR : GetLastError();
+}
+
+inline HANDLE fixH(HANDLE hFile)
+{
+	return hFile == INVALID_HANDLE_VALUE ? 0 : hFile;
 }
 
 #ifdef _malloca
