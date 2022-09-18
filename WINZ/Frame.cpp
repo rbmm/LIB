@@ -164,7 +164,7 @@ ZSDIFrameWnd::ZSDIFrameWnd()
 	_pCmdId = 0;
 	_nCmdId = 0;
 
-	if (ZGLOBALS* globals = ZGLOBALS::get())
+	if (_ZGLOBALS* globals = ZGLOBALS::get())
 	{
 		globals->MainFrame = this;
 	}
@@ -179,10 +179,10 @@ ZSDIFrameWnd::~ZSDIFrameWnd()
 
 	if (_pCmdId)
 	{
-		delete _pCmdId;
+		delete [] _pCmdId;
 	}
 
-	if (ZGLOBALS* globals = ZGLOBALS::get())
+	if (_ZGLOBALS* globals = ZGLOBALS::get())
 	{
 		globals->MainFrame = 0;
 		globals->hwndMain = 0;
@@ -313,7 +313,7 @@ BOOL ZSDIFrameWnd::CreateClient(HWND hwnd, int nWidth, int nHeight, PVOID lpCrea
 				SetIcons(hwnd, ((INID*)lpCreateParams)->hInstance, id);
 			}
 
-			if (ZGLOBALS* p = ZGLOBALS::get())
+			if (_ZGLOBALS* p = ZGLOBALS::get())
 			{
 				p->hwndMain = hwnd;
 			}

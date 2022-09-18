@@ -90,7 +90,7 @@ LRESULT ZConsole::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 BOOL ZConsole::CanClose()
 {
-	if (ZGLOBALS* p = ZGLOBALS::get())
+	if (_ZGLOBALS* p = ZGLOBALS::get())
 	{
 		if (p->App)
 		{

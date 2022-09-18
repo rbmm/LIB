@@ -5,29 +5,6 @@ _NT_BEGIN
 #include "SSL.h"
 #define DbgPrint echo(/)echo(/)
 //
-SECURITY_STATUS SharedCred::Acquire_v5(ULONG fCredentialUse, PCCERT_CONTEXT pCertContext, ULONG dwFlags)
-{
-	SCH_CREDENTIALS sc { SCH_CREDENTIALS_VERSION };
-
-	if (pCertContext)
-	{
-		sc.paCred = &pCertContext;
-		sc.cCreds = 1;
-	}
-
-	sc.dwFlags = dwFlags;
-
-	SECURITY_STATUS ss = AcquireCredentialsHandleW(0, const_cast<PWSTR>(SCHANNEL_NAME), fCredentialUse, 0, &sc, 0, 0, &m_hCred, 0);
-
-	if (0 > ss) 
-	{
-		m_hCred.dwLower = 0, m_hCred.dwUpper = 0;
-		DbgPrint("\r\n%p>%s(%p)=%x\r\n", this, __FUNCTION__, pCertContext, ss);
-	}
-
-	return ss;
-}
-
 SECURITY_STATUS SharedCred::Acquire(ULONG fCredentialUse, PCCERT_CONTEXT pCertContext, ULONG dwFlags, ULONG grbitEnabledProtocols)
 { 
 	SCHANNEL_CRED sc { SCHANNEL_CRED_VERSION };

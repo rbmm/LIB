@@ -50,6 +50,8 @@ protected:
 		SwitchToWindow(GetWindow(getHWND(), uCmd));
 	}
 
+	HWND Create(HINSTANCE hInstance, ULONG id, HWND hWndParent, CWizFrame* pFrame);
+
 	void DoInstall()
 	{
 		_pFrame->DoInstall();

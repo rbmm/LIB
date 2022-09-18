@@ -179,4 +179,15 @@ INT_PTR CWizPage::DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lPar
 	return ZDlg::DialogProc(hwndDlg, uMsg, wParam, lParam);
 }
 
+HWND CWizPage::Create(HINSTANCE hInstance, ULONG id, HWND hWndParent, CWizFrame* pFrame)
+{
+	if (hWndParent = ZDlg::Create(hInstance, MAKEINTRESOURCEW(id), hWndParent, (LPARAM)pFrame))
+	{
+		SetWindowLongW(hWndParent, GWL_ID, id);
+		return hWndParent;
+	}
+
+	return 0;
+}
+
 _NT_END

@@ -19,7 +19,7 @@ ZDocument::ZDocument()
 	InitializeListHead(&_viewList);
 	InitializeListHead(this);
 
-	if (ZGLOBALS* globals = ZGLOBALS::get())
+	if (_ZGLOBALS* globals = ZGLOBALS::get())
 	{
 		InsertHeadList(&globals->_docListHead, this);
 	}

@@ -16,7 +16,7 @@ ZRegistry::ZRegistry()
 {
 	_hKey = 0;
 
-	if (ZGLOBALS* globals = ZGLOBALS::get())
+	if (_ZGLOBALS* globals = ZGLOBALS::get())
 	{
 		globals->Reg = this;
 	}
@@ -24,7 +24,7 @@ ZRegistry::ZRegistry()
 
 ZRegistry::~ZRegistry()
 {
-	if (ZGLOBALS* globals = ZGLOBALS::get())
+	if (_ZGLOBALS* globals = ZGLOBALS::get())
 	{
 		globals->Reg = 0;
 	}
@@ -158,7 +158,7 @@ ZApp::ZApp()
 {
 	InitializeListHead(&_headTM);
 	InitializeListHead(&_headIdle);
-	if (ZGLOBALS* globals = ZGLOBALS::get())
+	if (_ZGLOBALS* globals = ZGLOBALS::get())
 	{
 		globals->App = this;
 	}
@@ -166,7 +166,7 @@ ZApp::ZApp()
 
 ZApp::~ZApp()
 {
-	if (ZGLOBALS* globals = ZGLOBALS::get())
+	if (_ZGLOBALS* globals = ZGLOBALS::get())
 	{
 		globals->App = 0;
 	}
@@ -437,7 +437,7 @@ ZIdle::~ZIdle()
 
 void ZIdle::Insert()
 {
-	if (ZGLOBALS* globals = ZGLOBALS::get())
+	if (_ZGLOBALS* globals = ZGLOBALS::get())
 	{
 		globals->App->InsertIdle(this);
 	}
@@ -455,7 +455,7 @@ void ZIdle::Remove()
 ZFontNotify::ZFontNotify()
 {
 	InitializeListHead(this);
-	if (ZGLOBALS* globals = ZGLOBALS::get())
+	if (_ZGLOBALS* globals = ZGLOBALS::get())
 	{
 		InsertHeadList(&globals->_fontListHead, this);
 	}
@@ -481,7 +481,7 @@ ZTranslateMsg::~ZTranslateMsg()
 
 void ZTranslateMsg::Insert()
 {
-	if (ZGLOBALS* globals = ZGLOBALS::get())
+	if (_ZGLOBALS* globals = ZGLOBALS::get())
 	{
 		globals->App->InsertTM(this);
 	}
@@ -504,7 +504,7 @@ ZFont::ZFont(BOOL bMain)
 	_hfont = 0;
 	_hStatusFont = 0;
 
-	ZGLOBALS* globals = ZGLOBALS::get();
+	_ZGLOBALS* globals = ZGLOBALS::get();
 
 	if (bMain)
 	{
@@ -552,7 +552,7 @@ ZFont::ZFont(BOOL bMain)
 
 ZFont::~ZFont()
 {
-	if (ZGLOBALS* globals = ZGLOBALS::get())
+	if (_ZGLOBALS* globals = ZGLOBALS::get())
 	{
 		if (globals->Font == this)
 		{
@@ -705,7 +705,7 @@ BOOL ZFont::SetNewFont(PLOGFONT plf, BOOL bSave)
 				}
 			}
 
-			if (ZGLOBALS* globals = ZGLOBALS::get())
+			if (_ZGLOBALS* globals = ZGLOBALS::get())
 			{
 				if (globals->Font == this)
 				{
@@ -749,7 +749,7 @@ _ZGLOBALS::~_ZGLOBALS()
 
 ZAppEx* _ZGLOBALS::getApp()
 {
-	if (ZGLOBALS* globals = ZGLOBALS::get())
+	if (_ZGLOBALS* globals = ZGLOBALS::get())
 	{
 		return globals->AppEx;
 	}
@@ -759,7 +759,7 @@ ZAppEx* _ZGLOBALS::getApp()
 
 class ZSDIFrameWnd* _ZGLOBALS::getMainFrame()
 {
-	if (ZGLOBALS* globals = ZGLOBALS::get())
+	if (_ZGLOBALS* globals = ZGLOBALS::get())
 	{
 		return globals->MainFrame;
 	}
@@ -769,7 +769,7 @@ class ZSDIFrameWnd* _ZGLOBALS::getMainFrame()
 
 HWND _ZGLOBALS::getMainHWND()
 {
-	if (ZGLOBALS* globals = ZGLOBALS::get())
+	if (_ZGLOBALS* globals = ZGLOBALS::get())
 	{
 		return globals->hwndMain;
 	}
@@ -779,7 +779,7 @@ HWND _ZGLOBALS::getMainHWND()
 
 ZRegistry* _ZGLOBALS::getRegistry()
 {
-	if (ZGLOBALS* globals = ZGLOBALS::get())
+	if (_ZGLOBALS* globals = ZGLOBALS::get())
 	{
 		return globals->Reg;
 	}
@@ -789,7 +789,7 @@ ZRegistry* _ZGLOBALS::getRegistry()
 
 ZFont* _ZGLOBALS::getFont()
 {
-	if (ZGLOBALS* globals = ZGLOBALS::get())
+	if (_ZGLOBALS* globals = ZGLOBALS::get())
 	{
 		return globals->Font;
 	}
