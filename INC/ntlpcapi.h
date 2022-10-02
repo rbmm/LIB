@@ -198,7 +198,7 @@ NTAPI
 NtConnectPort(
     __out PHANDLE PortHandle,
     __in PCUNICODE_STRING PortName,
-    __in PSECURITY_QUALITY_OF_SERVICE SecurityQos,
+    __in const SECURITY_QUALITY_OF_SERVICE* SecurityQos,
     __inout_opt PPORT_VIEW ClientView,
     __inout_opt PREMOTE_PORT_VIEW ServerView,
     __out_opt PULONG MaxMessageLength,
@@ -212,7 +212,7 @@ NTAPI
 NtSecureConnectPort(
     __out PHANDLE PortHandle,
     __in PCUNICODE_STRING PortName,
-    __in PSECURITY_QUALITY_OF_SERVICE SecurityQos,
+    __in const SECURITY_QUALITY_OF_SERVICE* SecurityQos,
     __inout_opt PPORT_VIEW ClientView,
     __in_opt PSID RequiredServerSid,
     __inout_opt PREMOTE_PORT_VIEW ServerView,
@@ -249,7 +249,7 @@ NTAPI
 ZwConnectPort(
 			  __out PHANDLE PortHandle,
 			  __in PCUNICODE_STRING PortName,
-			  __in PSECURITY_QUALITY_OF_SERVICE SecurityQos,
+			  __in const SECURITY_QUALITY_OF_SERVICE* SecurityQos,
 			  __inout_opt PPORT_VIEW ClientView,
 			  __inout_opt PREMOTE_PORT_VIEW ServerView,
 			  __out_opt PULONG MaxMessageLength,
@@ -263,7 +263,7 @@ NTAPI
 ZwSecureConnectPort(
 					__out PHANDLE PortHandle,
 					__in PCUNICODE_STRING PortName,
-					__in PSECURITY_QUALITY_OF_SERVICE SecurityQos,
+					__in const SECURITY_QUALITY_OF_SERVICE* SecurityQos,
 					__inout_opt PPORT_VIEW ClientView,
 					__in_opt PSID RequiredServerSid,
 					__inout_opt PREMOTE_PORT_VIEW ServerView,
@@ -645,7 +645,7 @@ typedef struct _ALPC_HANDLE_ATTR
 typedef struct _ALPC_SECURITY_ATTR
 {
     ULONG Flags;
-    PSECURITY_QUALITY_OF_SERVICE SecurityQos;
+    const SECURITY_QUALITY_OF_SERVICE* SecurityQos;
     ALPC_HANDLE ContextHandle; // dbg
     ULONG Reserved1;
     ULONG Reserved2;

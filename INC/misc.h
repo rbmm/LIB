@@ -92,7 +92,7 @@ inline HANDLE fixH(HANDLE hFile)
 #undef _freea
 #endif
 
-#define _malloca(size) ((size) < PAGE_SIZE ? alloca(size) : new BYTE[size])
+#define _malloca(size) ((size) < _ALLOCA_S_THRESHOLD ? alloca(size) : new BYTE[size])
 
 inline void _freea(PVOID pv)
 {

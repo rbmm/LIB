@@ -1092,6 +1092,8 @@ RtlDosApplyFileIsolationRedirection_Ustr(IN ULONG Flags,
 										 IN PSIZE_T FilePathLength,
 										 IN PSIZE_T MaxPathSize);
 
+EXTERN_C NTSYSAPI BOOLEAN NTAPI RtlDoesFileExists_U( _In_ PCWSTR FileName );
+
 NTDLL_(ULONG) RtlGetNtGlobalFlags();
 
 typedef void (CALLBACK * DO_CHECK)(LPVOID Context, LPCSTR ImportDllName);
