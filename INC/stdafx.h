@@ -28,6 +28,7 @@ _NT_END
 #include <stdio.h>
 #include <string.h>
 
+
 #define RtlInitializeCorrelationVector _RtlInitializeCorrelationVector_
 #define RtlIncrementCorrelationVector _RtlIncrementCorrelationVector_
 #define RtlExtendCorrelationVector _RtlExtendCorrelationVector_
@@ -42,6 +43,8 @@ _NT_END
 #define RtlFillNonVolatileMemory _RtlFillNonVolatileMemory_
 #define RtlFlushNonVolatileMemoryRanges _RtlFlushNonVolatileMemoryRanges_
 #define RtlCaptureContext2 _RtlCaptureContext2_
+#define RtlGetSystemGlobalData _RtlGetSystemGlobalData_
+#define RtlSetSystemGlobalData _RtlSetSystemGlobalData_
 
 #define _INC_MMSYSTEM  /* Prevent inclusion of mmsystem.h in windows.h */
 
@@ -62,6 +65,8 @@ _NT_END
 #undef RtlFillNonVolatileMemory
 #undef RtlFlushNonVolatileMemoryRanges
 #undef RtlCaptureContext2
+#undef RtlGetSystemGlobalData
+#undef RtlSetSystemGlobalData
 
 #ifdef SECURITY_WIN32
 #define InitSecurityInterfaceW _InitSecurityInterfaceW_

@@ -400,6 +400,22 @@ SampRetrieveUserPasswords(
 						  _Out_ PBOOLEAN NtPasswordNonNull
 						  );
 
+NTSYSAPI
+NTSTATUS
+NTAPI
+SampGetAccountDomainInfo(_In_ BOOLEAN bLocal,
+						 _Out_ PPOLICY_ACCOUNT_DOMAIN_INFO *PolicyAccountDomainInfo
+						 );
+
+NTSYSAPI
+NTSTATUS
+NTAPI
+LsaIFree_LSAPR_POLICY_INFORMATION(
+								  _In_ POLICY_INFORMATION_CLASS InformationClass,
+								  _In_ PVOID PolicyInformation
+								  );
+
+
 EXTERN_C_END
 
 #endif  // _NTSAMPRIVATE_

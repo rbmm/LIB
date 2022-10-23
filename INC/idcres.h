@@ -13,10 +13,11 @@
 #define AFX_IDW_DIALOGBAR               0xE805  // CDialogBar
 #define AFX_IDW_MENUBAR                 0xE806  // CMFCMenuBar
 
+#define AFX_IDW_PANE_FIRST              0xE900 
+
 #define AFX_IDM_WINDOW_FIRST            0xE130
 #define AFX_IDM_WINDOW_LAST             0xE13F
 #define AFX_IDM_FIRST_MDICHILD          0xFF00  // window list starts here
-
 #ifndef IDC_STATIC
 #define IDC_STATIC      (-1)
 #endif

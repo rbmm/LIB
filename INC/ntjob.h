@@ -1,6 +1,6 @@
 #pragma once
 
-_EXTERN_C_BEGIN
+EXTERN_C_START
 
 // Job objects
 
@@ -83,4 +83,4 @@ NtRevertContainerImpersonation(
     VOID
     );
 
-_EXTERN_C_END
+EXTERN_C_END

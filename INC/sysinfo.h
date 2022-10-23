@@ -1491,6 +1491,7 @@ typedef enum _PS_PROTECTED_SIGNER
 	PsProtectedSignerWindows,
 	PsProtectedSignerWinTcb,
 	PsProtectedSignerWinSystem,
+	PsProtectedSignerApp,
 	PsProtectedSignerMax
 } PS_PROTECTED_SIGNER;
 

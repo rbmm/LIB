@@ -1,0 +1,12 @@
+/////////////////////////////////////////////////////////////////////////////
+//
+// RT_MANIFEST
+//
+LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
+
+1 RT_MANIFEST	".manifest"
+IDR_MENU1 ICON "img/main.ico"
+4 RCDATA "img/dbg16.png"
+5 RCDATA "img/m2.png"
+
+IDI_ICON1 ICON "img/window.ico"

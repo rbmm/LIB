@@ -1,8 +1,8 @@
 #pragma  once
 
 struct MD5_CTX {
-	ULONG i[2];				/* number of _bits_ handled mod 2^64 */
-	ULONG buf[4];			/* scratch buffer */
+	ULONG ib[2];				/* number of _bits_ handled mod 2^64 */
+	ULONG sbuf[4];			/* scratch buffer */
 	UCHAR in[64];			/* input buffer */
 	union {					/* actual digest after MD5Final call */
 		UCHAR digest[16];           

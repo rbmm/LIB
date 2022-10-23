@@ -4,7 +4,7 @@
 
 class ZView;
 
-class WINZ_API Z_INTERFACE("DA039C7B-4B82-4deb-8ADD-E09C73631B34") ZDocument : public ZObject, LIST_ENTRY
+class WINZ_API Z_INTERFACE("DA039C7B-4B82-4deb-8ADD-E09C73631B34") ZDocument : public ZObject, public LIST_ENTRY
 {
 protected:
 	LIST_ENTRY _viewList;
