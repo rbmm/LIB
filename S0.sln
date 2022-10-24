@@ -9,6 +9,10 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "winZ", "winZ\winZ.vcxproj",
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "asio", "asio\asio.vcxproj", "{51EAE651-E39E-4737-8E3F-0A3D53844F7B}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "msvcrt", "msvcrt\msvcrt.vcxproj", "{C37BAF8E-1A84-4D2E-823D-EDA3F3656EB9}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ref", "ref\ref.vcxproj", "{3EB270BA-BF38-4F90-9B29-0BEF1F57B546}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Release|x64 = Release|x64
@@ -27,6 +31,14 @@ Global
 		{51EAE651-E39E-4737-8E3F-0A3D53844F7B}.Release|x64.Build.0 = Release|x64
 		{51EAE651-E39E-4737-8E3F-0A3D53844F7B}.Release|x86.ActiveCfg = Release|Win32
 		{51EAE651-E39E-4737-8E3F-0A3D53844F7B}.Release|x86.Build.0 = Release|Win32
+		{C37BAF8E-1A84-4D2E-823D-EDA3F3656EB9}.Release|x64.ActiveCfg = Release|x64
+		{C37BAF8E-1A84-4D2E-823D-EDA3F3656EB9}.Release|x64.Build.0 = Release|x64
+		{C37BAF8E-1A84-4D2E-823D-EDA3F3656EB9}.Release|x86.ActiveCfg = Release|Win32
+		{C37BAF8E-1A84-4D2E-823D-EDA3F3656EB9}.Release|x86.Build.0 = Release|Win32
+		{3EB270BA-BF38-4F90-9B29-0BEF1F57B546}.Release|x64.ActiveCfg = Release|x64
+		{3EB270BA-BF38-4F90-9B29-0BEF1F57B546}.Release|x64.Build.0 = Release|x64
+		{3EB270BA-BF38-4F90-9B29-0BEF1F57B546}.Release|x86.ActiveCfg = Release|Win32
+		{3EB270BA-BF38-4F90-9B29-0BEF1F57B546}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
