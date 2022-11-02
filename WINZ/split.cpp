@@ -4,241 +4,172 @@ _NT_BEGIN
 
 #include "split.h"
 
-//////////////////////////////////////////////////////////////////////////
-// ZScplitWnd
-
-ZSplitWnd::ZSplitWnd(int t)
+void GetChildPosV(_In_ PRECT rc, _In_ ULONG dx, _In_ BOOL lt, _Out_ PRECT rcChild)
 {
-	_hdc = 0, _t = t;
+	rcChild->top = 0;
+	rcChild->bottom = rc->bottom;
+	if (lt)
+	{
+		rcChild->left = 0;
+		rcChild->right = dx;
+	}
+	else
+	{
+		rcChild->left = dx;
+		rcChild->right = rc->right;
+	}
 }
 
-ZSplitWnd::~ZSplitWnd()
+void GetChildPosH(_In_ PRECT rc, _In_ ULONG dy, _In_ BOOL lt, _Out_ PRECT rcChild)
 {
+	rcChild->left = 0;
+	rcChild->right = rc->right;
+	if (lt)
+	{
+		rcChild->top = 0;
+		rcChild->bottom = dy;
+	}
+	else
+	{
+		rcChild->top = dy;
+		rcChild->bottom = rc->bottom;
+	}
+}
+
+void GetChildsPosV(_In_ HWND hwnd, _In_ ULONG xy, _Out_ PRECT prc1, _Out_ PRECT prc2)
+{
+	RECT RC;
+	GetClientRect(hwnd, &RC);
+	GetChildPosV(&RC, xy,     TRUE,  prc1);
+	GetChildPosV(&RC, xy + GetSystemMetrics(SM_CXDLGFRAME), FALSE, prc2);
+}
+
+void GetChildsPosH(_In_ HWND hwnd, _In_ ULONG xy, _Out_ PRECT prc1, _Out_ PRECT prc2)
+{
+	RECT RC;
+	GetClientRect(hwnd, &RC);
+	GetChildPosH(&RC, xy,     TRUE,  prc1);
+	GetChildPosH(&RC, xy + GetSystemMetrics(SM_CYDLGFRAME), FALSE, prc2);
 }
 
 BOOL ZSplitWnd::OnCreate(HWND hwnd)
 {
-	RECT rc;
-	GetClientRect(hwnd, &rc);
-	cx = rc.right, cy = rc.bottom;
-	return CreateChilds(hwnd);
+	RECT rc1, rc2;
+	(_bVert ? GetChildsPosV : GetChildsPosH)(hwnd, _xy, &rc1, &rc2);
+	_hwndChild[0] = CreateChild(TRUE, hwnd, rc1.left, rc1.top, rc1.right - rc1.left, rc1.bottom - rc1.top);
+	_hwndChild[1] = CreateChild(FALSE, hwnd, rc2.left, rc2.top, rc2.right - rc2.left, rc2.bottom - rc2.top);
+
+	return TRUE;
 }
 
-BOOL ZSplitWnd::MouseOnSplit(HWND hwnd, LPARAM lParam)
+void ZSplitWnd::MoveChilds(HWND hwnd, ULONG xy)
 {
-	POINT pt = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
-	ScreenToClient(hwnd, &pt);
-	return PointInSplit(pt);
+	if (HDWP hWinPosInfo = BeginDeferWindowPos(2))
+	{
+		RECT rc1, rc2;
+		(_bVert ? GetChildsPosV : GetChildsPosH)(hwnd, xy, &rc1, &rc2);
+		DeferWindowPos(hWinPosInfo, _hwndChild[0], 0, rc1.left, rc1.top, rc1.right - rc1.left, rc1.bottom - rc1.top, SWP_NOZORDER );
+		DeferWindowPos(hWinPosInfo, _hwndChild[1], 0, rc2.left, rc2.top, rc2.right - rc2.left, rc2.bottom - rc2.top, SWP_NOZORDER );
+		EndDeferWindowPos(hWinPosInfo);
+	}
+}
+
+void ZSplitWnd::OnPaint(HWND hwnd)
+{
+	PAINTSTRUCT ps;
+	if (BeginPaint(hwnd, &ps))
+	{
+		FillRect(ps.hdc, &ps.rcPaint, _hbr);
+		EndPaint(hwnd, &ps);
+	}
+}
+
+void ZSplitWnd::OnEnterSizeMove(HWND hwnd)
+{
+	RECT rc;
+	GetWindowRect(hwnd, &rc);
+	_rc = rc;
+	_xyNew = _xy;
+	ULONG xy;
+	if (_bVert)
+	{
+		xy = GetSystemMetrics( SM_CXMINTRACK );
+		rc.left += xy;
+		rc.right -= xy;
+	}
+	else
+	{
+		xy = GetSystemMetrics( SM_CYMINTRACK );
+		rc.top += xy;
+		rc.bottom -= xy;
+	}
+	ClipCursor(&rc);
+}
+
+void ZSplitWnd::OnSizing(HWND hwnd)
+{
+	POINT pt;
+	if (GetCursorPos(&pt) && ScreenToClient(hwnd, &pt))
+	{
+		ULONG xy = _bVert ? pt.x : pt.y;
+
+		if (xy != _xyNew)
+		{
+			_xyNew = xy;
+			MoveChilds(hwnd, xy);
+		}
+	}
 }
 
 LRESULT ZSplitWnd::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
 	switch (uMsg)
 	{
-	case WM_SIZE:
-		switch (wParam)
-		{
-		case SIZE_RESTORED:
-		case SIZE_MINIMIZED:
-		case SIZE_MAXIMIZED:
-			cx = GET_X_LPARAM(lParam), cy = GET_Y_LPARAM(lParam);
-			MoveChilds();
-			break;
-		}
-		break;
-	case WM_NCLBUTTONDOWN:
-		if (!_hdc && MouseOnSplit(hwnd, lParam) && (_hdc = GetDC(hwnd)))
-		{
-			RECT rc = { 0, 0, cx, cy};
-			MapWindowRect(hwnd, HWND_DESKTOP, &rc);
-			SetCapture(hwnd);
-			ClipCursor(&rc);
-			POINT pt = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
-			ScreenToClient(hwnd, &pt);
-			_tPrev = GetT(pt);
-			DrawMovingSplit();
-		}
-		break;
-	case WM_MOUSEMOVE:
-		if (_hdc)
-		{
-			int t = GetT(lParam);
-			if (_tPrev != t)
-			{
-				DrawMovingSplit();
-				_tPrev = t;
-				DrawMovingSplit();
-			}
-		}
-		break;
-	case WM_LBUTTONUP:
-		if (_hdc)
-		{
-			DrawMovingSplit();
-			ClipCursor(0); 
-			ReleaseCapture();
-			ReleaseDC(hwnd, _hdc);
-			_hdc = 0;
-			_t = _tPrev;
-			MoveChilds();
-			InvalidateRect(hwnd, 0, FALSE);
-		}
-		break;
-	case WM_NCHITTEST:
-		if (MouseOnSplit(hwnd, lParam)) return GetHitCode();
-		break;
-	case WM_DESTROY:
-		if (_hdc) ReleaseDC(hwnd, _hdc);
-		break;
 	case WM_CREATE:
-		if (!OnCreate(hwnd)) return -1;
+		if (!OnCreate(hwnd))
+		{
+			return -1;
+		}
 		break;
+
 	case WM_ERASEBKGND:
 		return TRUE;
+
 	case WM_PAINT:
-		PAINTSTRUCT ps;
-		if (BeginPaint(hwnd, &ps))
+		OnPaint(hwnd);
+		return 0;
+
+	case WM_ENTERSIZEMOVE:
+		OnEnterSizeMove(hwnd);
+		return 0;
+
+	case WM_EXITSIZEMOVE:
+		_xy = _xyNew, _bSplit = FALSE;
+		ClipCursor(0);
+		return 0;
+
+	case WM_NCHITTEST:
+		wParam = DefWinProc(hwnd, uMsg, wParam, lParam);
+		return wParam == HTCLIENT ? (_bSplit = TRUE, _bVert ? HTRIGHT : HTBOTTOM) : (_bSplit = FALSE, wParam);
+
+	case WM_SIZING:
+		if (_bSplit)
 		{
-			DrawSplit(ps.hdc);
-			EndPaint(hwnd, &ps);
+			*(PRECT)lParam = _rc;
+			OnSizing(hwnd);
+			return TRUE;
 		}
 		break;
-	}
-	return ZWnd::WindowProc(hwnd, uMsg, wParam, lParam);
-}
 
-HRESULT ZSplitWnd::QI(REFIID riid, void **ppvObject)
-{
-	if (riid == __uuidof(ZSplitWnd))
-	{
-		*ppvObject = static_cast<ZObject*>(this);
-		AddRef();
-		return S_OK;
+	case WM_WINDOWPOSCHANGED:
+		if (!(reinterpret_cast<WINDOWPOS*>(lParam)->flags & SWP_NOSIZE))
+		{
+			MoveChilds(hwnd, _xyNew);
+		}
+		return 0;
 	}
 
-	return ZWnd::QI(riid, ppvObject);
-}
-
-//////////////////////////////////////////////////////////////////////////
-// ZSplitWndV
-
-int ZSplitWndV::GetHitCode()
-{
-	return HTRIGHT;
-}
-
-BOOL ZSplitWndV::CreateChilds(HWND hwnd)
-{
-	return (_hwndCld[0] = CreateChild(TRUE, hwnd, 0, 0, _t - 2, cy)) && 
-		(_hwndCld[1] = CreateChild(FALSE, hwnd, _t - 2, 0, cx - _t - 2, cy));
-}
-
-void ZSplitWndV::MoveChilds()
-{
-	if (_t > cx - 16) _t = cx - 16;
-	if (_t < 0) _t = 0;
-
-	MoveWindow(_hwndCld[0], 0, 0, _t - 2, cy, TRUE);
-	MoveWindow(_hwndCld[1], _t + 2, 0, cx - _t - 2, cy, TRUE);
-}
-
-BOOL ZSplitWndV::PointInSplit(POINT pt)
-{
-	return (DWORD)pt.y < (DWORD)cy && (DWORD)(pt.x - _t + 2) < 5;
-}
-
-int ZSplitWndV::GetT(POINT pt)
-{
-	return pt.x;
-}
-
-int ZSplitWndV::GetT(LPARAM lParam)
-{
-	return GET_X_LPARAM(lParam);
-}
-
-void ZSplitWndV::DrawSplit(HDC hdc)
-{
-	RECT rc = { _t - 2, -1, _t + 2, cy + 2 };
-	DrawEdge(hdc, &rc, EDGE_RAISED, BF_RECT);
-}
-
-void ZSplitWndV::DrawMovingSplit()
-{
-	PatBlt(_hdc, _tPrev - 1, 0, 3, cy, DSTINVERT);
-}
-
-HRESULT ZSplitWndV::QI(REFIID riid, void **ppvObject)
-{
-	if (riid == __uuidof(ZSplitWndV))
-	{
-		*ppvObject = static_cast<ZObject*>(this);
-		AddRef();
-		return S_OK;
-	}
-
-	return ZSplitWnd::QI(riid, ppvObject);
-}
-
-//////////////////////////////////////////////////////////////////////////
-// ZSplitWndH
-
-int ZSplitWndH::GetHitCode()
-{
-	return HTBOTTOM;
-}
-
-BOOL ZSplitWndH::CreateChilds(HWND hwnd)
-{
-	return (_hwndCld[0] = CreateChild(TRUE, hwnd, 0, 0, _t - 2, cy)) && 
-		(_hwndCld[1] = CreateChild(FALSE, hwnd, _t - 2, 0, cx - _t - 2, cy));
-}
-
-void ZSplitWndH::MoveChilds()
-{
-	if (_t > cy - 16) _t = cy - 16;
-	if (_t < 0) _t = 0;
-
-	MoveWindow(_hwndCld[0], 0, 0, cx, _t - 2, TRUE);
-	MoveWindow(_hwndCld[1], 0, _t + 2, cx, cy - _t - 2, TRUE);
-}
-
-BOOL ZSplitWndH::PointInSplit(POINT pt)
-{
-	return (DWORD)pt.x < (DWORD)cx && (DWORD)(pt.y - _t + 2) < 5;
-}
-
-int ZSplitWndH::GetT(POINT pt)
-{
-	return pt.y;
-}
-
-int ZSplitWndH::GetT(LPARAM lParam)
-{
-	return GET_Y_LPARAM(lParam);
-}
-
-void ZSplitWndH::DrawSplit(HDC hdc)
-{
-	RECT rc = { -1, _t - 2, cx + 2, _t + 2};
-	DrawEdge(hdc, &rc, EDGE_RAISED, BF_RECT);
-}
-
-void ZSplitWndH::DrawMovingSplit()
-{
-	PatBlt(_hdc, 0, _tPrev - 1, cx, 3, DSTINVERT);
-}
-
-HRESULT ZSplitWndH::QI(REFIID riid, void **ppvObject)
-{
-	if (riid == __uuidof(ZSplitWndH))
-	{
-		*ppvObject = static_cast<ZObject*>(this);
-		AddRef();
-		return S_OK;
-	}
-
-	return ZSplitWnd::QI(riid, ppvObject);
+	return __super::WindowProc(hwnd, uMsg, wParam, lParam);
 }
 
 _NT_END
