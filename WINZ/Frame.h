@@ -25,6 +25,8 @@ protected:
 	virtual PCUNICODE_STRING getPosName();
 
 	virtual BOOL CanClose();
+
+	LRESULT OnCreate(HWND hwnd, CREATESTRUCT* lpcs);
 public:
 	
 	virtual ZView* getView();

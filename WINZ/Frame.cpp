@@ -57,9 +57,22 @@ BOOL ZFrameWnd::CanClose()
 	return ZView::CanClose(_hwndView);
 }
 
-LRESULT ZFrameWnd::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+LRESULT ZFrameWnd::OnCreate(HWND hwnd, CREATESTRUCT* lpcs)
 {
 	RECT rc;
+	if (!GetClientRect(hwnd, &rc) || 
+		!(_hwndView = CreateView(hwnd, rc.right, rc.bottom, lpcs->lpCreateParams))) return -1;
+
+	if (_hwndView == HWND_BROADCAST)
+	{
+		_hwndView = 0;
+	}
+
+	return 0;
+}
+
+LRESULT ZFrameWnd::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+{
 
 	switch (uMsg)
 	{
@@ -92,20 +105,25 @@ LRESULT ZFrameWnd::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam
 		return EmptyPaint(hwnd);
 
 	case WM_CREATE:
-		if (!GetClientRect(hwnd, &rc) || !(_hwndView = CreateView(hwnd, rc.right, rc.bottom, ((LPCREATESTRUCT)lParam)->lpCreateParams))) return -1;
-		if (_hwndView == HWND_BROADCAST)
-		{
-			_hwndView = 0;
-		}
-		break;
+		return OnCreate(hwnd, (LPCREATESTRUCT)lParam);
 
 	case WM_KEYDOWN:
 	case WM_SYSKEYDOWN:
 	case WM_CHAR:
 	case WM_SYSCHAR:
+	case WM_COMMAND:
 		if (_hwndView)
 		{
-			return SendMessage(_hwndView, uMsg, wParam, lParam);
+			if (ZWnd* p = ZWnd::FromHWND(_hwndView))
+			{
+				lParam = p->WindowProc(_hwndView, uMsg, wParam, lParam);
+				p->Release();
+			}
+			else
+			{
+				lParam = SendMessage(_hwndView, uMsg, wParam, lParam);
+			}
+			return lParam;
 		}
 		break;
 	}

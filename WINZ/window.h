@@ -5,6 +5,7 @@
 #include "layout.h"
 
 class ZView;
+class ZFrameWnd;
 
 void WINAPI gui_delete(void* p);
 
@@ -14,6 +15,8 @@ void WINAPI RundownGUI();
 
 class WINZ_API Z_INTERFACE("8E9D9C1D-763E-4ad0-8C68-C2D6F232BB45") ZWnd : public ZObject
 {
+	friend ZFrameWnd;
+
 	LRESULT WrapperWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
 	static LRESULT CALLBACK _WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)ASM_FUNCTION;
