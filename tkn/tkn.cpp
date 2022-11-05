@@ -419,6 +419,13 @@ NTSTATUS OnCloseCleanup(PDEVICE_OBJECT , PIRP Irp)
 
 NTSTATUS OnCreate(PDEVICE_OBJECT DeviceObject, PIRP Irp)
 {
+	PFILE_OBJECT FileObject = IoGetCurrentIrpStackLocation(Irp)->FileObject;
+	if (FileObject->FileName.Length || FileObject->RelatedFileObject)
+	{
+		Irp->IoStatus.Status = STATUS_OBJECT_NAME_INVALID;
+		IofCompleteRequest(Irp, IO_NO_INCREMENT);
+		return STATUS_OBJECT_NAME_INVALID;
+	}
 	return OnCloseCleanup(DeviceObject, Irp);
 }
 
@@ -1045,7 +1052,7 @@ BOOL FoundSelfMapIndexX86()
 
 #endif
 
-extern "C" NTSTATUS WINAPI DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING )
+EXTERN_C NTSTATUS NTAPI DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING )
 {
 	ULONG major, minor;
 	PsGetVersion(&major, &minor, 0, 0);
@@ -1126,11 +1133,31 @@ extern "C" NTSTATUS WINAPI DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STR
 	DriverObject->MajorFunction[IRP_MJ_CLOSE] = OnCloseCleanup;
 
 	NTSTATUS status = IoCreateDevice(DriverObject, 0,
-		(PUNICODE_STRING)&DeviceName, FILE_DEVICE_UNKNOWN, 0, FALSE, &g_ControlDevice);
+		const_cast<PUNICODE_STRING>(&DeviceName), FILE_DEVICE_UNKNOWN, FILE_DEVICE_SECURE_OPEN, FALSE, 
+		&g_ControlDevice);
 
 	if (0 <= status)
 	{
-		g_ControlDevice->Flags &= ~DO_DEVICE_INITIALIZING;
+		// "D:P(A;;GA;;;SY)(A;;GA;;;BA)S:(ML;;NWNRNX;;;HI)"
+		static const ULONG sd[] = {
+			0x90140001, 0x00000000, 0x00000000, 0x00000014, 
+			0x00000030, 0x001C0002, 0x00000001, 0x00140011, 
+			0x00000007, 0x00000101, 0x10000000, 0x00003000, 
+			0x00340002, 0x00000002, 0x00140000, 0x10000000, 
+			0x00000101, 0x05000000, 0x00000012, 0x00180000, 
+			0x10000000, 0x00000201, 0x05000000, 0x00000020, 
+			0x00000220,
+		};
+
+		if (0 > (status = ObSetSecurityObjectByPointer(g_ControlDevice, DACL_SECURITY_INFORMATION|LABEL_SECURITY_INFORMATION, 
+			const_cast<ULONG (*)[25]>(&sd))))
+		{
+			IoDeleteDevice(g_ControlDevice);
+		}
+		else
+		{
+			g_ControlDevice->Flags &= ~DO_DEVICE_INITIALIZING;
+		}
 	}
 
 	return status;
