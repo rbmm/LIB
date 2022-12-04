@@ -73,7 +73,6 @@ LRESULT ZFrameWnd::OnCreate(HWND hwnd, CREATESTRUCT* lpcs)
 
 LRESULT ZFrameWnd::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
-
 	switch (uMsg)
 	{
 	case WM_CLOSE:
@@ -116,14 +115,13 @@ LRESULT ZFrameWnd::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam
 		{
 			if (ZWnd* p = ZWnd::FromHWND(_hwndView))
 			{
-				lParam = p->WindowProc(_hwndView, uMsg, wParam, lParam);
+				p->WindowProc(_hwndView, uMsg, wParam, lParam);
 				p->Release();
 			}
 			else
 			{
-				lParam = SendMessage(_hwndView, uMsg, wParam, lParam);
+				SendMessage(_hwndView, uMsg, wParam, lParam);
 			}
-			return lParam;
 		}
 		break;
 	}

@@ -23,7 +23,6 @@ protected:
 	BOOLEAN _bChildChanged, _bClientEdge;
 
 	virtual LRESULT OnNotify(LPNMHDR lpnm);
-
 	virtual LRESULT DefWinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
 public:
