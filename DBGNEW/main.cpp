@@ -1086,7 +1086,6 @@ class CMainDlg : public ZDlg, ZIdle
 		} while(i--);
 
 		SetDlgItemText(hwndDlg, IDC_STATIC1, L"      00");
-
 	}
 
 	virtual void OnIdle()
@@ -1825,13 +1824,15 @@ public:
 	}
 };
 
-void CMainDlg_Create(HWND hwndParent)
+HWND CMainDlg_Create(HWND hwndParent)
 {
 	if (CMainDlg* p = new CMainDlg)
 	{
-		p->Create((HINSTANCE)&__ImageBase, MAKEINTRESOURCE(IDD_DIALOG0), hwndParent, 0);
+		hwndParent = p->Create((HINSTANCE)&__ImageBase, MAKEINTRESOURCE(IDD_DIALOG0), hwndParent, 0);
 		p->Release();
+		return hwndParent;
 	}
+	return 0;
 }
 
 _NT_END

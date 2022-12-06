@@ -256,6 +256,7 @@ LRESULT ZTabFrame::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam
 			case 1:
 				if (!(_pDoc->IsRemoteDebugger() || _pDoc->IsDump()))
 				{
+					item.iSubItem = 0, item.mask = LVIF_PARAM;
 					if (ListView_GetItem(hwndFrom, &item))
 					{
 						if (HMENU hmenu = LoadMenu((HINSTANCE)&__ImageBase, MAKEINTRESOURCE(IDR_MENU2)))
@@ -329,6 +330,7 @@ LRESULT ZTabFrame::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam
 		case NM_DBLCLK:
 			
 			item.iItem = ((LPNMITEMACTIVATE)lParam)->iItem;
+			item.iSubItem = 0, item.mask = LVIF_PARAM;
 
 			if (ListView_GetItem(hwndFrom, &item))
 			{
@@ -356,6 +358,16 @@ LRESULT ZTabFrame::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam
 		break;
 	}
 	return ZFrameMultiWnd::WindowProc(hwnd, uMsg, wParam, lParam);
+}
+
+ULONG ZTabFrame::GetCurrentThreadId()
+{
+	LVITEM item{LVIF_PARAM};
+	if (0 <= (item.iItem = ListView_GetSelectionMark(_hwndTH)) && ListView_GetItem(_hwndTH, &item))
+	{
+		return (ULONG)item.lParam;
+	}
+	return 0;
 }
 
 BOOL ZTabFrame::CreateClient(HWND hWndParent, int nWidth, int nHeight, PVOID /*lpCreateParams*/)

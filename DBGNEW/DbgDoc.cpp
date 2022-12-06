@@ -3191,6 +3191,11 @@ void ZDbgDoc::OnDebugEvent(DBGUI_WAIT_STATE_CHANGE& StateChange)
 	}
 }
 
+DWORD ZDbgDoc::getThreadId() 
+{ 
+	return _pThread && _IsWaitContinue ? _pThread->getID() : _pDbgTH ? _pDbgTH->GetCurrentThreadId() : 0; 
+}
+
 NTSTATUS ZDbgDoc::Write(PVOID RemoteAddress, UCHAR c)
 {
 	if (_IsDump)

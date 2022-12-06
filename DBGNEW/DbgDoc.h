@@ -145,8 +145,6 @@ class __declspec(uuid("AD893927-328E-4d71-B19C-6E90A88E4CBC")) ZDbgDoc :
 	virtual void OnActivate(BOOL bActivate);
 
 	BOOL Create();
-	BOOL CreateAux(HANDLE UniqueProcessId, PVOID wow);
-	NTSTATUS OnAttach(HANDLE UniqueProcessId);
 
 	~ZDbgDoc();
 
@@ -253,6 +251,8 @@ public:
 	ZDbgDoc(BOOL IsDebugger);
 
 	DWORD getId() { return _dwProcessId; }
+	
+	DWORD getThreadId();
 
 	HANDLE getProcess() { return _hProcess; }
 

@@ -71,6 +71,8 @@ class ZTabFrame : public ZFrameMultiWnd, ZTabBar
 	void ShowStackTrace(ZDbgThread* pThread, bool bKernel);
 
 public:
+	ULONG GetCurrentThreadId();
+
 	void AddThread(DWORD dwThreadId, PVOID lpThreadLocalBase, PVOID lpStartAddress);
 
 	void DelThread(DWORD dwThreadId);

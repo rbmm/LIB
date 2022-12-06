@@ -91,7 +91,7 @@ extern ULONG g_dwGuiThreadId;
 PSTR xcscpy(PSTR dst, PCSTR src);
 PWSTR xcscpy(PWSTR dst, PCWSTR src);
 
-void CMainDlg_Create(HWND hwndParent);
+HWND CMainDlg_Create(HWND hwndParent);
 
 void ShowProcessMemory(DWORD dwProcessId);
 void ShowProcessMemory(HANDLE hProcess, DWORD dwProcessId);

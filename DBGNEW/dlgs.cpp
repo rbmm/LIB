@@ -2494,7 +2494,7 @@ void ZSymbolsDlg::OnInitDialog(HWND hwnd)
 	if (PCWSTR ImageName = _pDll->_ImageName)
 	{
 		PWSTR buf = (PWSTR)alloca((wcslen(ImageName) + 32)<< 1);
-		swprintf(buf, L"[%x] %s symbols", (DWORD)_pDoc->getId(), ImageName);
+		swprintf(buf, L"[%x] %s (%x) symbols", (DWORD)_pDoc->getId(), ImageName, _nItems);
 		SetWindowText(hwnd, buf);
 	}
 

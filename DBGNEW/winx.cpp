@@ -530,7 +530,7 @@ LRESULT ZMainWnd::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 				pDlg->Create((HINSTANCE)&__ImageBase, MAKEINTRESOURCE(IDD_DIALOG1), hwnd, 0);
 				pDlg->Release();
 			}
-			break;
+			return 0;
 
 		case ID_4_FILEINUSE:
 			if (CFileInUseDlg* pDlg = new CFileInUseDlg)
@@ -538,7 +538,7 @@ LRESULT ZMainWnd::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 				pDlg->Create((HINSTANCE)&__ImageBase, MAKEINTRESOURCE(IDD_DIALOG18), hwnd, 0);
 				pDlg->Release();
 			}
-			break;
+			return 0;
 
 		case ID_4_RVATOOFS:
 			if (CRvaToOfs* pDlg = new CRvaToOfs)
@@ -546,7 +546,7 @@ LRESULT ZMainWnd::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 				pDlg->Create((HINSTANCE)&__ImageBase, MAKEINTRESOURCE(IDD_DIALOG19), hwnd, 0);
 				pDlg->Release();
 			}
-			break;
+			return 0;
 
 		case ID_4_SHOWTOKEN:
 			if (CTokenDlg* pDlg = new CTokenDlg)
@@ -554,16 +554,33 @@ LRESULT ZMainWnd::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 				pDlg->Create((HINSTANCE)&__ImageBase, MAKEINTRESOURCE(IDD_DIALOG20), hwnd, 0);
 				pDlg->Release();
 			}
-			break;
+			return 0;
 
 		case ID_FILE_EXIT:
 			//if (IsListEmpty(&ZGLOBALS::get()->_docListHead)) __nop();
 			PostMessageW(hwnd, WM_CLOSE, 0, 0);
-			break;
+			return 0;
 
 		case IDB_BITMAP20:
-			CMainDlg_Create(hwnd);
-			break;
+			if (hwnd = CMainDlg_Create(hwnd))
+			{
+				if (ZDocument* pDoc = GetActiveDoc())
+				{
+					WCHAR sz[9];
+					if (0 < swprintf_s(sz, _countof(sz), L"%x", static_cast<ZDbgDoc*>(pDoc)->getId()))
+					{
+						SetDlgItemTextW(hwnd, IDC_EDIT8, sz);
+					}
+					if (uMsg = static_cast<ZDbgDoc*>(pDoc)->getThreadId() )
+					{
+						if (0 < swprintf_s(sz, _countof(sz), L"%x", uMsg))
+						{
+							SetDlgItemTextW(hwnd, IDC_EDIT7, sz);
+						}
+					}
+				}
+			}
+			return 0;
 
 		case ID_PATH:
 			if (CSymbolsDlg* pDlg = new CSymbolsDlg)
@@ -571,11 +588,11 @@ LRESULT ZMainWnd::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 				pDlg->Create((HINSTANCE)&__ImageBase, MAKEINTRESOURCE(IDD_DIALOG15), hwnd, 0);
 				pDlg->Release();
 			}
-			break;
+			return 0;
 
 		case IDB_BITMAP12:
 			SetWindowPos(hwnd, (_bTopMost = !_bTopMost) ? HWND_TOPMOST : HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE|SWP_NOSIZE|SWP_NOREDRAW|SWP_NOACTIVATE);
-			break;
+			return 0;
 
 		case IDB_BITMAP2:
 			if (ZExecDlg* dlg = new ZExecDlg)
@@ -583,7 +600,7 @@ LRESULT ZMainWnd::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 				dlg->Create((HINSTANCE)&__ImageBase, MAKEINTRESOURCE(IDD_DIALOG8), hwnd, 0);
 				dlg->Release();
 			}
-			break;
+			return 0;
 		
 		case IDB_BITMAP1:
 			if (ZExceptionDlg* p = new ZExceptionDlg)
@@ -591,11 +608,11 @@ LRESULT ZMainWnd::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 				p->Create((HINSTANCE)&__ImageBase, MAKEINTRESOURCE(IDD_DIALOG9), hwnd, 0);
 				p->Release();
 			}
-			break;
+			return 0;
 
 		case IDB_BITMAP17:
 			ChoseFont(hwnd);
-			break;
+			return 0;
 
 		case ID_PRFLT:
 			if (ZPrintFilter* p = new ZPrintFilter)
@@ -603,7 +620,7 @@ LRESULT ZMainWnd::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 				p->Create((HINSTANCE)&__ImageBase, MAKEINTRESOURCE(IDD_DIALOG11), hwnd, 0);
 				p->Release();
 			}
-			break;
+			return 0;
 
 		case ID_PIPE:
 			if (GLOBALS_EX* globals = static_cast<GLOBALS_EX*>(ZGLOBALS::get()))
@@ -619,7 +636,7 @@ LRESULT ZMainWnd::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 					IndeterminateCmd(ID_PIPE, FALSE);
 				}
 			}
-			break;
+			return 0;
 		}
 		break;
 	}

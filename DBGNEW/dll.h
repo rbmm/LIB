@@ -43,7 +43,10 @@ struct RVAOFS
 	DWORD rva, ofs;
 	
 	static int __cdecl compare(RVAOFS& a, RVAOFS& b);
+	static int __cdecl compare_nf(RVAOFS& a, RVAOFS& b);
 };
+
+struct MD;
 
 struct LINE_INFO
 {
@@ -132,7 +135,17 @@ class ZDll : public ZObject, public LIST_ENTRY
 	
 	NTSTATUS LoadPublicSymbols(PdbReader* pdb, SHORT symrecStream, ULONG expLen);
 	
-	NTSTATUS LoadPublicSymbols(PdbReader* pdb, PVOID stream, LONG size, ULONG expLen);
+	NTSTATUS LoadPublicSymbols(PdbReader* pdb, PVOID stream, ULONG size, ULONG expLen);
+	
+	ULONG LoadSymbols(PdbReader* pdb,
+		PULONG pstr_len,
+		PVOID stream, 
+		ULONG size, 
+		MD& md, 
+		RVAOFS* pSymbols, 
+		ULONG nSymbols, 
+		ULONG nSpace, 
+		BOOL bSecondLoop);
 	
 	NTSTATUS LoadModuleInfo(PdbReader* pdb);
 	

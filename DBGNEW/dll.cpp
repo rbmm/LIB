@@ -11,6 +11,27 @@ _NT_BEGIN
 #include "../inc/rtf.h"
 #endif
 
+size_t __fastcall strnlen(_In_ size_t numberOfElements, _In_ const char *str);
+
+template<typename T>
+BOOL IsValidSymbol(T* ps, ULONG cb)
+{
+	if (FIELD_OFFSET(T, name) < cb)
+	{
+		ULONG len = sizeof(USHORT) + static_cast<SYM_HEADER*>(ps)->len;
+		if (FIELD_OFFSET(T, name) < len && len <= cb)
+		{
+			len -= FIELD_OFFSET(T, name);
+			if (strnlen(len, ps->name) < len)
+			{
+				return TRUE;
+			}
+		}
+	}
+
+	return FALSE;
+}
+
 PSTR xcscpy(PSTR dst, PCSTR src)
 {
 	CHAR c;
@@ -35,10 +56,23 @@ PWSTR xcscpy(PWSTR dst, PCWSTR src)
 	return dst;
 }
 
+#define r_rva(r) ((r) & 0x0FFFFFFF)
+
+int __cdecl RVAOFS::compare_nf(RVAOFS& a, RVAOFS& b)
+{
+	ULONG a_rva = r_rva(a.rva), b_rva = r_rva(b.rva);
+	if (a_rva < b_rva) return -1;
+	if (a_rva > b_rva) return +1;
+	if (a.ofs < b.ofs) return +1;
+	if (a.ofs > b.ofs) return -1;
+	return 0;
+}
+
 int __cdecl RVAOFS::compare(RVAOFS& a, RVAOFS& b)
 {
-	if (a.rva < b.rva) return -1;
-	if (a.rva > b.rva) return +1;
+	ULONG a_rva = a.rva, b_rva = b.rva;
+	if (a_rva < b_rva) return -1;
+	if (a_rva > b_rva) return +1;
 	if (a.ofs < b.ofs) return +1;
 	if (a.ofs > b.ofs) return -1;
 	return 0;
@@ -657,116 +691,322 @@ void ZDll::ProcessExport(ZDbgDoc* pDoc, PVOID BaseOfDll, PULONG pLen)
 	}
 }
 
-size_t __fastcall strnlen(
-						  size_t numberOfElements, 
-						  const char *str
-						  );
 
-NTSTATUS ZDll::LoadPublicSymbols(PdbReader* pdb, PVOID stream, LONG size, ULONG expLen)
+DbiModuleInfo** getModules(_In_ PdbReader* pdb, _Out_ PULONG pn);
+
+struct MI 
+{
+	USHORT imod = MAXUSHORT;
+	PBYTE _pb = 0;
+	ULONG _cb;
+
+	~MI()
+	{
+		if (PVOID pv = _pb)
+		{
+			delete [] pv;
+		}
+	}
+
+	ULONG rva(DbiModuleInfo* pm, PdbReader* pdb, ULONG ibSym, PCSTR name)
+	{
+		USHORT s = pm->stream;
+		if (s != MAXUSHORT)
+		{
+			union {
+				PVOID pv;
+				PBYTE pb;
+				SYM_HEADER* ph;
+				PROCSYM32* ps;
+			};
+			ULONG cb;
+			if (s == imod)
+			{
+				cb = _cb, pb = _pb;
+			}
+			else
+			{
+				if (0 > pdb->getStream(s, &pv, &cb))
+				{
+					return 0;
+				}
+				if (_pb)
+				{
+					delete [] _pb;
+					_pb = 0;
+				}
+				_pb = pb;
+				_cb = cb;
+				imod = s;
+			}
+
+			if (ibSym < cb) // Offset of actual symbol in $$Symbols
+			{
+				pb += ibSym, cb -= ibSym;
+
+				if (IsValidSymbol(ps, cb))
+				{
+					switch (ph->type)
+					{
+					case S_GPROC32:
+					case S_LPROC32:
+					case S_GPROC32_ID:
+					case S_LPROC32_ID:
+					case S_LPROC32_DPC:
+					case S_LPROC32_DPC_ID:
+						if (!strcmp(ps->name, name))
+						{
+							return pdb->rva(ps->seg, ps->off);
+						}
+					}
+				}
+			}
+		}
+
+		return 0;
+	}
+};
+
+struct SH 
+{
+	ULONG n;
+	RVAOFS* pSymbols = new RVAOFS[n = 0x40000];
+	~SH()
+	{
+		if (PVOID pv = pSymbols)
+		{
+			delete [] pv;
+		}
+	}
+};
+
+struct MD 
+{
+	ULONG n;
+	DbiModuleInfo** pmm;
+
+	MD(PdbReader* pdb) : pmm(getModules(pdb, &n))
+	{
+	}
+
+	~MD()
+	{
+		if (PVOID pv = pmm)
+		{
+			delete [] pv;
+		}
+	}
+
+	DbiModuleInfo* operator[](ULONG i)
+	{
+		return i < n ? pmm[i] : 0;
+	}
+};
+
+BOOL IsRvaExist(ULONG rva, RVAOFS *pSymbols, ULONG b)
+{
+	if (!b || r_rva(pSymbols->rva) > rva)
+	{
+		return 0;
+	}
+
+	ULONG a = 0, o, r;
+
+	do 
+	{
+		if ((r = r_rva(pSymbols[o = (a + b) >> 1].rva)) == rva)
+		{
+			return TRUE;
+		}
+
+		r < rva ? a = o + 1 : b = o;
+
+	} while (a < b);
+
+	return FALSE;
+}
+
+ULONG ZDll::LoadSymbols(PdbReader* pdb,
+						PULONG pstr_len,
+						PVOID stream, 
+						ULONG size, 
+						MD& md, 
+						RVAOFS* pSymbols, 
+						ULONG nSymbols, 
+						ULONG nSpace, 
+						BOOL bSecondLoop)
 {
 	union {
 		PVOID pv;
 		PBYTE pb;
 		SYM_HEADER* psh;
-		ANNOTATIONSYM* pas;
 		PUBSYM32* pbs;
+		PROCSYM32* pps;
+		REFSYM2* pls;
 	};
 
 	pv = stream;
 
-	DWORD szlens = 0, n = 0, len, ofs;
+	DWORD szlens = 0, n = 0, len;
 
-	PVOID stack = alloca(guz);
-	RVAOFS* pSymbols = (RVAOFS*)stack, *pRO, *qRO;
-	PSTR name, c;
+	PSTR name = 0, c;
+	MI mi;
+	RVAOFS* pSymbolsBase = pSymbols;
+
+	pSymbols += nSymbols;
 
 	do 
 	{
 		len = psh->len + sizeof(WORD);
 
-		if ((size -= len) < 0) 
+		if (size < len) 
 		{
-			return STATUS_INVALID_IMAGE_FORMAT;
+			return 0;
 		}
 
-		if (psh->type == S_PUB32)
+		ULONG rva = 0;
+
+		switch (psh->type)
 		{
-			name = pbs->name;
-			//__imp_
-			if (name[0] == '_' && name[1] == '_' && name[2] == 'i' && name[3] == 'm' && name[4] == 'p' && name[5] == '_')
+		case S_GPROC32:
+		case S_LPROC32:
+		case S_GPROC32_ID:
+		case S_LPROC32_ID:
+		case S_LPROC32_DPC:
+		case S_LPROC32_DPC_ID:
+			if (bSecondLoop && IsValidSymbol(pps, size))
 			{
-				if (name[6] == 'l' && name[7] == 'o' && name[8] == 'a' && name[9] == 'd' && name[10] == '_')
+				name = pps->name;
+				if (rva = pdb->rva(pps->seg, pps->off))
 				{
-					goto __o;
+					goto __test;
 				}
-				continue;
 			}
+			continue;
 
-			// ??_C@_
-			if (name[0] == '?' && name[1] == '?' && name[2] == '_' && name[3] == 'C' && name[4] == '@' && name[5] == '_')
+		case S_DATAREF:
+		case S_PROCREF:
+		case S_LPROCREF:
+			if (bSecondLoop && IsValidSymbol(pls, size))
 			{
-				strcpy(pbs->name, "string");
-			}
-__o:
-			ULONG MaxCount = RtlPointerToOffset(name, pb + len);
-			ULONG nlen = (ULONG)strnlen(MaxCount, name);
-			if (nlen >= MaxCount)
-			{
-				return STATUS_INVALID_IMAGE_FORMAT;
-			}
-
-			if (!_Is64Bit)
-			{
-				switch (name[0])
+				if (DbiModuleInfo* pm = md[pls->imod - 1])
 				{
-				case '_':
-				case '@':
-					nlen--;
-					if (c = strnchr(nlen, ++name, '@'))
+					if (rva = mi.rva(pm, pdb, pls->ibSym, pls->name))
 					{
-						*--c = 0;
-						nlen = RtlPointerToOffset(name, c);
+						name = pls->name;
+__test:
+						if (!IsRvaExist(rva, pSymbolsBase, nSymbols))
+						{
+							break;
+						}
 					}
+				}
+			}
+			continue;
+
+		case S_PUB32:
+			if (!bSecondLoop &&IsValidSymbol(pbs, size))
+			{
+				if (rva = pdb->rva(pbs->seg, pbs->off))
+				{
+					name = pbs->name;
 					break;
 				}
 			}
+			continue;
+		default:
+			continue;
+		}
 
-			if (ULONG rva = pdb->rva(pbs->seg, pbs->off))
+		//__imp_
+		if (name[0] == '_' && name[1] == '_' && name[2] == 'i' && name[3] == 'm' && name[4] == 'p' && name[5] == '_')
+		{
+			if (name[6] == 'l' && name[7] == 'o' && name[8] == 'a' && name[9] == 'd' && name[10] == '_')
 			{
-				switch(IsRvaExported(rva, name))
-				{
-				case -1:
-					rva |= FLAG_RVAEXPORT;
-					break;
-				case 0:
-					rva |= FLAG_NOEXPORT;
-					break;
-				default:// +1
-					continue;
-				}
+				goto __o;
+			}
+			continue;
+		}
 
-				if (--pSymbols < stack)
-				{
-					stack = alloca(256 * sizeof(RVAOFS));
-				}
+		// ??_C@_
+		if (name[0] == '?' && name[1] == '?' && name[2] == '_' && name[3] == 'C' && name[4] == '@' && name[5] == '_')
+		{
+			strcpy(name, "string");
+		}
+__o:
+		ULONG nlen = (ULONG)strlen(name);
 
-				pSymbols->rva = rva;
-				pSymbols->ofs = RtlPointerToOffset(stream, name);
-				n++, szlens += 1 + nlen;
+		if (!_Is64Bit)
+		{
+			switch (name[0])
+			{
+			case '_':
+			case '@':
+				nlen--;
+				if (c = strnchr(nlen, ++name, '@'))
+				{
+					*--c = 0;
+					nlen = RtlPointerToOffset(name, c);
+				}
+				break;
 			}
 		}
 
-	} while (pb += len, size);
+		switch(IsRvaExported(rva, name))
+		{
+		case -1:
+			rva |= FLAG_RVAEXPORT;
+			break;
+		case 0:
+			rva |= FLAG_NOEXPORT;
+			break;
+		default:// +1
+			continue;
+		}
 
-	if (n)
+		if (!nSpace)
+		{
+			break;
+		}
+
+		pSymbols->rva = rva;
+		pSymbols++->ofs = RtlPointerToOffset(stream, name);
+		n++, szlens += 1 + nlen;
+
+	} while (--nSpace, pb += len, size -= len);
+
+	*pstr_len += szlens;
+	return n;
+}
+
+NTSTATUS ZDll::LoadPublicSymbols(PdbReader* pdb, PVOID stream, ULONG size, ULONG expLen)
+{
+	DWORD szlens = 0, n = 0, ofs;
+
+	SH sh;
+
+	RVAOFS* pSymbols = sh.pSymbols, *pRO, *qRO;
+	if (!pSymbols)
+	{
+		return STATUS_INSUFFICIENT_RESOURCES;
+	}
+
+	MD md(pdb);
+
+	if (n = LoadSymbols(pdb, &szlens, stream, size, md, pSymbols, 0, sh.n, FALSE))
+	{
+		qsort(pSymbols, n, sizeof(RVAOFS), (QSORTFN)RVAOFS::compare_nf);
+	}
+
+	if (n += LoadSymbols(pdb, &szlens, stream, size, md, pSymbols, n, sh.n -= n, TRUE))
 	{
 		ULONG nSymbols = _nSymbols;
 
-		if (pv = new UCHAR[(n + nSymbols + 2) * sizeof(RVAOFS) + szlens + expLen])
+		if (PVOID pv = new UCHAR[(n + nSymbols + 2) * sizeof(RVAOFS) + szlens + expLen])
 		{
 			pRO = (RVAOFS*)pv;
 			pRO++->rva = 0;
-			c = (PSTR)(pRO + nSymbols + n + 1);
+			PSTR c = (PSTR)(pRO + nSymbols + n + 1);
 			RVAOFS* qv = _pSymbols;
 
 			pv = pRO;

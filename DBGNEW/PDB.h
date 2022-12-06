@@ -1,5 +1,6 @@
 #pragma once
 
+#define CC_DP_CXX 1
 #include "../CVINFO/cvinfo.h"
 
 // PDB Stream IDs
@@ -161,7 +162,6 @@ class PdbReader
 	PLONG _StreamSizes;
 	PULONG _StreamPages;
 	PUSHORT _pFileInfo;
-	DbiModuleInfo* _modules;
 	ULONG _pageSize, _pagesUsed, _nStreams, _nSections, _nOmapFromSrc, _nSecContrib;
 	BOOLEAN _bUnmap;
 

@@ -43,6 +43,61 @@ int bsearch(PULONG pu, ULONG b, ULONG u)
 	return -1;
 }
 
+DbiModuleInfo** getModules(_In_ PdbReader* pdb, _Out_ PULONG pn)
+{
+	*pn = 0;
+
+	ULONG size, nModules, cb;
+	PUSHORT pFileInfo = pdb->getFileInfo(size);
+	union {
+		PBYTE pb;
+		DbiModuleInfo* module;
+	};
+
+	if (!pFileInfo || !(nModules = *pFileInfo) || !(module = pdb->getModuleInfo(size)))
+	{
+		return 0;
+	}
+
+	if (size < sizeof(DbiModuleInfo) + 2)
+	{
+		return 0;
+	}
+
+	PCSTR end = RtlOffsetToPointer(module, size - 2);
+
+	if (end[0] || end[1])
+	{
+		return 0;
+	}
+
+	if (DbiModuleInfo** ppm = new DbiModuleInfo*[nModules])
+	{
+		DbiModuleInfo** _ppm = ppm;
+		*pn = nModules;
+		do 
+		{
+			*ppm++ = module;
+			PCSTR objectName = module->buf + strlen(module->buf) + 1;
+
+			cb = (RtlPointerToOffset(module, objectName + strlen(objectName)) + __alignof(DbiModuleInfo)) & ~(__alignof(DbiModuleInfo) - 1);
+
+			size -= cb, pb += cb;
+
+		} while (--nModules && size > sizeof(DbiModuleInfo) + 1);
+
+		if (!nModules && !size)
+		{
+			return _ppm;
+		}
+
+		*pn = 0;
+		delete [] _ppm;
+	}
+
+	return 0;
+}
+
 /*
 FileInfo(size)
 ---------------------------------------------------
@@ -737,7 +792,7 @@ NTSTATUS ZDll::LoadModuleInfo(PdbReader* pdb)
 
 	module = pdb->getModuleInfo((ULONG&)size);
 
-	if (!module || size < 2)
+	if (!module || size < sizeof(DbiModuleInfo) + 2)
 	{
 		return STATUS_NOT_FOUND;
 	}
