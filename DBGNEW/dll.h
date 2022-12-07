@@ -11,7 +11,6 @@ class PdbReader;
 struct CV_DebugSSubsectionHeader_t;
 struct SC;
 struct SYM_HEADER;
-struct ANNOTATIONSYM;
 struct PUBSYM32;
 struct DbiModuleInfo;
 struct DbiSecCon;
@@ -22,7 +21,6 @@ union SYM {
 	PVOID pv;
 	PBYTE pb;
 	SYM_HEADER* psh;
-	ANNOTATIONSYM* pas;
 	PUBSYM32* pbs;
 
 	SYM(PVOID p)
@@ -137,14 +135,14 @@ class ZDll : public ZObject, public LIST_ENTRY
 	
 	NTSTATUS LoadPublicSymbols(PdbReader* pdb, PVOID stream, ULONG size, ULONG expLen);
 	
-	ULONG LoadSymbols(PdbReader* pdb,
+	ULONG LoadSymbols(
 		PULONG pstr_len,
+		PdbReader* pdb,
 		PVOID stream, 
 		ULONG size, 
 		MD& md, 
-		RVAOFS* pSymbols, 
-		ULONG nSymbols, 
-		ULONG nSpace, 
+		RVAOFS* pSymbolsBase,
+		ULONG nSymbols,
 		BOOL bSecondLoop);
 	
 	NTSTATUS LoadModuleInfo(PdbReader* pdb);
