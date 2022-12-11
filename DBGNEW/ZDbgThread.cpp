@@ -530,7 +530,7 @@ void ZTabFrame::ShowStackTrace(CONTEXT& ctx)
 	ListView_DeleteAllItems(_hwndST);
 
 	PVOID Va = (PVOID)ctx.Xip;
-	WCHAR wz[512];
+	WCHAR wz[2048];
 	LVITEM item;
 	item.pszText = wz;
 
@@ -581,7 +581,7 @@ void ZTabFrame::ShowStackTrace(CONTEXT& ctx)
 
 		if (Name)
 		{
-			swprintf(wz, L"%s!%S%c+ %x", szDllName, Name, d ? ' ' : 0, d);
+			swprintf_s(wz, _countof(wz), L"%s!%S%c+ %x", szDllName, Name, d ? ' ' : 0, d);
 			item.iSubItem++;
 			ListView_SetItem(_hwndST, &item);
 		}
