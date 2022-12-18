@@ -570,7 +570,7 @@ ULONG CDnsSocket::OnRecv(PDNS_MESSAGE_BUFFER pDnsBuffer, ULONG wMessageLength, U
 	return NOERROR;
 }
 
-void CDnsSocket::OnRecv(PSTR Buffer, ULONG cbTransferred, CDataPacket* packet, SOCKADDR_IN_EX* addr)
+void CDnsSocket::OnRecv(PSTR Buffer, ULONG cbTransferred, CDataPacket* packet, [[maybe_unused]] SOCKADDR_IN_EX* addr)
 {
 	DCD* p = (DCD*)packet->getData();
 

@@ -3,8 +3,20 @@
 _NT_BEGIN
 #include <Cryptuiapi.h>
 #include "SSL.h"
-#define DbgPrint echo(/)echo(/)
-//
+//#define __DBG__
+//#define __DBG_EX__
+
+#ifdef __DBG__
+__pragma(message(" !! __DBG__ !! "))
+#define __DBG
+#else
+#define __DBG /##/
+#define DbgPrint /##/
+#define Dump /##/
+#define PrintStr /##/
+#define DumpBytes /##/
+#endif
+
 SECURITY_STATUS SharedCred::Acquire(ULONG fCredentialUse, PCCERT_CONTEXT pCertContext, ULONG dwFlags, ULONG grbitEnabledProtocols)
 { 
 	SCHANNEL_CRED sc { SCHANNEL_CRED_VERSION };
@@ -29,8 +41,9 @@ SECURITY_STATUS SharedCred::Acquire(ULONG fCredentialUse, PCCERT_CONTEXT pCertCo
 	return ss;
 }
 
-void CSSLStream::OnEncryptDecryptError(HRESULT )
+void CSSLStream::OnEncryptDecryptError([[maybe_unused]] HRESULT hr)
 {
+	DbgPrint("\n\n%p>%s(%x) !!!!!!!!!!\n\n", this, __FUNCTION__, hr);
 }
 
 PCCERT_CONTEXT CryptUIDlgGetUserCert()
@@ -149,27 +162,159 @@ BOOL CSSLStream::StartSSL(PSTR buf, DWORD cb)
 {
 	m_cbSavedData = 0;
 
-	_bittestandset(&m_flags, f_Handshake);
+	m_flags = 1 << f_Handshake;
 
 	return IsServer() && !cb ? TRUE : ProcessSecurityContext(buf, cb) == SEC_I_CONTINUE_NEEDED;
 }
+
+BOOL CSSLStream::ReStartSSL(PSTR& rbuf, DWORD& rcb)
+{
+	m_cbSavedData = 0;
+
+	m_flags = 1 << f_Handshake | 1 << f_Renegotiated;
+
+	switch ( ProcessSecurityContext(rbuf, rcb))
+	{
+	case SEC_E_OK:
+	case SEC_I_CONTINUE_NEEDED:
+		return TRUE;
+	}
+
+	return FALSE;
+}
+
+#ifdef __DBG__
+
+#ifdef __DBG_EX__
+
+void PrintStr(PSTR psz, ULONG cch)
+{
+	ULONG len;
+	do 
+	{
+		DbgPrint("%.*s", len = min(0x100, cch), psz);
+	} while (psz += len, cch -= len);
+}
+
+void DumpBytes(const UCHAR* pb, ULONG cb)
+{
+	PSTR psz = 0;
+	ULONG cch = 0;
+	while (CryptBinaryToStringA(pb, cb, CRYPT_STRING_HEXASCIIADDR, psz, &cch))
+	{
+		if (psz)
+		{
+			PrintStr( psz, cch);
+			break;
+		}
+
+		if (!(psz = new CHAR[cch]))
+		{
+			break;
+		}
+	}
+	
+	if (psz)
+	{
+		delete [] psz;
+	}
+}
+#endif
+
+#define CASE(t) case SECBUFFER_##t: return #t
+
+PCSTR GetBufTypeName(ULONG BufferType, PSTR buf)
+{
+	switch (BufferType & ~0xF0000000)
+	{
+		CASE(EMPTY);
+		CASE(DATA);
+		CASE(TOKEN);
+		CASE(PKG_PARAMS);
+		CASE(MISSING);
+		CASE(EXTRA);
+		CASE(STREAM_TRAILER);
+		CASE(STREAM_HEADER);
+		CASE(NEGOTIATION_INFO);
+		CASE(PADDING);
+		CASE(STREAM);
+		CASE(MECHLIST);
+		CASE(MECHLIST_SIGNATURE);
+		CASE(TARGET);
+		CASE(CHANNEL_BINDINGS);
+		CASE(CHANGE_PASS_RESPONSE);
+		CASE(TARGET_HOST);
+		CASE(ALERT);
+		CASE(APPLICATION_PROTOCOLS);
+		CASE(SRTP_PROTECTION_PROFILES);
+		CASE(SRTP_MASTER_KEY_IDENTIFIER);
+		CASE(TOKEN_BINDING);
+		CASE(PRESHARED_KEY);
+		CASE(PRESHARED_KEY_IDENTITY);
+		CASE(DTLS_MTU);
+		CASE(SEND_GENERIC_TLS_EXTENSION);
+		CASE(SUBSCRIBE_GENERIC_TLS_EXTENSION);
+		CASE(FLAGS);
+		CASE(TRAFFIC_SECRETS);
+	}
+
+	sprintf_s(buf, 16, "%x", BufferType);
+	return buf;
+}
+
+void Dump(PSecBufferDesc psbd, PCSTR msg, ULONG id, CHAR c)
+{
+	if (ULONG cBuffers = psbd->cBuffers)
+	{
+		PSecBuffer pBuffers = psbd->pBuffers;
+		DbgPrint("PSecBufferDesc<%c%u>(v=%x, n=%x) : %s\r\n", c, id, psbd->ulVersion, cBuffers, msg);
+
+		do 
+		{
+			char buf[16];
+			DbgPrint("BufferType = %s, cb = %x, pv = %p\r\n", 
+				GetBufTypeName(pBuffers->BufferType, buf), pBuffers->cbBuffer, pBuffers->pvBuffer);
+
+#ifdef __DBG_EX__
+
+			if (pBuffers->BufferType != SECBUFFER_EMPTY)
+			{
+				union {
+					PVOID pv;
+					PUCHAR pb;
+				};
+
+				if (pv = pBuffers->pvBuffer)
+				{
+					ULONG cb = pBuffers->cbBuffer;
+					DumpBytes(pb, cb);
+				}
+			}
+#endif
+
+		} while (pBuffers++, --cBuffers);
+	}
+}
+#endif // __DBG__
 
 SECURITY_STATUS CSSLStream::ProcessSecurityContext(PSTR& rbuf, DWORD& rcb)
 {
 	PSTR buf = rbuf;
 	DWORD cb = rcb;
 
-	DbgPrint("%p>%u:ProcessSecurityContext(%p,%x)\n", this, IsServer(), buf, cb);
+	DbgPrint("%p>%c:ProcessSecurityContext(%p, %x)\n\n", this, IsServer() ? 'S' : 'C', buf, cb);
 
 loop:
 
 	SecBuffer InBuf[2] = {{ cb, SECBUFFER_TOKEN, buf }}, OutBuf = { 0, SECBUFFER_TOKEN }; 
 
-	SecBufferDesc sbd_in = {SECBUFFER_VERSION, 2, InBuf}, sbd_out = { SECBUFFER_VERSION, 1, &OutBuf };
+	SecBufferDesc sbd_in = { SECBUFFER_VERSION, 2, InBuf }, sbd_out = { SECBUFFER_VERSION, 1, &OutBuf };
 
 	SECURITY_STATUS ss = ProcessSecurityContext(&sbd_in, &sbd_out);
 
-	DbgPrint("%p>%u:ProcessSecurityContext(%x)=%x, out=%x, (%x,%x),(%x,%x)\n", this, IsServer(), cb, ss, OutBuf.cbBuffer, InBuf[0].BufferType, InBuf[0].cbBuffer,InBuf[1].BufferType, InBuf[1].cbBuffer);
+	DbgPrint("%p>%c:ProcessSecurityContext(%x)=%x, out=%x\n\n", this, IsServer() ? 'S' : 'C', cb, ss, OutBuf.cbBuffer);
+	__DBG static LONG id = 0;
+	Dump(&sbd_in, "ProcessSecurityContext", InterlockedIncrementNoFence(&id), IsServer() ? 's' : 'c');
 
 	switch (ss)
 	{
@@ -206,7 +351,7 @@ loop:
 			memcpy(packet->getData(), OutBuf.pvBuffer, OutBuf.cbBuffer);
 			packet->setDataSize(OutBuf.cbBuffer);
 			fOk = !SendData(packet);
-			DbgPrint("send %x bytes\n", OutBuf.cbBuffer);
+			DbgPrint(">>>> SEND %X Bytes\n", OutBuf.cbBuffer);
 			packet->Release();
 		}
 		FreeContextBuffer(OutBuf.pvBuffer);
@@ -227,8 +372,11 @@ loop:
 		_bittestandreset(&m_flags, f_Handshake);
 		if (SEC_E_OK == (ss = ::QueryContextAttributes(this, SECPKG_ATTR_STREAM_SIZES, static_cast<SecPkgContext_StreamSizes*>(this))))
 		{
-			DbgPrint("\r\nStreamSizes( %x-%x-%x %x *%x)\r\n", cbHeader, cbMaximumMessage, cbTrailer, cBuffers, cbBlockSize);
-			ss = OnEndHandshake();
+			DbgPrint("\n\nStreamSizes( %x-%x-%x %xx%x)\n\n", cbHeader, cbMaximumMessage, cbTrailer, cBuffers, cbBlockSize);
+			if (!_bittest(&m_flags, f_Renegotiated))
+			{
+				ss = OnEndHandshake();
+			}
 		}
 		break;
 	
@@ -250,7 +398,7 @@ loop:
 
 SECURITY_STATUS CSSLStream::ProcessSecurityContext(PSecBufferDesc pInput, PSecBufferDesc pOutput)
 {
-	//DbgPrint("%p>%u:ProcessSecurityContext<%p.%p> %S\n", this, IsServer(), dwLower, dwUpper, m_pszTargetName);
+	//DbgPrint("%p>%c:ProcessSecurityContext<%p.%p> %S\n", this, IsServer() ? 'S' : 'C', dwLower, dwUpper, m_pszTargetName);
 	DWORD ContextAttr;
 
 	PCtxtHandle phContext = 0, phNewContext = 0;
@@ -271,7 +419,7 @@ BOOL CSSLStream::OnData(PSTR buf, ULONG cb)
 {
 	CDataPacket* packet = get_packet();
 	
-	DbgPrint("%p>%u:OnRecv(%p, %x+%x) %x\n", this, IsServer(), buf, m_cbSavedData, cb, m_flags);
+	DbgPrint("%p>%c:OnRecv(%p, %X+%X) %x\n\n", this, IsServer() ? 'S' : 'C', buf, m_cbSavedData, cb, m_flags);
 	
 	if (m_cbSavedData)
 	{
@@ -303,7 +451,7 @@ __save_and_exit:
 
 	if (!cb) return TRUE;
 
-	DbgPrint("%p>%u:OnData(%p, %X) %x\n", this, IsServer(), buf, cb, m_flags);
+	DbgPrint("%p>%c:OnData(%p, %X) %x\n\n", this, IsServer() ? 'S' : 'C', buf, cb, m_flags);
 
 	for (;;)
 	{
@@ -313,17 +461,19 @@ __save_and_exit:
 
 		SECURITY_STATUS ss = ::DecryptMessage(this, &sbd, 0, 0);
 
-		DbgPrint("%u:DecryptMessage(%x)=%x, (%x,%x)(%x,%x)(%x,%x)(%x,%x)\n", IsServer(), cb, ss, sb[0].BufferType, sb[0].cbBuffer, sb[1].BufferType, sb[1].cbBuffer,sb[2].BufferType, sb[2].cbBuffer, sb[3].BufferType, sb[3].cbBuffer);
+		DbgPrint("%p>%c:DecryptMessage(%x)=%x\n\n", this, IsServer() ? 'S' : 'C', cb, ss);
+		__DBG static LONG id = 0;
+		Dump(&sbd, "DecryptMessage", InterlockedIncrementNoFence(&id), IsServer() ? 's' : 'c');
 
 		switch(ss)
 		{
 		case SEC_I_CONTEXT_EXPIRED:
-			DbgPrint("\r\n%p>Shutdown %u\r\n", this, IsServer());
+			DbgPrint("\n\n%p>%c:Shutdown\n\n", this, IsServer() ? 'S' : 'C');
 			OnShutdown();
 			return FALSE;
 
 		case SEC_I_RENEGOTIATE:
-			DbgPrint("\r\n%p>SEC_I_RENEGOTIATE %u\r\n", this, IsServer());
+			DbgPrint("\n\n%p>%u:SEC_I_RENEGOTIATE\n\n", this, IsServer() ? 'S' : 'C');
 			if (sb[0].BufferType == SECBUFFER_STREAM_HEADER &&
 				sb[1].BufferType == SECBUFFER_DATA && !sb[1].cbBuffer &&
 				sb[2].BufferType == SECBUFFER_STREAM_TRAILER)
@@ -332,8 +482,18 @@ __save_and_exit:
 				{
 				case SECBUFFER_EMPTY:
 					sb[3].cbBuffer = 0;
+					[[fallthrough]];
 				case SECBUFFER_EXTRA:
-					return OnRenegotiate() ? StartSSL((PSTR)sb[3].pvBuffer, sb[3].cbBuffer) : FALSE;
+					buf = (PSTR)sb[3].pvBuffer, cb = sb[3].cbBuffer;
+					if (!ReStartSSL(buf, cb))
+					{
+						return FALSE;
+					}
+					if (cb)
+					{
+						continue;
+					}
+					return TRUE;
 				}
 			}
 			return FALSE;
@@ -368,11 +528,6 @@ __save_and_exit:
 			return FALSE;
 		}
 	}
-}
-
-BOOL CSSLStream::OnRenegotiate()
-{
-	return TRUE;
 }
 
 CDataPacket* CSSLStream::AllocPacket(DWORD cbBody, PSTR& buf)
@@ -498,6 +653,7 @@ SECURITY_STATUS CSSLStream::Renegotiate()
 	if (OutBuf.cbBuffer)
 	{
 		_bittestandset(&m_flags, f_Handshake);
+		_bittestandset(&m_flags, f_Renegotiated);
 
 		if (CDataPacket* packet = allocPacket(OutBuf.cbBuffer))
 		{

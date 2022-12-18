@@ -31,8 +31,9 @@ SECURITY_STATUS SharedCred::Acquire(ULONG fCredentialUse, PCCERT_CONTEXT pCertCo
 	return ss;
 }
 
-void CSSLStream::OnEncryptDecryptError(HRESULT )
+void CSSLStream::OnEncryptDecryptError([[maybe_unused]] HRESULT hr)
 {
+	DbgPrint("\n\n%p>%s(%x) !!!!!!!!!!\n\n", this, __FUNCTION__, hr);
 }
 
 PCCERT_CONTEXT CSSLStream::GetUserCert()
@@ -79,11 +80,27 @@ BOOL CSSLStream::StartSSL()
 {
 	m_cbSavedData = 0;
 
-	_bittestandset(&m_flags, f_Handshake);
+	m_flags = 1 << f_Handshake;
 
 	DWORD cb = 0;
 	PSTR buf = 0;
 	return IsServer() ? TRUE : ProcessSecurityContext(buf, cb) == SEC_I_CONTINUE_NEEDED;
+}
+
+BOOL CSSLStream::ReStartSSL(PSTR& rbuf, DWORD& rcb)
+{
+	m_cbSavedData = 0;
+
+	m_flags = 1 << f_Handshake | 1 << f_Renegotiated;
+
+	switch ( ProcessSecurityContext(rbuf, rcb))
+	{
+	case SEC_E_OK:
+	case SEC_I_CONTINUE_NEEDED:
+		return TRUE;
+	}
+
+	return FALSE;
 }
 
 SECURITY_STATUS CSSLStream::ProcessSecurityContext(PSTR& rbuf, DWORD& rcb)
@@ -253,8 +270,30 @@ __save_and_exit:
 			return FALSE;
 
 		case SEC_I_RENEGOTIATE:
-			DbgPrint("\r\n%p>SEC_I_RENEGOTIATE %u\r\n", this, IsServer());
-			return OnRenegotiate() ? StartSSL() : FALSE;
+			DbgPrint("\n\n%p>%u:SEC_I_RENEGOTIATE\n\n", this, IsServer() ? 'S' : 'C');
+			if (sb[0].BufferType == SECBUFFER_STREAM_HEADER &&
+				sb[1].BufferType == SECBUFFER_DATA && !sb[1].cbBuffer &&
+				sb[2].BufferType == SECBUFFER_STREAM_TRAILER)
+			{
+				switch (sb[3].BufferType)
+				{
+				case SECBUFFER_EMPTY:
+					sb[3].cbBuffer = 0;
+					[[fallthrough]];
+				case SECBUFFER_EXTRA:
+					buf = (PSTR)sb[3].pvBuffer, cb = sb[3].cbBuffer;
+					if (!ReStartSSL(buf, cb))
+					{
+						return FALSE;
+					}
+					if (cb)
+					{
+						continue;
+					}
+					return TRUE;
+				}
+			}
+			return FALSE;
 
 		case SEC_E_INCOMPLETE_MESSAGE:
 			goto __save_and_exit;
@@ -286,11 +325,6 @@ __save_and_exit:
 			return FALSE;
 		}
 	}
-}
-
-BOOL CSSLStream::OnRenegotiate()
-{
-	return TRUE;
 }
 
 CDataPacket* CSSLStream::AllocPacket(DWORD cbBody, PSTR& buf)

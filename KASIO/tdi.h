@@ -35,12 +35,11 @@ class CTdiAddress : public CTdiObject
 {
 	friend class CTcpEndpoint;
 
-	NTSTATUS QueryInfo(LONG QueryType, PVOID buf, ULONG cb, ULONG_PTR& Information);
 protected:
-	NTSTATUS Create(POBJECT_ATTRIBUTES DeviceName, USHORT port, ULONG ip);
-	NTSTATUS Create(POBJECT_ATTRIBUTES DeviceName, USHORT AddressType, PVOID Address, USHORT AddressLength);
-
 public:
+	NTSTATUS QueryInfo(LONG QueryType, PVOID buf, ULONG cb, ULONG_PTR& Information);
+	NTSTATUS Create(POBJECT_ATTRIBUTES DeviceName, USHORT port, ULONG ip);
+	NTSTATUS Create(POBJECT_ATTRIBUTES DeviceName, USHORT AddressType, PVOID Address, USHORT AddressLength, USHORT exv = 0);
 
 	NTSTATUS GetPort(PWORD port);
 	NTSTATUS Create(USHORT port, ULONG ip = 0);
@@ -50,6 +49,10 @@ class CUdpEndpoint : public CTdiAddress
 {
 	virtual void IOCompletionRoutine(CDataPacket* packet, DWORD Code, NTSTATUS status, ULONG_PTR dwNumberOfBytesTransfered, PVOID Pointer);
 
+	virtual BOOL KeepFileHandle()
+	{
+		return FALSE;
+	}
 protected:
 
 	enum {
@@ -73,12 +76,17 @@ public:
 	NTSTATUS SendTo(ULONG ip, USHORT port, const void* lpData, ULONG cbData);	
 };
 
+extern OBJECT_ATTRIBUTES oaTcp, oaUdp;
+
 class __declspec(novtable) CTcpEndpoint : public CTdiObject, public TA_INET_ADDRESS
 {
 	friend class CDnsSocket;
 	friend class CTcpEndpointTest;
+	friend class CTcpEndpointEvt;
 
 protected:
+
+	static inline TDI_CONNECTION_INFORMATION zRequestConnectionInformation {};
 
 	CDataPacket*		m_packet;
 private:
@@ -116,17 +124,17 @@ protected:
 	}
 	/************************************************************************/
 
+	/*virtual*/ NTSTATUS Recv(PVOID Buffer, ULONG ReceiveLength);
+	NTSTATUS Recv();
 public:
 
-	NTSTATUS Create(DWORD BufferSize);
+	NTSTATUS Create(DWORD BufferSize, POBJECT_ATTRIBUTES poa = &oaTcp);
 	NTSTATUS Listen();
 
 	NTSTATUS Connect(ULONG ip, USHORT port);
 	NTSTATUS Connect(PIN6_ADDR ip6, USHORT port);
 	NTSTATUS Connect(USHORT AddrType, PVOID Addr, USHORT AddrLength);
 
-	NTSTATUS Recv();
-	NTSTATUS Recv(PVOID Buffer, ULONG ReceiveLength);
 	NTSTATUS Send(CDataPacket* packet);	
 	void Disconnect(NTSTATUS status = STATUS_SUCCESS);
 	void Close();

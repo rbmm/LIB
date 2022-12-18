@@ -141,24 +141,30 @@ void IO_OBJECT::OnComplete(PIRP Irp)
 	Release();
 }
 
-NTSTATUS IO_OBJECT::SendIrp(PDEVICE_OBJECT DeviceObject, PIRP Irp)
+void IO_OBJECT::PrepareIrp(PIRP Irp)
 {
-	MY_IRP_CONTEXT* Context = (MY_IRP_CONTEXT*)Irp->Overlay.AsynchronousParameters.UserApcContext;
-
-	DbgPrint("%s<%p>(irp=%p, packet=%p, code=%.4s, pv=%p)\n", __FUNCTION__, this, Irp, Context->_packet, &Context->_code, Context->_pv);
-
 	Irp->UserIosb = &Irp->IoStatus;
 
-	// will be dereferenced in IopCompleteRequest 
-	Irp->Tail.Overlay.OriginalFileObject = m_FileObject, ObfReferenceObject(m_FileObject);
+	// will be dereferenced in IopCompleteRequest
+	PFILE_OBJECT FileObject = m_FileObject;
+	Irp->Tail.Overlay.OriginalFileObject = FileObject, ObfReferenceObject(FileObject);
 
 	PIO_STACK_LOCATION IrpSp = IoGetNextIrpStackLocation(Irp);
 
 	IrpSp->Control = 0;
 
-	IrpSp->FileObject = m_FileObject;
+	IrpSp->FileObject = FileObject;
 
 	AddRef();
+}
+
+NTSTATUS IO_OBJECT::SendIrp(PDEVICE_OBJECT DeviceObject, PIRP Irp)
+{
+	MY_IRP_CONTEXT* Context = (MY_IRP_CONTEXT*)Irp->Overlay.AsynchronousParameters.UserApcContext;
+	
+	DbgPrint("%s<%p>(irp=%p, packet=%p, code=%.4s, pv=%p)\n", __FUNCTION__, this, Irp, Context->_packet, &Context->_code, Context->_pv);
+	
+	PrepareIrp(Irp);
 
 	NTSTATUS status = IofCallDriver(DeviceObject, Irp);
 	
@@ -278,7 +284,7 @@ class DRIVER_RUNDOWN : public RUNDOWN_REF
 {
 	virtual void RundownCompleted()
 	{
-		DbgPrint("RundownCompleted\n");
+		DbgPrint("RundownCompleted(%x)\n", gnPackets);
 
 		destroyterm();
 
@@ -318,11 +324,13 @@ void* IO_OBJECT::operator new(size_t cb)
 IO_OBJECT::IO_OBJECT()
 {
 	m_FileObject = 0, m_hFile = 0, m_nRef = 1;
+	DbgPrint("%s<%p>\n", __FUNCTION__, this);
 }
 
 IO_OBJECT::~IO_OBJECT()
 {
 	Close();
+	DbgPrint("%s<%p>\n", __FUNCTION__, this);
 }
 
 void IO_OBJECT::CloseObjectHandle(HANDLE hFile, PFILE_OBJECT FileObject)

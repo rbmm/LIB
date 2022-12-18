@@ -9,19 +9,19 @@ _NT_BEGIN
 STATIC_UNICODE_STRING(Tcp, "\\Device\\Tcp");
 STATIC_UNICODE_STRING(Udp, "\\Device\\Udp");
 
-static OBJECT_ATTRIBUTES oaTcp = { 
-	sizeof oaTcp, 0, (PUNICODE_STRING)&Tcp, OBJ_CASE_INSENSITIVE|OBJ_KERNEL_HANDLE 
+OBJECT_ATTRIBUTES oaTcp = { 
+	sizeof(oaTcp), 0, (PUNICODE_STRING)&Tcp, OBJ_CASE_INSENSITIVE|OBJ_KERNEL_HANDLE 
 };
 
-static OBJECT_ATTRIBUTES oaUdp = { 
-	sizeof oaUdp, 0, (PUNICODE_STRING)&Udp, OBJ_CASE_INSENSITIVE|OBJ_KERNEL_HANDLE 
+OBJECT_ATTRIBUTES oaUdp = { 
+	sizeof(oaUdp), 0, (PUNICODE_STRING)&Udp, OBJ_CASE_INSENSITIVE|OBJ_KERNEL_HANDLE 
 };
 
-NTSTATUS CTdiAddress::Create(POBJECT_ATTRIBUTES DeviceName, USHORT AddressType, PVOID Address, USHORT AddressLength)
+NTSTATUS CTdiAddress::Create(POBJECT_ATTRIBUTES DeviceName, USHORT AddressType, PVOID Address, USHORT AddressLength, USHORT exv)
 {
 	IO_STATUS_BLOCK iosb;
 
-	USHORT EaValueLength = (USHORT)FIELD_OFFSET(TRANSPORT_ADDRESS, Address->Address[AddressLength]);
+	USHORT EaValueLength = (USHORT)FIELD_OFFSET(TRANSPORT_ADDRESS, Address->Address[AddressLength]) + exv;
 
 	ULONG EaSize = sizeof(FILE_FULL_EA_INFORMATION) + TDI_TRANSPORT_ADDRESS_LENGTH + EaValueLength;
 
@@ -120,9 +120,9 @@ NTSTATUS CTdiAddress::QueryInfo(LONG QueryType, PVOID buf, ULONG cb, ULONG_PTR& 
 NTSTATUS CTdiAddress::GetPort( PWORD port )
 {
 	ULONG_PTR Information;
-	PTDI_ADDRESS_INFO ptia = (PTDI_ADDRESS_INFO)alloca(64);
+	PTDI_ADDRESS_INFO ptia = (PTDI_ADDRESS_INFO)alloca(sizeof(TDI_ADDRESS_INFO) + ISO_MAX_ADDR_LENGTH);
 
-	NTSTATUS status = QueryInfo(TDI_QUERY_ADDRESS_INFO, ptia, 64, Information);
+	NTSTATUS status = QueryInfo(TDI_QUERY_ADDRESS_INFO, ptia, sizeof(TDI_ADDRESS_INFO) + ISO_MAX_ADDR_LENGTH, Information);
 
 	if (0 <= status)
 	{
@@ -274,6 +274,7 @@ NTSTATUS CUdpEndpoint::RecvFrom( CDataPacket* packet)
 
 void CUdpEndpoint::IOCompletionRoutine(CDataPacket* packet, DWORD Code, NTSTATUS status, ULONG_PTR dwNumberOfBytesTransfered, PVOID Pointer)
 {
+	DbgPrint("%s<%p>[%.4s] %x %x %p %p\n", __FUNCTION__, this, &Code, status, dwNumberOfBytesTransfered, packet, Pointer);
 	switch(Code)
 	{
 	case recv:
@@ -354,7 +355,7 @@ NTSTATUS CTcpEndpoint::Associate(PFILE_OBJECT FileObject, HANDLE AddressHandle)
 	return status;
 }
 
-NTSTATUS CTcpEndpoint::Create(DWORD BufferSize)
+NTSTATUS CTcpEndpoint::Create(DWORD BufferSize, POBJECT_ATTRIBUTES poa)
 {
 	if (BufferSize && !(m_packet = new(BufferSize) CDataPacket)) return STATUS_INSUFFICIENT_RESOURCES;
 
@@ -375,7 +376,7 @@ NTSTATUS CTcpEndpoint::Create(DWORD BufferSize)
 	HANDLE hFile, AddressHandle;
 	IO_STATUS_BLOCK iosb;
 
-	NTSTATUS status = IoCreateFile(&hFile, FILE_READ_EA | FILE_WRITE_EA, &oaTcp, &iosb, 0, 0, 0, FILE_CREATE, 
+	NTSTATUS status = IoCreateFile(&hFile, FILE_READ_EA | FILE_WRITE_EA, poa, &iosb, 0, 0, 0, FILE_CREATE, 
 		0, fei, EaSize, CreateFileTypeNone, NULL, 0);
 
 	if (0 <= status)
@@ -425,7 +426,7 @@ NTSTATUS CTcpEndpoint::Listen()
 
 		PDEVICE_OBJECT DeviceObject = IoGetRelatedDeviceObject(FileObject);
 
-		static TDI_CONNECTION_INFORMATION RequestConnectionInformation;
+		RtlZeroMemory(static_cast<TA_INET_ADDRESS*>(this), sizeof(TA_INET_ADDRESS));
 
 		TDI_CONNECTION_INFORMATION ReturnConnectionInformation = {
 			0, 0, 0, 0, sizeof(TA_INET_ADDRESS), static_cast<TA_INET_ADDRESS*>(this)
@@ -444,7 +445,7 @@ NTSTATUS CTcpEndpoint::Listen()
 
 			p->RequestFlags = 0;
 			p->RequestSpecific = 0;
-			p->RequestConnectionInformation = &RequestConnectionInformation; 
+			p->RequestConnectionInformation = &zRequestConnectionInformation; 
 			p->ReturnConnectionInformation = (PTDI_CONNECTION_INFORMATION)Irp->AssociatedIrp.SystemBuffer;
 
 			status = SendIrp(DeviceObject, Irp);
@@ -459,7 +460,7 @@ NTSTATUS CTcpEndpoint::Listen()
 	}
 
 	// if fail begin IO, direct call with error
-	IOCompletionRoutine(m_packet, cnct, status, 0, 0);
+	IOCompletionRoutine(0, cnct, status, 0, 0);
 	return STATUS_SUCCESS;
 }
 
@@ -559,7 +560,7 @@ NTSTATUS CTcpEndpoint::Connect()
 	}
 
 	// if fail begin IO, direct call with error
-	IOCompletionRoutine(m_packet, cnct, status, 0, 0);
+	IOCompletionRoutine(0, cnct, status, 0, 0);
 	return STATUS_SUCCESS;
 }
 
@@ -758,6 +759,7 @@ void CTcpEndpoint::Disconnect(NTSTATUS status)
 
 void CTcpEndpoint::IOCompletionRoutine(CDataPacket* packet, DWORD Code, NTSTATUS status, ULONG_PTR dwNumberOfBytesTransfered, PVOID Pointer)
 {
+	DbgPrint("%s<%p>[%.4s] %x %x %p %p\n", __FUNCTION__, this, &Code, status, dwNumberOfBytesTransfered, packet, Pointer);
 	BOOL f;
 
 	if (0 > status)

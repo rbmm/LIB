@@ -2,8 +2,8 @@
 
 //#define _PRINT_CPP_NAMES_
 #include "../inc/asmfunc.h"
-
-//#define DBG_PRINT
+//
+#define DBG_PRINT
 
 #ifndef DBG_PRINT
 
@@ -75,6 +75,7 @@ __forceinline void ReleasePushLock(PEX_PUSH_LOCK PushLock )
 class __declspec(novtable) IO_OBJECT
 {
 	friend void IoThread();
+	friend class CTdiAddressEvt;
 
 	virtual void IOCompletionRoutine(CDataPacket* packet, DWORD Code, NTSTATUS status, ULONG_PTR dwNumberOfBytesTransfered, PVOID Pointer) = 0;
 
@@ -102,6 +103,7 @@ protected:
 	{
 	}
 
+	void PrepareIrp(PIRP Irp);
 	NTSTATUS SendIrp(PDEVICE_OBJECT DeviceObject, PIRP Irp);
 
 	static PIRP NTAPI BuildSynchronousFsdRequest(
