@@ -68,14 +68,12 @@ private:
 	LONG m_flags;
 
 	enum{
-		f_Handshake, f_Renegotiated
+		f_Handshake
 	};
 
 	SECURITY_STATUS ProcessSecurityContext(PSecBufferDesc pInput, PSecBufferDesc pOutput);
 
 	SECURITY_STATUS ProcessSecurityContext(PSTR& rbuf, ULONG& rcb);
-
-	BOOL ReStartSSL(PSTR& rbuf, DWORD& rcb);
 
 	virtual void OnEncryptDecryptError(SECURITY_STATUS );
 

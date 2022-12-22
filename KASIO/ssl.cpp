@@ -87,20 +87,28 @@ BOOL CSSLStream::StartSSL()
 	return IsServer() ? TRUE : ProcessSecurityContext(buf, cb) == SEC_I_CONTINUE_NEEDED;
 }
 
-BOOL CSSLStream::ReStartSSL(PSTR& rbuf, DWORD& rcb)
+#define ASC_REQ ASC_REQ_REPLAY_DETECT|ASC_REQ_SEQUENCE_DETECT|ASC_REQ_CONFIDENTIALITY|ASC_REQ_ALLOCATE_MEMORY|ASC_REQ_EXTENDED_ERROR|ASC_REQ_STREAM
+#define ISC_REQ ISC_REQ_REPLAY_DETECT|ISC_REQ_SEQUENCE_DETECT|ISC_REQ_CONFIDENTIALITY|ISC_REQ_ALLOCATE_MEMORY|ISC_REQ_EXTENDED_ERROR|ISC_REQ_STREAM//|ISC_REQ_USE_SUPPLIED_CREDS//|ISC_REQ_MANUAL_CRED_VALIDATION
+
+SECURITY_STATUS CSSLStream::ProcessSecurityContext(PSecBufferDesc pInput, PSecBufferDesc pOutput)
 {
-	m_cbSavedData = 0;
+	//DbgPrint("%p>%u:ProcessSecurityContext<%p.%p> %S\n", this, IsServer(), dwLower, dwUpper, m_pszTargetName);
+	DWORD ContextAttr;
 
-	m_flags = 1 << f_Handshake | 1 << f_Renegotiated;
+	BOOLEAN bMutualAuth = FALSE;
 
-	switch ( ProcessSecurityContext(rbuf, rcb))
+	SECURITY_STRING TargetName, *pTargetName = 0;
+	if (m_pszTargetName)
 	{
-	case SEC_E_OK:
-	case SEC_I_CONTINUE_NEEDED:
-		return TRUE;
+		RtlInitUnicodeString(pTargetName = &TargetName, m_pszTargetName);
 	}
 
-	return FALSE;
+	return IsServer(&bMutualAuth) 
+		?
+		AcceptSecurityContext(&m_pCred->m_hCred, this, pInput,
+		bMutualAuth ? ASC_REQ_MUTUAL_AUTH|ASC_REQ : ASC_REQ, 0, this, pOutput, &ContextAttr, 0)
+		:
+		InitializeSecurityContextW(&m_pCred->m_hCred, this, pTargetName, ISC_REQ, 0, 0, pInput, 0, this, pOutput, &ContextAttr, 0);
 }
 
 SECURITY_STATUS CSSLStream::ProcessSecurityContext(PSTR& rbuf, DWORD& rcb)
@@ -168,22 +176,17 @@ loop:
 
 	switch (ss)
 	{
-	case SEC_I_CONTINUE_NEEDED:
-		if (cb) goto loop;
-		break;
-
 	case SEC_E_OK:
-		_bittestandreset(&m_flags, f_Handshake);
-		if (SEC_E_OK == (ss = QueryContextAttributesW(this, SECPKG_ATTR_STREAM_SIZES, static_cast<SecPkgContext_StreamSizes*>(this))))
+		if (_bittestandreset(&m_flags, f_Handshake))
 		{
-			DbgPrint("\r\nStreamSizes( %x-%x-%x %x *%x)\r\n", cbHeader, cbMaximumMessage, cbTrailer, cBuffers, cbBlockSize);
-			OnEndHandshake();
+			if (SEC_E_OK == (ss = QueryContextAttributesW(this, SECPKG_ATTR_STREAM_SIZES, static_cast<SecPkgContext_StreamSizes*>(this))))
+			{
+				DbgPrint("\n\nStreamSizes( %x-%x-%x %xx%x)\n\n", cbHeader, cbMaximumMessage, cbTrailer, cBuffers, cbBlockSize);
+				ss = OnEndHandshake();
+			}
 		}
+	case SEC_I_CONTINUE_NEEDED:
 		break;
-	
-	//case SEC_I_COMPLETE_AND_CONTINUE:
-	//case SEC_I_COMPLETE_NEEDED:
-	//default: __debugbreak();
 	}
 
 	if (0 > ss)
@@ -192,30 +195,6 @@ loop:
 	}
 
 	return ss;
-}
-
-#define ASC_REQ ASC_REQ_REPLAY_DETECT|ASC_REQ_SEQUENCE_DETECT|ASC_REQ_CONFIDENTIALITY|ASC_REQ_ALLOCATE_MEMORY|ASC_REQ_EXTENDED_ERROR|ASC_REQ_STREAM
-#define ISC_REQ ISC_REQ_REPLAY_DETECT|ISC_REQ_SEQUENCE_DETECT|ISC_REQ_CONFIDENTIALITY|ISC_REQ_ALLOCATE_MEMORY|ISC_REQ_EXTENDED_ERROR|ISC_REQ_STREAM//|ISC_REQ_USE_SUPPLIED_CREDS//|ISC_REQ_MANUAL_CRED_VALIDATION
-
-SECURITY_STATUS CSSLStream::ProcessSecurityContext(PSecBufferDesc pInput, PSecBufferDesc pOutput)
-{
-	//DbgPrint("%p>%u:ProcessSecurityContext<%p.%p> %S\n", this, IsServer(), dwLower, dwUpper, m_pszTargetName);
-	DWORD ContextAttr;
-
-	BOOLEAN bMutualAuth = FALSE;
-
-	SECURITY_STRING TargetName, *pTargetName = 0;
-	if (m_pszTargetName)
-	{
-		RtlInitUnicodeString(pTargetName = &TargetName, m_pszTargetName);
-	}
-
-	return IsServer(&bMutualAuth) 
-		?
-		AcceptSecurityContext(&m_pCred->m_hCred, this, pInput,
-		bMutualAuth ? ASC_REQ_MUTUAL_AUTH|ASC_REQ : ASC_REQ, 0, this, pOutput, &ContextAttr, 0)
-		:
-		InitializeSecurityContextW(&m_pCred->m_hCred, this, pTargetName, ISC_REQ, 0, 0, pInput, 0, this, pOutput, &ContextAttr, 0);
 }
 
 BOOL CSSLStream::OnData(PSTR buf, ULONG cb)
@@ -237,13 +216,15 @@ BOOL CSSLStream::OnData(PSTR buf, ULONG cb)
 		switch(ProcessSecurityContext(buf, cb))
 		{
 		case SEC_E_INCOMPLETE_MESSAGE:
+		case SEC_I_CONTINUE_NEEDED:
 __save_and_exit:
 			m_cbSavedData = cb;
 			packet->addData(buf, cb);
-		case SEC_I_CONTINUE_NEEDED:
 			return TRUE;
+
 		case SEC_E_OK:
 			break;
+
 		default:return FALSE;
 		}
 	}
@@ -281,16 +262,16 @@ __save_and_exit:
 					sb[3].cbBuffer = 0;
 					[[fallthrough]];
 				case SECBUFFER_EXTRA:
-					buf = (PSTR)sb[3].pvBuffer, cb = sb[3].cbBuffer;
-					if (!ReStartSSL(buf, cb))
+					switch ( ProcessSecurityContext(buf = (PSTR)sb[3].pvBuffer, cb = sb[3].cbBuffer))
 					{
-						return FALSE;
+					case SEC_E_OK:
+					case SEC_I_CONTINUE_NEEDED:
+						if (cb)
+						{
+							continue;
+						}
+						return TRUE;
 					}
-					if (cb)
-					{
-						continue;
-					}
-					return TRUE;
 				}
 			}
 			return FALSE;
@@ -442,8 +423,6 @@ SECURITY_STATUS CSSLStream::Renegotiate()
 
 	if (OutBuf.cbBuffer)
 	{
-		_bittestandset(&m_flags, f_Handshake);
-
 		if (CDataPacket* packet = new(OutBuf.cbBuffer) CDataPacket)
 		{
 			memcpy(packet->getData(), OutBuf.pvBuffer, OutBuf.cbBuffer);

@@ -177,6 +177,22 @@ NTSTATUS NTAPI TrUnHook(T_HOOK_ENTRY* entry)
 	return STATUS_SUCCESS;
 }
 
+void NTAPI TrUnHook(_In_ T_HOOK_ENTRY* entry, _In_ ULONG n)
+{
+	do 
+	{
+		TrUnHook(entry++);
+	} while (--n);
+}
+
+void NTAPI TrHook(_In_ T_HOOK_ENTRY* entry, _In_ ULONG n)
+{
+	do 
+	{
+		TrHook(*entry->pThunk, entry);
+	} while (entry++, --n);
+}
+
 NTSTATUS NTAPI TrHook(HMODULE hmod, T_HOOK_ENTRY* entry)
 {
 	PCSTR funcName = entry->funcName;

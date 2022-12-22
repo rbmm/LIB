@@ -52,16 +52,14 @@ private:
 	ULONG m_cbSavedData;
 	LONG m_flags;
 
-	enum{
-		f_Handshake, f_Renegotiated
+	enum {
+		f_Handshake
 	};
 
 	SECURITY_STATUS ProcessSecurityContext(PSecBufferDesc pInput, PSecBufferDesc pOutput);
 
 	SECURITY_STATUS ProcessSecurityContext(PSTR& rbuf, DWORD& rcb);
 	
-	BOOL ReStartSSL(PSTR& rbuf, DWORD& rcb);
-
 	virtual void OnEncryptDecryptError(SECURITY_STATUS );
 
 	virtual PCCERT_CONTEXT GetUserCert();

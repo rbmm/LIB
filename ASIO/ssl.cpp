@@ -167,22 +167,6 @@ BOOL CSSLStream::StartSSL(PSTR buf, DWORD cb)
 	return IsServer() && !cb ? TRUE : ProcessSecurityContext(buf, cb) == SEC_I_CONTINUE_NEEDED;
 }
 
-BOOL CSSLStream::ReStartSSL(PSTR& rbuf, DWORD& rcb)
-{
-	m_cbSavedData = 0;
-
-	m_flags = 1 << f_Handshake | 1 << f_Renegotiated;
-
-	switch ( ProcessSecurityContext(rbuf, rcb))
-	{
-	case SEC_E_OK:
-	case SEC_I_CONTINUE_NEEDED:
-		return TRUE;
-	}
-
-	return FALSE;
-}
-
 #ifdef __DBG__
 
 #ifdef __DBG_EX__
@@ -297,6 +281,28 @@ void Dump(PSecBufferDesc psbd, PCSTR msg, ULONG id, CHAR c)
 }
 #endif // __DBG__
 
+#define ASC_REQ ASC_REQ_REPLAY_DETECT|ASC_REQ_SEQUENCE_DETECT|ASC_REQ_CONFIDENTIALITY|ASC_REQ_ALLOCATE_MEMORY|ASC_REQ_EXTENDED_ERROR|ASC_REQ_STREAM
+#define ISC_REQ ISC_REQ_REPLAY_DETECT|ISC_REQ_SEQUENCE_DETECT|ISC_REQ_CONFIDENTIALITY|ISC_REQ_ALLOCATE_MEMORY|ISC_REQ_EXTENDED_ERROR|ISC_REQ_STREAM//|ISC_REQ_USE_SUPPLIED_CREDS//|ISC_REQ_MANUAL_CRED_VALIDATION
+
+SECURITY_STATUS CSSLStream::ProcessSecurityContext(PSecBufferDesc pInput, PSecBufferDesc pOutput)
+{
+	//DbgPrint("%p>%c:ProcessSecurityContext<%p.%p> %S\n", this, IsServer() ? 'S' : 'C', dwLower, dwUpper, m_pszTargetName);
+	DWORD ContextAttr;
+
+	PCtxtHandle phContext = 0, phNewContext = 0;
+
+	dwLower | dwUpper ? phContext = this : phNewContext = this;
+
+	BOOLEAN bMutualAuth = FALSE;
+
+	return IsServer(&bMutualAuth) 
+		?
+		::AcceptSecurityContext(&m_pCred->m_hCred, phContext, pInput,
+		bMutualAuth ? ASC_REQ_MUTUAL_AUTH|ASC_REQ : ASC_REQ, 0, phNewContext, pOutput, &ContextAttr, 0)
+		:
+		::InitializeSecurityContextW(&m_pCred->m_hCred, phContext, m_pszTargetName, ISC_REQ, 0, 0, pInput, 0, phNewContext, pOutput, &ContextAttr, 0);
+}
+
 SECURITY_STATUS CSSLStream::ProcessSecurityContext(PSTR& rbuf, DWORD& rcb)
 {
 	PSTR buf = rbuf;
@@ -364,25 +370,17 @@ loop:
 
 	switch (ss)
 	{
-	case SEC_I_CONTINUE_NEEDED:
-		if (cb) goto loop;
-		break;
-
 	case SEC_E_OK:
-		_bittestandreset(&m_flags, f_Handshake);
-		if (SEC_E_OK == (ss = ::QueryContextAttributes(this, SECPKG_ATTR_STREAM_SIZES, static_cast<SecPkgContext_StreamSizes*>(this))))
+		if (_bittestandreset(&m_flags, f_Handshake))
 		{
-			DbgPrint("\n\nStreamSizes( %x-%x-%x %xx%x)\n\n", cbHeader, cbMaximumMessage, cbTrailer, cBuffers, cbBlockSize);
-			if (!_bittest(&m_flags, f_Renegotiated))
+			if (SEC_E_OK == (ss = ::QueryContextAttributes(this, SECPKG_ATTR_STREAM_SIZES, static_cast<SecPkgContext_StreamSizes*>(this))))
 			{
+				DbgPrint("\n\nStreamSizes( %x-%x-%x %xx%x)\n\n", cbHeader, cbMaximumMessage, cbTrailer, cBuffers, cbBlockSize);
 				ss = OnEndHandshake();
 			}
 		}
+	case SEC_I_CONTINUE_NEEDED:
 		break;
-	
-	//case SEC_I_COMPLETE_AND_CONTINUE:
-	//case SEC_I_COMPLETE_NEEDED:
-	//default: __debugbreak();
 	}
 
 	if (0 > ss)
@@ -391,28 +389,6 @@ loop:
 	}
 
 	return ss;
-}
-
-#define ASC_REQ ASC_REQ_REPLAY_DETECT|ASC_REQ_SEQUENCE_DETECT|ASC_REQ_CONFIDENTIALITY|ASC_REQ_ALLOCATE_MEMORY|ASC_REQ_EXTENDED_ERROR|ASC_REQ_STREAM
-#define ISC_REQ ISC_REQ_REPLAY_DETECT|ISC_REQ_SEQUENCE_DETECT|ISC_REQ_CONFIDENTIALITY|ISC_REQ_ALLOCATE_MEMORY|ISC_REQ_EXTENDED_ERROR|ISC_REQ_STREAM//|ISC_REQ_USE_SUPPLIED_CREDS//|ISC_REQ_MANUAL_CRED_VALIDATION
-
-SECURITY_STATUS CSSLStream::ProcessSecurityContext(PSecBufferDesc pInput, PSecBufferDesc pOutput)
-{
-	//DbgPrint("%p>%c:ProcessSecurityContext<%p.%p> %S\n", this, IsServer() ? 'S' : 'C', dwLower, dwUpper, m_pszTargetName);
-	DWORD ContextAttr;
-
-	PCtxtHandle phContext = 0, phNewContext = 0;
-	
-	dwLower | dwUpper ? phContext = this : phNewContext = this;
-
-	BOOLEAN bMutualAuth = FALSE;
-
-	return IsServer(&bMutualAuth) 
-		?
-		::AcceptSecurityContext(&m_pCred->m_hCred, phContext, pInput,
-		bMutualAuth ? ASC_REQ_MUTUAL_AUTH|ASC_REQ : ASC_REQ, 0, phNewContext, pOutput, &ContextAttr, 0)
-		:
-		::InitializeSecurityContextW(&m_pCred->m_hCred, phContext, m_pszTargetName, ISC_REQ, 0, 0, pInput, 0, phNewContext, pOutput, &ContextAttr, 0);
 }
 
 BOOL CSSLStream::OnData(PSTR buf, ULONG cb)
@@ -429,20 +405,21 @@ BOOL CSSLStream::OnData(PSTR buf, ULONG cb)
 		m_cbSavedData = 0;
 	}
 
+	BOOL fOk = TRUE;
+
 	if (_bittest(&m_flags, f_Handshake))
 	{
 		switch(ProcessSecurityContext(buf, cb))
 		{
-		case STATUS_PENDING:
-			m_cbSavedData = cb;
-			packet->addData(buf, cb);
-			return -1;// no recv
+		case STATUS_PENDING: // can be returned by OnEndHandshake()
+			fOk = -1;        // no recv
+			[[fallthrough]];
 		case SEC_E_INCOMPLETE_MESSAGE:
+		case SEC_I_CONTINUE_NEEDED:
 __save_and_exit:
 			m_cbSavedData = cb;
 			packet->addData(buf, cb);
-		case SEC_I_CONTINUE_NEEDED:
-			return TRUE;
+			return fOk;
 		case SEC_E_OK:
 			break;
 		default:return FALSE;
@@ -474,6 +451,7 @@ __save_and_exit:
 
 		case SEC_I_RENEGOTIATE:
 			DbgPrint("\n\n%p>%u:SEC_I_RENEGOTIATE\n\n", this, IsServer() ? 'S' : 'C');
+
 			if (sb[0].BufferType == SECBUFFER_STREAM_HEADER &&
 				sb[1].BufferType == SECBUFFER_DATA && !sb[1].cbBuffer &&
 				sb[2].BufferType == SECBUFFER_STREAM_TRAILER)
@@ -484,16 +462,16 @@ __save_and_exit:
 					sb[3].cbBuffer = 0;
 					[[fallthrough]];
 				case SECBUFFER_EXTRA:
-					buf = (PSTR)sb[3].pvBuffer, cb = sb[3].cbBuffer;
-					if (!ReStartSSL(buf, cb))
+					switch ( ProcessSecurityContext(buf = (PSTR)sb[3].pvBuffer, cb = sb[3].cbBuffer))
 					{
-						return FALSE;
+					case SEC_E_OK:
+					case SEC_I_CONTINUE_NEEDED:
+						if (cb)
+						{
+							continue;
+						}
+						return TRUE;
 					}
-					if (cb)
-					{
-						continue;
-					}
-					return TRUE;
 				}
 			}
 			return FALSE;
@@ -652,9 +630,6 @@ SECURITY_STATUS CSSLStream::Renegotiate()
 
 	if (OutBuf.cbBuffer)
 	{
-		_bittestandset(&m_flags, f_Handshake);
-		_bittestandset(&m_flags, f_Renegotiated);
-
 		if (CDataPacket* packet = allocPacket(OutBuf.cbBuffer))
 		{
 			memcpy(packet->getData(), OutBuf.pvBuffer, OutBuf.cbBuffer);

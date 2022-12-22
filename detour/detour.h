@@ -14,7 +14,7 @@ struct TR_HOOK_DLL
 	T_HOOK_ENTRY hookV[];
 };
 
-#define _DECLARE_TR_HOOK(pfn) extern "C" { extern PVOID __imp_##pfn; }
+#define _DECLARE_TR_HOOK(pfn) EXTERN_C { extern PVOID __imp_##pfn; }
 #define DECLARE_TR_HOOK_X86(pfn, n) _DECLARE_TR_HOOK(pfn) __pragma(comment(linker, _CRT_STRINGIZE(/alternatename:___imp_##pfn##=__imp__##pfn##@##n)))
 
 #ifdef _M_IX86
@@ -28,9 +28,11 @@ struct TR_HOOK_DLL
 
 #define BEGIN_TR_HOOK(dllname) TR_HOOK_DLL TR_DLL_NAME(dllname) = { L ## #dllname L".dll", {
 #define BEGIN_TR_HOOK2(dllname, name) TR_HOOK_DLL TR_DLL_NAME(dllname) = { _CRT_WIDE(name), {
-#define TR_HOOK_ENTRY(pfn) { #pfn, HOOK_NAME(pfn), (void**)&__imp_##pfn },
-#define TR_HOOK_ENTRY_ORD(i, pfn) { (PCSTR)(i), HOOK_NAME(pfn), (void**)&__imp_##pfn },
+#define TR_HOOK_ENTRY(pfn) { #pfn, HOOK_NAME(pfn), &__imp_##pfn },
+#define TR_HOOK_ENTRY_ORD(i, pfn) { (PCSTR)(i), HOOK_NAME(pfn), &__imp_##pfn },
 #define END_TR_HOOK() {}}};
+
+#define TR_HOOK(pfn) { 0, HOOK_NAME(pfn), &__imp_##pfn },
 
 #define BEGIN_TR_DLLs(x) TR_HOOK_DLL* x[] = {
 #define TR_DLL(dllname) &TR_DLL_NAME(dllname),
@@ -43,3 +45,6 @@ void NTAPI TrHook(PVOID hmod, PCUNICODE_STRING DllName, TR_HOOK_DLL* pphDLL[]);/
 void NTAPI TrUnHook(TR_HOOK_DLL* pphDLL[]);
 NTSTATUS NTAPI TrHook(PVOID pv, T_HOOK_ENTRY* entry, _In_opt_ BOOLEAN bProtect = TRUE);// pv address for hook
 NTSTATUS NTAPI TrUnHook(T_HOOK_ENTRY* entry);
+
+void NTAPI TrHook(_In_ T_HOOK_ENTRY* entry, _In_ ULONG n);
+void NTAPI TrUnHook(_In_ T_HOOK_ENTRY* entry, _In_ ULONG n);
