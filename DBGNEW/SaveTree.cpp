@@ -144,12 +144,12 @@ HRESULT OnBrowse(_In_ HWND hwndDlg,
 				 _In_ const CLSID* pclsid = &__uuidof(FileOpenDialog),
 				 _In_ PCWSTR pszDefaultExtension = 0);
 
-NTSTATUS Save(HWND hwndTV, TVITEM* item)
+NTSTATUS Save(HWND hwndTV, TVITEM* item, ULONG dwSize)
 {
 	if (item->hItem = TreeView_GetChild(hwndTV, TVI_ROOT))
 	{
 		VBuf vb;
-		NTSTATUS status = vb.Create(0x1000000);
+		NTSTATUS status = vb.Create(dwSize);
 
 		if (0 <= status)
 		{

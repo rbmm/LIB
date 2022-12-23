@@ -163,7 +163,7 @@ INT_PTR ZPDBPathDlg::DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM l
 			Signature->Data4[4], Signature->Data4[5], Signature->Data4[6], Signature->Data4[7],
 			_Age);
 
-		if (_getPdbDlg = FindWindowW(L"#32770", L"Download PDB file"))
+		if (_getPdbDlg = FindWindowW(L"#32770", L"Download PDB file(s)"))
 		{
 			COPYDATASTRUCT cds = { 
 				CD_MAGIC, (len + 1)*sizeof(WCHAR), const_cast<PWSTR>(sz) 

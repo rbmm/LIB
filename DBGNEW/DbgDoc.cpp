@@ -764,6 +764,7 @@ void ZDbgDoc::StopTrace()
 	if (_IsInTrace)
 	{
 		_IsInTrace = FALSE;
+		_pTraceView->SetStatus();
 		_pTraceView->Release();
 		_pTraceView = 0;
 		SuspendAllBps(FALSE);
@@ -1171,9 +1172,9 @@ void ZDbgDoc::Detach()
 	{
 		if (_IsInTrace)
 		{
-			DestroyWindow(_pTraceView->getHWND());
 			if (_pTraceView)
 			{
+				DestroyWindow(_pTraceView->ZFrameMultiWnd::getHWND());
 				_pTraceView->Release();
 				_pTraceView = 0;
 			}
@@ -2445,23 +2446,23 @@ BOOL ZDbgDoc::_DbgContinue(CONTEXT& ctx, int key, INT_PTR Va)
 		{
 			return FALSE;
 		}
-		if (HWND hwnd = CreateWindowExW(0, WC_TREEVIEW, L"Trace", WS_POPUP|WS_VISIBLE|WS_CAPTION |
-			WS_SYSMENU | WS_MAXIMIZEBOX | WS_MINIMIZEBOX | WS_THICKFRAME |
-			TVS_LINESATROOT|TVS_HASLINES|TVS_HASBUTTONS|TVS_DISABLEDRAGDROP|
-			TVS_TRACKSELECT|TVS_EDITLABELS, 320, 256, 800, 640, ZGLOBALS::getMainHWND(), 0, 0, 0))
-		{
-			SendMessage(hwnd, WM_SETFONT, (WPARAM)ZGLOBALS::getFont()->getFont(), 0);
 
-			if (_pTraceView = new ZTraceView(this, pThread->_dwThreadId, &ctx))
+		if (ZTraceView* pTraceView = new ZTraceView(this, pThread->_dwThreadId, &ctx))
+		{
+			ULONG cx = GetSystemMetrics(SM_CXSCREEN), cy = GetSystemMetrics(SM_CYSCREEN);
+
+			if (pTraceView->ZFrameMultiWnd::Create(0, L"Trace", WS_POPUP|WS_VISIBLE|WS_CAPTION |
+				WS_SYSMENU | WS_MAXIMIZEBOX | WS_MINIMIZEBOX | WS_THICKFRAME, 
+				cx >> 3, cy >> 3, cx>>1, cy>>1, ZGLOBALS::getMainHWND(), 0, 0))
 			{
-				_pTraceView->Subclass(hwnd);
-				_pTraceView->AddFirstReport();
+				_pTraceView = pTraceView;
+				pTraceView->AddFirstReport();
 				SuspendAllBps(TRUE);
 				_IsInTrace = TRUE;
 			}
 			else
 			{
-				DestroyWindow(hwnd);
+				pTraceView->Release();
 				return FALSE;
 			}
 		}

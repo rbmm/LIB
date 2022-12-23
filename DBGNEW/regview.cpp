@@ -334,6 +334,7 @@ LRESULT ZRegView::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 	switch (uMsg)
 	{
 	case WM_LBUTTONUP:
+__f:
 		if (_capture)
 		{
 			_capture = FALSE;
@@ -392,6 +393,9 @@ LRESULT ZRegView::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 		case VK_RIGHT:
 			v = _vCaret + 1;
 			break;
+		case VK_ESCAPE:
+			goto __f;
+
 		default:
 			if (wParam - '0' < 10)
 			{

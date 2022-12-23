@@ -90,7 +90,7 @@ public:
 
 BOOL CreateDbgTH(ZTabFrame** pp, ZDbgDoc* pDoc);
 
-class ZTraceView : public ZSubClass, ZDetachNotify
+class ZTraceView : public ZFrameMultiWnd, public ZStatusBar, ZDetachNotify
 {
 	HTREEITEM		_Nodes[64];
 	ULONG_PTR		_HighLevelStack[64];	
@@ -98,9 +98,12 @@ class ZTraceView : public ZSubClass, ZDetachNotify
 	ULONG_PTR		_LastPC;
 	PVOID			_ExceptionAddress;
 	ZDbgDoc*		_pDoc;
+	HWND			_hwndTV;
 	int				_Level;
 	DWORD			_dwThreadId;
 	DWORD			_id;
+	ULONG			_dwSize = 0;
+	ULONG			_time = GetTickCount() + 500;
 	BOOLEAN			_bStop;
 
 	virtual LRESULT WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
@@ -109,11 +112,14 @@ class ZTraceView : public ZSubClass, ZDetachNotify
 
 	void AddReport(ULONG_PTR Pc, ULONG_PTR From, DWORD dw = MAXDWORD);
 
+	virtual BOOL CreateClient(HWND hWndParent, int nWidth, int nHeight, PVOID lpCreateParams);
+
 	~ZTraceView();
 
 public:
 
 	void AddFirstReport();
+	void SetStatus();
 	NTSTATUS OnException(CONTEXT* ctx);
 
 	ZTraceView(ZDbgDoc* pDoc, DWORD dwThreadId, CONTEXT* ctx);

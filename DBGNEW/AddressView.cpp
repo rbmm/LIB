@@ -348,6 +348,13 @@ LRESULT ZAddressView::WindowProc( HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lP
 		}
 		break;
 
+	case WM_KEYDOWN:
+		if (wParam != VK_ESCAPE)
+		{
+			break;
+		}
+		[[fallthrough]];
+
 	case WM_LBUTTONUP:
 		if (_capture)
 		{

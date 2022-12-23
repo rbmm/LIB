@@ -660,7 +660,32 @@ void ZTraceView::AddFirstReport()
 	_HighLevelStack[_Level = 1] = _LastStack;
 }
 
-NTSTATUS Save(HWND hwndTV, TVITEM* item);
+NTSTATUS Save(HWND hwndTV, TVITEM* item, ULONG dwSize);
+
+BOOL ZTraceView::CreateClient(HWND hWndParent, int nWidth, int nHeight, PVOID /*lpCreateParams*/)
+{
+	if (HWND hwnd = ZStatusBar::Create(hWndParent))
+	{
+		SendMessage(hwnd, SB_SIMPLE, TRUE, 0);
+
+		RECT rc;
+		if (GetWindowRect(hwnd, &rc))
+		{
+			if (hwnd = CreateWindowExW(0, WC_TREEVIEW, L"Trace", WS_CHILD|WS_VISIBLE|
+				TVS_LINESATROOT|TVS_HASLINES|TVS_HASBUTTONS|TVS_DISABLEDRAGDROP|
+				TVS_TRACKSELECT|TVS_EDITLABELS, 0, 0, nWidth, nHeight - (rc.bottom - rc.top), hWndParent, (HMENU)1, 0, 0))
+			{
+				_hwndTV = hwnd;
+				SendMessage(hwnd, WM_SETFONT, (WPARAM)ZGLOBALS::getFont()->getFont(), 0);
+				return TRUE;
+			}
+		}
+
+		return TRUE;
+	}
+
+	return FALSE;
+}
 
 LRESULT ZTraceView::WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
@@ -669,65 +694,77 @@ LRESULT ZTraceView::WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPara
 	ZDbgDoc* pDoc = _pDoc;
 	switch (uMsg)
 	{
-	case WM_RBUTTONDOWN:
-		if (item.hItem = TreeView_GetSelection(hWnd))
+	case WM_NOTIFY:
+		switch (((NMHDR*)lParam)->idFrom)
 		{
-			if (item.hItem == TVI_ROOT)
+		case 1:
+			switch (((NMHDR*)lParam)->code)
 			{
-				return 0;
-			}
-			
-			WCHAR sz[512];
-			item.mask = TVIF_TEXT|TVIF_PARAM;
-			item.pszText = sz;
-			item.cchTextMax = RTL_NUMBER_OF(sz);
-			TreeView_GetItem(hWnd, &item);
-
-			if (HMENU hmenu = LoadMenu((HINSTANCE)&__ImageBase, MAKEINTRESOURCE(IDR_MENU2)))
-			{
-				POINT pt;
-				GetCursorPos(&pt);
-
-				HMENU hSubMenu = GetSubMenu(hmenu, 2);
-
-				BOOL bInTrace = pDoc && pDoc->InTrace();
-				
-				EnableMenuItem(hSubMenu, ID_2_GOTOFROM, pDoc ? MF_BYCOMMAND|MF_ENABLED : MF_BYCOMMAND|MF_GRAYED);
-				EnableMenuItem(hSubMenu, ID_2_GOTOTARGET, pDoc ? MF_BYCOMMAND|MF_ENABLED : MF_BYCOMMAND|MF_GRAYED);
-				EnableMenuItem(hSubMenu, ID_2_STOP, bInTrace ? MF_BYCOMMAND|MF_ENABLED : MF_BYCOMMAND|MF_GRAYED);
-				EnableMenuItem(hSubMenu, ID_2_SAVE, bInTrace ? MF_BYCOMMAND|MF_GRAYED : MF_BYCOMMAND|MF_ENABLED);
-
-				switch (TrackPopupMenu(hSubMenu, TPM_RETURNCMD, pt.x, pt.y, 0, hWnd, 0))
+			case NM_RCLICK:
+				hWnd = ((NMHDR*)lParam)->hwndFrom;
+				if (item.hItem = TreeView_GetSelection(hWnd))
 				{
-				case ID_2_GOTOFROM:
-					if (PWSTR lpsz = wcschr(item.pszText, L'('))
+					if (item.hItem == TVI_ROOT)
 					{
-						ULONG_PTR Va;
-						if ((Va = uptoul(lpsz + 1, &lpsz, 16)) && *lpsz == L')')
-						{
-							if (pDoc) pDoc->GoTo((PVOID)Va);
-						}
+						return 0;
 					}
-					break;
-				case ID_2_GOTOTARGET:
-					if (pDoc) pDoc->GoTo((PVOID)item.lParam);
-					break;
-				case ID_2_STOP:
-					_bStop = TRUE;
-					break;
-				case ID_2_SAVE:
-					item.mask = TVIF_TEXT;
-					Save(getHWND(), &item);
+
+					WCHAR sz[512];
+					item.mask = TVIF_TEXT|TVIF_PARAM;
+					item.pszText = sz;
+					item.cchTextMax = RTL_NUMBER_OF(sz);
+					TreeView_GetItem(hWnd, &item);
+
+					if (HMENU hmenu = LoadMenu((HINSTANCE)&__ImageBase, MAKEINTRESOURCE(IDR_MENU2)))
+					{
+						POINT pt;
+						GetCursorPos(&pt);
+
+						HMENU hSubMenu = GetSubMenu(hmenu, 2);
+
+						BOOL bInTrace = pDoc && pDoc->InTrace();
+
+						EnableMenuItem(hSubMenu, ID_2_GOTOFROM, pDoc ? MF_BYCOMMAND|MF_ENABLED : MF_BYCOMMAND|MF_GRAYED);
+						EnableMenuItem(hSubMenu, ID_2_GOTOTARGET, pDoc ? MF_BYCOMMAND|MF_ENABLED : MF_BYCOMMAND|MF_GRAYED);
+						EnableMenuItem(hSubMenu, ID_2_STOP, bInTrace ? MF_BYCOMMAND|MF_ENABLED : MF_BYCOMMAND|MF_GRAYED);
+						EnableMenuItem(hSubMenu, ID_2_SAVE, bInTrace ? MF_BYCOMMAND|MF_GRAYED : MF_BYCOMMAND|MF_ENABLED);
+
+						switch (TrackPopupMenu(hSubMenu, TPM_RETURNCMD, pt.x, pt.y, 0, hWnd, 0))
+						{
+						case ID_2_GOTOFROM:
+							if (PWSTR lpsz = wcschr(item.pszText, L'('))
+							{
+								ULONG_PTR Va;
+								if ((Va = uptoul(lpsz + 1, &lpsz, 16)) && *lpsz == L')')
+								{
+									if (pDoc) pDoc->GoTo((PVOID)Va);
+								}
+							}
+							break;
+						case ID_2_GOTOTARGET:
+							if (pDoc) pDoc->GoTo((PVOID)item.lParam);
+							break;
+						case ID_2_STOP:
+							_bStop = TRUE;
+							break;
+						case ID_2_SAVE:
+							item.mask = TVIF_TEXT;
+							Save(hWnd, &item, _dwSize);
+						}
+						DestroyMenu(hmenu);
+					}
 				}
-				DestroyMenu(hmenu);
 			}
+			break;
 		}
 		return 0;
+
 	case WM_DESTROY:
 		if (pDoc) pDoc->StopTrace();
 		break;
 	}
-	return ZSubClass::WindowProc(hWnd, uMsg, wParam, lParam);
+
+	return __super::WindowProc(hWnd, uMsg, wParam, lParam);
 }
 
 void ZTraceView::AddReport(ULONG_PTR Pc, ULONG_PTR From, DWORD dw)
@@ -777,7 +814,24 @@ void ZTraceView::AddReport(ULONG_PTR Pc, ULONG_PTR From, DWORD dw)
 	tv.item.pszText = sz;
 	tv.item.lParam = Pc;
 
-	_Nodes[_Level + 1] = TreeView_InsertItem(getHWND(), &tv);
+	_Nodes[_Level + 1] = TreeView_InsertItem(_hwndTV, &tv);
+
+	_dwSize += WideCharToMultiByte(CP_UTF8, 0, sz, MAXULONG, 0, 0, 0, 0) + 1;
+
+	if (_time < GetTickCount())
+	{
+		SetStatus();
+		_time = GetTickCount() + 500;
+	}
+}
+
+void ZTraceView::SetStatus()
+{
+	WCHAR sz[0x80];
+	if (0 < swprintf_s(sz, _countof(sz), L"%u nodes level = %u, size = %u", _id, _Level + 1, _dwSize))
+	{
+		SendMessage(ZStatusBar::getHWND(), SB_SETTEXT, SB_SIMPLEID, (LPARAM)sz);
+	}
 }
 
 NTSTATUS ZTraceView::OnException(CONTEXT* ctx)
