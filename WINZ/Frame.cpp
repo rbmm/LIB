@@ -118,10 +118,6 @@ LRESULT ZFrameWnd::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam
 				p->WindowProc(_hwndView, uMsg, wParam, lParam);
 				p->Release();
 			}
-			else
-			{
-				SendMessage(_hwndView, uMsg, wParam, lParam);
-			}
 		}
 		break;
 	}
