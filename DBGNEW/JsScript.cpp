@@ -144,6 +144,7 @@ HRESULT JsScript::RunScript(PCWSTR script, BOOL *pResult, PCONTEXT pContext, ZDb
 {
 	_ThreadId = ThreadId, _HitCount = HitCount, _pCtx = pCtx, _pContext = pContext, _pDoc = pDoc;
 	VARIANT varResult;
+
 	HRESULT hr = m_pscParse->ParseScriptText(script, 0, 0, 0, 0, 0, SCRIPTTEXT_ISEXPRESSION , &varResult, 0);
 	if (!hr)
 	{
@@ -159,6 +160,7 @@ HRESULT JsScript::RunScript(PCWSTR script, BOOL *pResult, PCONTEXT pContext, ZDb
 		}
 		VariantClear(&varResult);
 	}
+
 	return hr;
 }
 
@@ -270,30 +272,6 @@ STDMETHODIMP JsScript::GetIDsOfNames(
 				continue;
 			}
 
-			if (!wcscmp(szName, L"ofs_ptr"))
-			{
-				DispId = e_add;
-				continue;
-			}
-
-			if (!wcscmp(szName, L"ptr_ofs"))
-			{
-				DispId = e_sub;
-				continue;
-			}
-
-			if (!wcscmp(szName, L"toPtr"))
-			{
-				DispId = e_toPtr;
-				continue;
-			}
-
-			if (!wcscmp(szName, L"toInt"))
-			{
-				DispId = e_toInt;
-				continue;
-			}
-
 			if (!wcscmp(szName, L"printOA"))
 			{
 				DispId = e_prOA;
@@ -303,6 +281,36 @@ STDMETHODIMP JsScript::GetIDsOfNames(
 			if (!wcscmp(szName, L"printUS"))
 			{
 				DispId = e_prUS;
+				continue;
+			}
+
+			if (!wcscmp(szName, L"Str"))
+			{
+				DispId = e_toStrW;
+				continue;
+			}
+
+			if (!wcscmp(szName, L"AStr"))
+			{
+				DispId = e_toStrA;
+				continue;
+			}
+
+			if (!wcscmp(szName, L"name"))
+			{
+				DispId = e_name;
+				continue;
+			}
+
+			if (!wcscmp(szName, L"strstr"))
+			{
+				DispId = e_strstr;
+				continue;
+			}
+
+			if (!wcscmp(szName, L"strcmp"))
+			{
+				DispId = e_strcmp;
 				continue;
 			}
 
@@ -334,31 +342,31 @@ STDMETHODIMP JsScript::GetIDsOfNames(
 
 			if (!c)
 			{
-#define REG_CASE(x, y) case x: DispId = FIELD_OFFSET(CONTEXT, y)|e_reg_base; continue
-#define REG_CASE_D(x, y) case x: DispId = FIELD_OFFSET(CONTEXT, y)|e_reg_dword|e_reg_base; continue
-#define REG_CASE_W(x, y) case x: DispId = FIELD_OFFSET(CONTEXT, y)|e_reg_word|e_reg_base; continue
-#define REG_CASE_B(x, y) case x: DispId = FIELD_OFFSET(CONTEXT, y)|e_reg_byte|e_reg_base; continue
+#define REG_CASE_Q(x, y) case x: DispId = FIELD_OFFSET(CONTEXT, y)|e_reg_qword; continue
+#define REG_CASE_D(x, y) case x: DispId = FIELD_OFFSET(CONTEXT, y)|e_reg_dword; continue
+#define REG_CASE_W(x, y) case x: DispId = FIELD_OFFSET(CONTEXT, y)|e_reg_word; continue
+#define REG_CASE_B(x, y) case x: DispId = FIELD_OFFSET(CONTEXT, y)|e_reg_byte; continue
 
 				switch(u.dd)
 				{
 #ifdef _WIN64
-					REG_CASE('xar', Rax);
-					REG_CASE('xbr', Rbx);
-					REG_CASE('xcr', Rcx);
-					REG_CASE('xdr', Rdx);
-					REG_CASE('isr', Rsi);
-					REG_CASE('idr', Rdi);
-					REG_CASE('pbr', Rbp);
-					REG_CASE('psr', Rsp);
-					REG_CASE('8r', R8);
-					REG_CASE('9r', R9);
-					REG_CASE('01r', R10);
-					REG_CASE('11r', R11);
-					REG_CASE('21r', R12);
-					REG_CASE('31r', R13);
-					REG_CASE('41r', R14);
-					REG_CASE('51r', R15);
-					REG_CASE('pir', Rip);
+					REG_CASE_Q('xar', Rax);
+					REG_CASE_Q('xbr', Rbx);
+					REG_CASE_Q('xcr', Rcx);
+					REG_CASE_Q('xdr', Rdx);
+					REG_CASE_Q('isr', Rsi);
+					REG_CASE_Q('idr', Rdi);
+					REG_CASE_Q('pbr', Rbp);
+					REG_CASE_Q('psr', Rsp);
+					REG_CASE_Q('8r', R8);
+					REG_CASE_Q('9r', R9);
+					REG_CASE_Q('01r', R10);
+					REG_CASE_Q('11r', R11);
+					REG_CASE_Q('21r', R12);
+					REG_CASE_Q('31r', R13);
+					REG_CASE_Q('41r', R14);
+					REG_CASE_Q('51r', R15);
+					REG_CASE_Q('pir', Rip);
 
 					REG_CASE_D('xae', Rax);
 					REG_CASE_D('xbe', Rbx);
@@ -406,16 +414,15 @@ STDMETHODIMP JsScript::GetIDsOfNames(
 					REG_CASE_B('l51r', R15);
 
 #else
-
-					REG_CASE('xae', Eax);
-					REG_CASE('xbe', Ebx);
-					REG_CASE('xce', Ecx);
-					REG_CASE('xde', Edx);
-					REG_CASE('ise', Esi);
-					REG_CASE('ide', Edi);
-					REG_CASE('pbe', Ebp);
-					REG_CASE('pse', Esp);
-					REG_CASE('pie', Eip);
+					REG_CASE_D('xae', Eax);
+					REG_CASE_D('xbe', Ebx);
+					REG_CASE_D('xce', Ecx);
+					REG_CASE_D('xde', Edx);
+					REG_CASE_D('ise', Esi);
+					REG_CASE_D('ide', Edi);
+					REG_CASE_D('pbe', Ebp);
+					REG_CASE_D('pse', Esp);
+					REG_CASE_D('pie', Eip);
 
 					REG_CASE_W('xa', Eax);
 					REG_CASE_W('xb', Ebx);
@@ -428,7 +435,6 @@ STDMETHODIMP JsScript::GetIDsOfNames(
 					REG_CASE_B('lb', Ebx);
 					REG_CASE_B('lc', Ecx);
 					REG_CASE_B('ld', Edx);
-
 #endif
 
 					REG_CASE_D('0rd', Dr0);
@@ -465,39 +471,212 @@ STDMETHODIMP JsScript::Invoke(
 	UINT cArgs = pDispParams->cArgs;
 	VARIANT *rgvarg = pDispParams->rgvarg;
 
-	LONG len;
+	union {
+		ULONG len;
+		SIZE_T rcb;
+	};
+
+	union {
+		CHAR astr[0x200];
+		WCHAR str[0x100];
+	};
+
+	PWSTR psz1, psz2;
 
 	if (wFlags & DISPATCH_METHOD)
 	{
 		switch (dispIdMember)
 		{
-		case e_toPtr:
-			if (cArgs != 1)
+		case e_strstr:
+			if (cArgs != 2)
 			{
 				return DISP_E_BADPARAMCOUNT;
 			}
 
-			if (rgvarg->vt != VT_I4)
+			if (rgvarg[0].vt != VT_BSTR || rgvarg[1].vt != VT_BSTR)
 			{
 				return DISP_E_BADVARTYPE;
 			}
-			pVarResult->byref = rgvarg->byref;
-			pVarResult->vt = VT_USERDEFINED;
-			return S_OK;
 
-		case e_toInt:
-			if (cArgs != 1)
-			{
-				return DISP_E_BADPARAMCOUNT;
-			}
-
-			if (rgvarg->vt != VT_USERDEFINED)
-			{
-				return DISP_E_BADVARTYPE;
-			}
-			pVarResult->byref = rgvarg->byref;
+			pVarResult->intVal = -1;
 			pVarResult->vt = VT_I4;
+
+			if ((psz1 = rgvarg[1].bstrVal) && (psz2 = rgvarg[0].bstrVal))
+			{
+				if (psz2 = wcsstr(psz1, psz2))
+				{
+					pVarResult->intVal = RtlPointerToOffset(psz1, psz2) >> 1;
+				}
+			}
+
 			return S_OK;
+
+		case e_strcmp:
+			if (cArgs != 2)
+			{
+				return DISP_E_BADPARAMCOUNT;
+			}
+
+			if (rgvarg[0].vt != VT_BSTR || rgvarg[1].vt != VT_BSTR)
+			{
+				return DISP_E_BADVARTYPE;
+			}
+
+			pVarResult->vt = VT_I4;
+			pVarResult->intVal = 0;
+
+			if ((psz1 = rgvarg[1].bstrVal) && (psz2 = rgvarg[0].bstrVal))
+			{
+				pVarResult->intVal = wcscmp(psz1, psz2);
+			}
+
+			return S_OK;
+
+		case e_name:
+			if (cArgs != 1)
+			{
+				return DISP_E_BADPARAMCOUNT;
+			}
+
+			if (_pDoc)
+			{
+				PCSTR Name = 0;
+				INT_PTR NameVa = 0;
+				PCWSTR szDllName = L"";
+				PVOID Va = rgvarg->byref;
+
+				if (ZDll* pDll = _pDoc->getDllByVaNoRef(Va))
+				{
+					szDllName = pDll->name();
+					if (PCSTR name = pDll->getNameByVa2(Va, &NameVa))
+					{
+						if (IS_INTRESOURCE(name))
+						{
+							char oname[16];
+							sprintf(oname, "#%u", (ULONG)(ULONG_PTR)name);
+							name = oname;
+						}
+
+						Name = unDNameEx(astr, name, RTL_NUMBER_OF(astr), UNDNAME_DEFAULT);
+					}
+					else
+					{
+						NameVa = (INT_PTR)pDll->getBase();
+						Name = "";
+					}
+
+					if (Name)
+					{
+						int d = RtlPointerToOffset(NameVa, Va);
+
+						PWSTR psz = 0;
+						cArgs = 0;
+						while (0 < (INT)(cArgs = _snwprintf(psz, cArgs, L"%s!%S%c+ %x", szDllName, Name, d ? ' ' : 0, d)))
+						{
+							if (psz)
+							{
+								pVarResult->bstrVal = psz;
+								pVarResult->vt = VT_BSTR;
+								return S_OK;
+							}
+
+							if (!(psz = SysAllocStringLen(0, cArgs)))
+							{
+								return E_OUTOFMEMORY;
+							}
+						}
+
+						if (psz)
+						{
+							SysFreeString(psz);
+						}
+					}
+				}
+			}
+			else
+			{
+				pVarResult->bstrVal = 0;
+				pVarResult->vt = VT_BSTR;
+				return S_OK;
+			}
+
+			return E_FAIL;
+
+		case e_toStrA:
+			if (cArgs != 1)
+			{
+				return DISP_E_BADPARAMCOUNT;
+			}
+
+			if (!_pDoc)
+			{
+				return S_OK;
+			}
+
+			switch (SymReadMemory(_pDoc, rgvarg->byref, astr, sizeof(astr), &rcb))
+			{
+			case STATUS_SUCCESS:
+			case STATUS_PARTIAL_COPY:
+				if (rcb)
+				{
+					astr[rcb-1]=0;
+					PWSTR psz = 0;
+					cArgs = 0;
+					while (cArgs = MultiByteToWideChar(CP_UTF8, 0, astr, MAXULONG, psz, cArgs))
+					{
+						if (psz)
+						{
+							pVarResult->bstrVal = psz;
+							pVarResult->vt = VT_BSTR;
+							return S_OK;
+						}
+
+						if (!(psz = SysAllocStringLen(0, cArgs)))
+						{
+							return E_OUTOFMEMORY;
+						}
+					}
+
+					if (psz)
+					{
+						SysFreeString(psz);
+					}
+				}
+			}
+
+			return E_FAIL;
+
+		case e_toStrW:
+			if (cArgs != 1)
+			{
+				return DISP_E_BADPARAMCOUNT;
+			}
+
+			if (rgvarg->ulVal & 1)
+			{
+				return E_INVALIDARG;
+			}
+
+			if (!_pDoc)
+			{
+				pVarResult->bstrVal = 0;
+				pVarResult->vt = VT_BSTR;
+				return S_OK;
+			}
+
+			switch (SymReadMemory(_pDoc, rgvarg->byref, str, sizeof(str), &rcb))
+			{
+			case STATUS_SUCCESS:
+			case STATUS_PARTIAL_COPY:
+				if (rcb >>= 1)
+				{
+					str[rcb-1]=0;
+					pVarResult->bstrVal = SysAllocString(str);
+					pVarResult->vt = VT_BSTR;
+					return S_OK;
+				}
+			}
+			return E_FAIL;
 
 		case e_setctx:
 			if (cArgs != 2)
@@ -505,14 +684,9 @@ STDMETHODIMP JsScript::Invoke(
 				return DISP_E_BADPARAMCOUNT;
 			}
 
-			if (rgvarg[1].vt != VT_I4)
-			{
-				return DISP_E_BADVARTYPE;
-			}
-
 			if (3 < (cArgs = rgvarg[1].ulVal))
 			{
-				return E_INVALIDARG;;
+				return E_INVALIDARG;
 			}
 
 			_pCtx[cArgs] = rgvarg->byref;
@@ -525,61 +699,19 @@ STDMETHODIMP JsScript::Invoke(
 				return DISP_E_BADPARAMCOUNT;
 			}
 
-			if (rgvarg->vt != VT_I4)
-			{
-				return DISP_E_BADVARTYPE;
-			}
-
 			if (3 < (cArgs = rgvarg->ulVal))
 			{
 				return E_INVALIDARG;
 			}
 
 			pVarResult->byref = _pCtx[cArgs];
-			pVarResult->vt = VT_USERDEFINED;
-			return S_OK;
-
-		case e_add:
-			if (cArgs != 2)
-			{
-				return DISP_E_BADPARAMCOUNT;
-			}
-
-			if (rgvarg[1].vt != VT_USERDEFINED)
-			{
-				return DISP_E_BADVARTYPE;
-			}
-
-			pVarResult->vt = VT_USERDEFINED;
-			pVarResult->byref = (PVOID)((INT_PTR)rgvarg[1].byref + rgvarg[0].lVal);
-
-			return S_OK;
-
-		case e_sub:
-			if (cArgs != 2)
-			{
-				return DISP_E_BADPARAMCOUNT;
-			}
-
-			if (rgvarg[1].vt != VT_USERDEFINED || rgvarg[0].vt != VT_USERDEFINED)
-			{
-				return DISP_E_BADVARTYPE;
-			}
-
 			pVarResult->vt = VT_I4;
-			pVarResult->lVal = RtlPointerToOffset(rgvarg[1].byref, rgvarg[0].byref);
-
 			return S_OK;
 
 		case e_prUS:
 			if (cArgs != 1)
 			{
 				return DISP_E_BADPARAMCOUNT;
-			}
-
-			if (rgvarg->vt != VT_USERDEFINED)
-			{
-				return DISP_E_BADVARTYPE;
 			}
 
 			pVarResult->vt = VT_EMPTY;
@@ -591,11 +723,6 @@ STDMETHODIMP JsScript::Invoke(
 				return DISP_E_BADPARAMCOUNT;
 			}
 
-			if (rgvarg->vt != VT_USERDEFINED)
-			{
-				return DISP_E_BADVARTYPE;
-			}
-
 			pVarResult->vt = VT_EMPTY;
 			return printOA(rgvarg->byref);
 
@@ -605,50 +732,12 @@ STDMETHODIMP JsScript::Invoke(
 				return DISP_E_BADPARAMCOUNT;
 			}
 
-			if (rgvarg->vt != VT_USERDEFINED || rgvarg[1].vt != VT_I4)
-			{
-				return DISP_E_BADVARTYPE;
-			}
-
 			switch (len = rgvarg[1].lVal)
 			{
-			case 0:
-				pVarResult->vt = VT_USERDEFINED;
-				len = sizeof(PVOID);
-#ifdef _WIN64
-				if (_pContext->SegCs == 0x23)
-				{
-					len = 4;
-				}
-#endif
-				break;
-			case -1:
-				pVarResult->vt = VT_I1;
-				len = 1;
-				break;
 			case +1:
-				pVarResult->vt = VT_UI1;
-				break;
-			case -2:
-				pVarResult->vt = VT_I2;
-				len = 2;
-				break;
 			case +2:
-				pVarResult->vt = VT_UI2;
-				break;
-			case -4:
-				pVarResult->vt = VT_I4;
-				len = 4;
-				break;
 			case +4:
-				pVarResult->vt = VT_UI4;
-				break;
-			case -8:
-				pVarResult->vt = VT_I8;
-				len = 8;
-				break;
 			case +8:
-				pVarResult->vt = VT_UI8;
 				break;
 			default: return E_INVALIDARG;
 			}
@@ -658,6 +747,7 @@ STDMETHODIMP JsScript::Invoke(
 				rgvarg->llVal &= MAXULONG;
 			}
 #endif
+			pVarResult->vt = VT_I4;
 			pVarResult->llVal = 0;
 			return _pDoc ? SymReadMemory(_pDoc, rgvarg->byref, &pVarResult->llVal, len, 0) : S_OK;
 
@@ -708,38 +798,38 @@ STDMETHODIMP JsScript::Invoke(
 		switch (dispIdMember)
 		{
 		case e_cnt:
-			pVarResult->vt = VT_UINT;
+			pVarResult->vt = VT_UI4;
 			pVarResult->ulVal = _HitCount;
 			return S_OK;
 
 		case e_tid:
-			pVarResult->vt = VT_UINT;
+			pVarResult->vt = VT_UI4;
 			pVarResult->ulVal = _ThreadId;
 			return S_OK;
 		}
 
-		if (dispIdMember & e_reg_base)
+		if ((dispIdMember & (e_reg_qword|e_reg_dword|e_reg_word|e_reg_byte)) &&
+			(USHORT)dispIdMember < sizeof(CONTEXT) && !((USHORT)dispIdMember & (__alignof(ULONG_PTR) - 1)))
 		{
-			pVarResult->byref = *(void**)RtlOffsetToPointer(_pContext, (USHORT)dispIdMember);
+			ULONG_PTR value = *(ULONG_PTR*)RtlOffsetToPointer(_pContext, (USHORT)dispIdMember);
+			pVarResult->vt = VT_I4;
 
 			switch (dispIdMember & 0xffff0000)
 			{
-			case e_reg_base:
-				pVarResult->vt = VT_USERDEFINED;
-				return S_OK;
-
-			case e_reg_base|e_reg_dword:
-				pVarResult->vt = VT_I4;
-				return S_OK;
-
-			case e_reg_base|e_reg_word:
-				pVarResult->vt = VT_I2;
-				return S_OK;
-
-			case e_reg_base|e_reg_byte:
-				pVarResult->vt = VT_I1;
-				return S_OK;
+			case e_reg_byte:
+				value &= 0xFF;
+				break;
+			case e_reg_word:
+				value &= 0xFFFF;
+				break;
+			case e_reg_dword:
+				value &= 0xFFFFFFFF;
+			case e_reg_qword:
+				break;
+			default: return E_INVALIDARG;
 			}
+			pVarResult->byref = (PVOID)value;
+			return S_OK;
 		}
 	}
 

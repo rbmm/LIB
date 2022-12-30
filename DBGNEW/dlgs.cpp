@@ -1284,7 +1284,7 @@ INT_PTR ZBpExp::DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam
 						PWSTR sz = (PWSTR)alloca((++len) << 1);
 						GetWindowText(hwnd, sz, len);
 						BOOL b;
-						CONTEXT ctx;
+						CONTEXT ctx{};
 
 						if (JsScript::_RunScript(sz, &b, &ctx, 0, 0, 0, (void**)&ctx))
 						{

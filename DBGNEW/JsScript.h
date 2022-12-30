@@ -12,22 +12,23 @@ struct JsScript : IDispatch, IActiveScriptSite
 	LONG m_dwRef;
 
 	enum{
-		e_reg_base = 0x80000000,
+		e_reg_qword = 0x80000000,
 		e_reg_dword = 0x40000000,
 		e_reg_word = 0x20000000,
 		e_reg_byte = 0x10000000,
 		e_print = 1,
-		e_add,
-		e_sub,
 		e_tid,
 		e_cnt,
 		e_read,
 		e_setctx,
 		e_getctx,
-		e_toPtr,
-		e_toInt,
 		e_prUS,
-		e_prOA
+		e_prOA,
+		e_toStrW,
+		e_toStrA,
+		e_name,
+		e_strstr,
+		e_strcmp
 	};
 
 	JsScript();
