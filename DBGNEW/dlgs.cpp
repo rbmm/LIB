@@ -1244,6 +1244,35 @@ INT_PTR CRvaToOfs::DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lPa
 
 //////////////////////////////////////////////////////////////////////////
 // ZBpExp
+extern CHAR help_begin[], help_end[];
+
+void SetEditText(HWND hwnd, PVOID txt);
+
+void SetTextToControl(HWND hDlg, int nIDDlgItem, PCSTR begin, PCSTR end)
+{
+	ULONG cb = RtlPointerToOffset(begin, end);
+
+	ULONG cch = 0;
+	PWSTR wz = 0;
+	while (cch = MultiByteToWideChar(CP_UTF8, 0, begin, cb, wz, cch))
+	{
+		if (wz)
+		{
+			wz[cch] = 0;
+			SetDlgItemTextW(hDlg, nIDDlgItem, wz);
+			break;
+		}
+
+		ULONG s = (1 + cch) * sizeof(WCHAR);
+
+		if (!(wz = (PWSTR)_malloca(s)))
+		{
+			break;
+		}
+	}
+
+	if (wz) _freea(wz);
+}
 
 void ZBpExp::OnDetach()
 {
@@ -1253,15 +1282,147 @@ void ZBpExp::OnDetach()
 	}
 }
 
+void ExecuteLink(HWND hwnd, PNMLINK p)
+{
+	SetFocus(hwnd);
+	SendMessage(hwnd, EM_REPLACESEL, 0, (LPARAM)p->item.szID);
+}
+
+#if 0
+<A id="ThreadId">ThreadId</A>
+<A id="HitCount">HitCount</A>
+<A id="Read(,)">Read</A>
+<A id="SetCtx(,)">SetCtx</A> <A id="GetCtx()">GetCtx</A>
+<A id="AStr()">AStr</A> <A id="WStr()">WStr</A> <A id="UStr()">UStr</A>
+<A id="name()">name</A>
+<A id="IsNameInExpression(,)">IsNameInExpression</A>
+<A id="strstr(,)">strstr</A> <A id="strupr()">strupr</A>
+<A id="strcmp(,)">strcmp</A> <A id="stricmp(,)">stricmp</A>
+<A id="print(,)">print</A> <A id="printOA()">printOA</A> <A id="printUS()">printUS</A>
+
+#endif
+
+STATIC_ASTRING(hlp, "You can use in expression generic registers and next API:\r\n( click help for more info, click link for insert function to expression )");
+
+static PCWSTR hp_msg[] = {
+	L"ULONG ThreadId\r\n====================================\r\nid of current thread",
+	L"ULONG HitCount\r\n====================================\r\nhow many time current BP was hit (begin from 1)",
+	L"PVOID Read(ULONG cb, PVOID pv)\r\n====================================\r\nread cb bytes from pv address to PVOID size variable\r\nand return it value.\r\ncb must be 1, 2, 4 or 8",
+	L"void SetCtx(int index, PVOID pv)\r\n====================================\r\nTLS: store pv in current thread context\r\nindex must be 0, 1, 2, 3",
+	L"PVOID GetCtx(int index)\r\n====================================\r\nTLS: read previous stored value at index\r\nindex must be 0, 1, 2, 3",
+	L"BSTR AStr(PCSTR String)\r\n====================================\r\n",
+	L"BSTR WStr(PCWSTR String)\r\n====================================\r\n",
+	L"BSTR UStr(PCUNICODE_STRING String)\r\n====================================\r\n",
+	L"BSTR name(PVOID Ip)\r\n====================================\r\nreturn the \"module!fuction + ofs\" corresponds to the specified Ip value.\r\nIp: The virtual address within the function",
+	L"BOOL IsNameInExpression(BSTR Expression, BSTR Name)\r\n====================================\r\ncall RtlIsNameInExpression(Expression, Name, TRUE, 0)",
+	L"int strstr(BSTR str, BSTR strSearch)\r\n====================================\r\nReturn a index to the first occurrence of a strSearch in a str\r\nor -1 if strSearch does not appear in str",
+	L"BSTR strupr\r\n====================================\r\nConvert a string to uppercase",
+	L"int strcmp(BSTR str1, BSTR str2)\r\n====================================\r\ncompares str1 and str2. case sensetive",
+	L"int stricmp(BSTR str1, BSTR str2)\r\n====================================\r\ncompares str1 and str2 case insensetive",
+	L"void print(BSTR format, ...)\r\n====================================\r\nPrint formatted output to log",
+	L"void printOA(POBJECT_ATTRIBUTES ObjectAttributes)\r\n====================================\r\nprint OBJECT_ATTRIBUTES",
+	L"void printUS(PCUNICODE_STRING String)\r\n====================================\r\nprint UNICODE_STRING",
+};
+
+void OnHelp(HWND hwnd, HELPINFO* phi)
+{
+	if (phi->iContextType == HELPINFO_WINDOW && phi->iCtrlId == IDC_CUSTOM1 &&
+		ScreenToClient((HWND)phi->hItemHandle, &phi->MousePos))
+	{
+		LHITTESTINFO ht = { phi->MousePos };
+		if (SendMessage((HWND)phi->hItemHandle, LM_HITTEST, 0, (LPARAM)&ht))
+		{
+			if ((ULONG)ht.item.iLink < _countof(hp_msg))
+			{
+				SetDlgItemTextW(hwnd, IDC_EDIT2, hp_msg[ht.item.iLink]);
+				return ;
+			}
+		}
+	}
+
+	SetDlgItemTextW(hwnd, IDC_EDIT2, 0);
+}
+
+BOOL ZBpExp::OnOk(HWND hwnd)
+{
+	if (int len = GetWindowTextLength(hwnd))
+	{
+		if (len > PAGE_SIZE)
+		{
+			MessageBox(hwnd, 0, L"Script Too Long (> 4096 symbols)", MB_ICONWARNING);
+		}
+		else
+		{
+			if (PWSTR sz = (PWSTR)_malloca(++len << 1))
+			{
+				BOOL fOk = FALSE;
+				GetWindowText(hwnd, sz, len);
+				BOOL b;
+				CONTEXT ctx{};
+				if (JsScript::_RunScript(sz, &b, &ctx, 0, 0, 0, (void**)&ctx))
+				{
+					MessageBox(hwnd, 0, L"Script Error", MB_ICONHAND);
+				}
+				else
+				{
+					if (_pDoc->SetBpCondition(_Va, sz, len))
+					{
+						fOk = TRUE;
+					}
+				}
+				_freea(sz);
+
+				return fOk;
+			}
+
+		}
+	}
+	else
+	{
+		if (_pDoc->SetBpCondition(_Va, 0, 0))
+		{
+			return TRUE;
+		}
+	}
+
+	return FALSE;
+}
+
 INT_PTR ZBpExp::DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
 	switch (uMsg)
 	{
+	case WM_CTLCOLORSTATIC:
+		switch (GetDlgCtrlID((HWND)lParam))
+		{
+		case IDC_CUSTOM1:
+			SetTextColor((HDC)wParam, (INT_PTR)GetSysColor(COLOR_WINDOWTEXT));
+			SetBkMode((HDC)wParam, TRANSPARENT);
+			return (INT_PTR)GetSysColorBrush(COLOR_MENU);
+		}
+		break;
+	case WM_NOTIFY:
+		if (wParam == IDC_CUSTOM1)
+		{
+			switch(reinterpret_cast<PNMLINK>(lParam)->hdr.code)
+			{
+			case NM_CLICK:
+				ExecuteLink(GetDlgItem(hwndDlg, IDC_EDIT1),reinterpret_cast<PNMLINK>(lParam));
+			}
+		}
+		break;
+
 	case WM_CLOSE:
 		DestroyWindow(hwndDlg);
 		break;
+
+	case WM_HELP:
+		OnHelp(hwndDlg, reinterpret_cast<HELPINFO*>(lParam));
+		break;
 	case WM_INITDIALOG:
 		_pDoc->AddNotify(this);
+		SetTextToControl(hwndDlg, IDC_CUSTOM1, help_begin, help_end);
+		SetTextToControl(hwndDlg, IDC_STATIC, hlp, hlp + sizeof(hlp) - 1);
 		if (lParam) SetDlgItemText(hwndDlg, IDC_EDIT1, (PCWSTR)lParam);
 		break;
 	case WM_DESTROY:
@@ -1271,45 +1432,13 @@ INT_PTR ZBpExp::DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam
 		switch (wParam)
 		{
 		case IDOK:
-			if (HWND hwnd = GetDlgItem(hwndDlg, IDC_EDIT1))
+			if (OnOk(GetDlgItem(hwndDlg, IDC_EDIT1)))
 			{
-				if (int len = GetWindowTextLength(hwnd))
-				{
-					if (len > PAGE_SIZE)
-					{
-						MessageBox(hwndDlg, 0, L"Script Too Long (> 4096 symbols)", MB_ICONWARNING);
-					}
-					else
-					{
-						PWSTR sz = (PWSTR)alloca((++len) << 1);
-						GetWindowText(hwnd, sz, len);
-						BOOL b;
-						CONTEXT ctx{};
-
-						if (JsScript::_RunScript(sz, &b, &ctx, 0, 0, 0, (void**)&ctx))
-						{
-							MessageBox(hwndDlg, 0, L"Script Error", MB_ICONHAND);
-						}
-						else
-						{
-							if (_pDoc->SetBpCondition(_Va, sz, len))
-							{
-								DestroyWindow(hwndDlg);
-							}
-						}
-					}
-				}
-				else
-				{
-					if (_pDoc->SetBpCondition(_Va, 0, 0))
-					{
-						DestroyWindow(hwndDlg);
-					}
-				}
-
+				DestroyWindow(hwndDlg);
 			}
 			break;
 		}
+		break;
 	}
 
 	return ZDlg::DialogProc(hwndDlg, uMsg, wParam, lParam);

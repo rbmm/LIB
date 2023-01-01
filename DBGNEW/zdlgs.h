@@ -85,6 +85,7 @@ class ZBpExp : public ZDlg, ZDetachNotify
 	PVOID _Va;
 
 	void OnInitDialog(HWND hwndDlg);
+	BOOL OnOk(HWND hwnd);
 
 	virtual void OnDetach();
 

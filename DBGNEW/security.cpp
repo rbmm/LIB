@@ -986,17 +986,4 @@ void DumpObjectSecurity(HWND hwnd, HANDLE hObject)
 	}
 }
 
-void ShowXY(void (*fn)(HWND , HANDLE),HANDLE hObject, PCWSTR caption, HWND hwndParent, HFONT hFont)
-{
-	if (HWND hwnd = CreateWindowExW(0, WC_EDIT, caption, WS_OVERLAPPEDWINDOW|WS_VSCROLL|ES_MULTILINE,
-		CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, hwndParent, 0, 0, 0))
-	{
-		SendMessage(hwnd, WM_SETFONT, (WPARAM)hFont, 0);
-
-		fn(hwnd, hObject);
-
-		ShowWindow(hwnd, SW_SHOWNORMAL);
-	}
-}
-
 _NT_END

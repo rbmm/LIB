@@ -1,5 +1,6 @@
+public ?help_begin@NT@@3PADA, ?help_end@NT@@3PADA
 
-_TEXT segment
+.CODE
 
 ?strnlen@NT@@YA_K_KPEBD@Z proc
 	xor eax,eax
@@ -19,5 +20,10 @@ _TEXT segment
 
 _TEXT ENDS
 
+.CONST
+
+?help_begin@NT@@3PADA:
+INCLUDE <js_help.asm>
+?help_end@NT@@3PADA:
 
 END

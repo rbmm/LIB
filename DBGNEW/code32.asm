@@ -1,6 +1,9 @@
 .686
 
-_TEXT segment
+.model flat
+public ?help_begin@NT@@3PADA, ?help_end@NT@@3PADA
+
+.code
 
 ?strnlen@NT@@YIIIPBD@Z proc
 	xor eax,eax
@@ -18,6 +21,11 @@ _TEXT segment
 	ret
 ?strnlen@NT@@YIIIPBD@Z endp
 
-_TEXT ends
 
+CONST segment
+
+?help_begin@NT@@3PADA:
+INCLUDE <js_help.asm>
+?help_end@NT@@3PADA:
+CONST ends
 END

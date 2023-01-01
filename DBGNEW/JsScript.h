@@ -26,9 +26,13 @@ struct JsScript : IDispatch, IActiveScriptSite
 		e_prOA,
 		e_toStrW,
 		e_toStrA,
+		e_toStrU,
 		e_name,
+		e_strupr,
 		e_strstr,
-		e_strcmp
+		e_strcmp,
+		e_stricmp,
+		e_Exp,
 	};
 
 	JsScript();

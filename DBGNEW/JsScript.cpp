@@ -4,6 +4,13 @@ _NT_BEGIN
 
 #include "common.h"
 
+EXTERN_C NTSYSAPI BOOLEAN NTAPI RtlIsNameInExpression(
+	_In_     PCUNICODE_STRING Expression,
+	_In_     PCUNICODE_STRING Name,
+	_In_     BOOLEAN         IgnoreCase,
+	_In_opt_ PWCH            UpcaseTable
+	);
+
 JsScript::JsScript()
 {
 	m_pscParse = 0;
@@ -43,48 +50,58 @@ HRESULT JsScript::printUS(PVOID pv)
 	{
 		return S_OK;
 	}
+
+	union {
+		UNICODE_STRING32 us32;
+		UNICODE_STRING us;
+	};
+
+	NTSTATUS status;
 #ifdef _WIN64
 	if (_pContext->SegCs == 0x23)
 	{
-		UNICODE_STRING32 us32;
-		NTSTATUS status = SymReadMemory(_pDoc, (PVOID)(ULONG)(ULONG_PTR)pv, &us32, sizeof(us32), 0);
-		if (0 > status)
+		if ((ULONG_PTR)pv & (__alignof(UNICODE_STRING32) - 1)) return E_INVALIDARG;
+		if (0 > (status = SymReadMemory(_pDoc, (PVOID)(ULONG_PTR)(ULONG)(ULONG_PTR)pv, &us32, sizeof(us32), 0)))
 		{
 			return status;
 		}
 
-		if (us32.Length)
-		{
-			UNICODE_STRING us = { us32.Length, us32.MaximumLength, (PWSTR)alloca(us32.Length) };
-			if (0 > (status = SymReadMemory(_pDoc, (PVOID)us32.Buffer, us.Buffer, us.Length, 0)))
-			{
-				return status;
-			}
-
-			_pDoc->printf(prGen, L"%wZ", &us);
-		}
+		us.Buffer = (PWSTR)us32.Buffer;
 	}
 	else
 #endif
 	{
-		UNICODE_STRING us;
-		NTSTATUS status = SymReadMemory(_pDoc, pv, &us, sizeof(us), 0);
-		if (0 > status)
+		if ((ULONG_PTR)pv & (__alignof(UNICODE_STRING) - 1)) return E_INVALIDARG;
+		if (0 > (status = SymReadMemory(_pDoc, pv, &us, sizeof(us), 0)))
 		{
 			return status;
 		}
+	}
 
-		if (us.Length)
+	if (
+		us.Length > us.MaximumLength ||
+		(us.Length & (sizeof(WCHAR) - 1)) ||
+		(us.MaximumLength & (sizeof(WCHAR) - 1)) ||
+		((ULONG_PTR)us.Buffer & (__alignof(WCHAR) - 1))
+		)
+	{
+		return E_INVALIDARG;
+	}
+
+	if (us.Length)
+	{
+		if (PVOID buf = _malloca(us.Length))
 		{
-			PVOID buf = us.Buffer;
-			us.Buffer = (PWSTR)alloca(us.Length);
-			if (0 > (status = SymReadMemory(_pDoc, buf, us.Buffer, us.Length, 0)))
+			if (0 <= (status = SymReadMemory(_pDoc, us.Buffer, buf, us.Length, 0)))
 			{
-				return status;
+				us.Buffer = (PWSTR)buf;
+				_pDoc->printf(prGen, L"%wZ\r\n", &us);
 			}
-
-			_pDoc->printf(prGen, L"%wZ", &us);
+			_freea(buf);
+			return status;
 		}
+
+		return E_OUTOFMEMORY;
 	}
 
 	return S_OK;
@@ -96,33 +113,37 @@ HRESULT JsScript::printOA(PVOID pv)
 	{
 		return S_OK;
 	}
+
+	NTSTATUS status;
+
+	union {
+#ifdef _WIN64
+		OBJECT_ATTRIBUTES64 oa64;
+#endif
+		OBJECT_ATTRIBUTES32 oa32;
+		OBJECT_ATTRIBUTES oa;
+
+	};
 #ifdef _WIN64
 	if (_pContext->SegCs == 0x23)
 	{
-		OBJECT_ATTRIBUTES32 oa;
-		NTSTATUS status = SymReadMemory(_pDoc, (PVOID)(ULONG)(ULONG_PTR)pv, &oa, sizeof(oa), 0);
-		if (0 > status)
+		if (0 > (status = SymReadMemory(_pDoc, (PVOID)(ULONG_PTR)(ULONG)(ULONG_PTR)pv, &oa32, sizeof(oa32), 0)))
 		{
 			return status;
 		}
 
-		if (oa.Length != sizeof(oa))
+		if (oa32.Length != sizeof(oa32))
 		{
 			return STATUS_INFO_LENGTH_MISMATCH;
 		}
 
-		if (oa.RootDirectory)
-		{
-			_pDoc->printf(prGen, L"%x.", oa.RootDirectory);
-		}
-		return printUS((PVOID)oa.ObjectName);
+		oa64.ObjectName = oa32.ObjectName;
+		oa64.RootDirectory = oa32.RootDirectory;
 	}
 	else
 #endif
 	{
-		OBJECT_ATTRIBUTES oa;
-		NTSTATUS status = SymReadMemory(_pDoc, pv, &oa, sizeof(oa), 0);
-		if (0 > status)
+		if (0 > (status = SymReadMemory(_pDoc, pv, &oa, sizeof(oa), 0)))
 		{
 			return status;
 		}
@@ -131,13 +152,14 @@ HRESULT JsScript::printOA(PVOID pv)
 		{
 			return STATUS_INFO_LENGTH_MISMATCH;
 		}
-
-		if (oa.RootDirectory)
-		{
-			_pDoc->printf(prGen, L"%p.", oa.RootDirectory);
-		}
-		return printUS(oa.ObjectName);
 	}
+
+	if (oa.RootDirectory)
+	{
+		_pDoc->printf(prGen, L"%p.", oa.RootDirectory);
+	}
+
+	return printUS(oa.ObjectName);
 }
 
 HRESULT JsScript::RunScript(PCWSTR script, BOOL *pResult, PCONTEXT pContext, ZDbgDoc* pDoc, ULONG ThreadId, ULONG HitCount, void** pCtx)
@@ -284,9 +306,15 @@ STDMETHODIMP JsScript::GetIDsOfNames(
 				continue;
 			}
 
-			if (!wcscmp(szName, L"Str"))
+			if (!wcscmp(szName, L"WStr"))
 			{
 				DispId = e_toStrW;
+				continue;
+			}
+
+			if (!wcscmp(szName, L"UStr"))
+			{
+				DispId = e_toStrU;
 				continue;
 			}
 
@@ -302,6 +330,12 @@ STDMETHODIMP JsScript::GetIDsOfNames(
 				continue;
 			}
 
+			if (!wcscmp(szName, L"strupr"))
+			{
+				DispId = e_strupr;
+				continue;
+			}
+
 			if (!wcscmp(szName, L"strstr"))
 			{
 				DispId = e_strstr;
@@ -311,6 +345,18 @@ STDMETHODIMP JsScript::GetIDsOfNames(
 			if (!wcscmp(szName, L"strcmp"))
 			{
 				DispId = e_strcmp;
+				continue;
+			}
+
+			if (!wcscmp(szName, L"stricmp"))
+			{
+				DispId = e_stricmp;
+				continue;
+			}
+
+			if (!wcscmp(szName, L"IsNameInExpression"))
+			{
+				DispId = e_Exp;
 				continue;
 			}
 
@@ -374,6 +420,8 @@ STDMETHODIMP JsScript::GetIDsOfNames(
 					REG_CASE_D('xde', Rdx);
 					REG_CASE_D('ise', Rsi);
 					REG_CASE_D('ide', Rdi);
+					REG_CASE_D('pbe', Rbp);
+					REG_CASE_D('pse', Rsp);
 					REG_CASE_D('d8r', R8);
 					REG_CASE_D('d9r', R9);
 					REG_CASE_D('d01r', R10);
@@ -382,6 +430,7 @@ STDMETHODIMP JsScript::GetIDsOfNames(
 					REG_CASE_D('d31r', R13);
 					REG_CASE_D('d41r', R14);
 					REG_CASE_D('d51r', R15);
+					REG_CASE_D('pie', Rip);
 
 					REG_CASE_W('xa', Rax);
 					REG_CASE_W('xb', Rbx);
@@ -430,6 +479,7 @@ STDMETHODIMP JsScript::GetIDsOfNames(
 					REG_CASE_W('xd', Edx);
 					REG_CASE_W('is', Esi);
 					REG_CASE_W('id', Edi);
+					REG_CASE_D('pb', Ebp);
 
 					REG_CASE_B('la', Eax);
 					REG_CASE_B('lb', Ebx);
@@ -479,14 +529,71 @@ STDMETHODIMP JsScript::Invoke(
 	union {
 		CHAR astr[0x200];
 		WCHAR str[0x100];
+		UNICODE_STRING us;
+		UNICODE_STRING32 us32;
 	};
 
 	PWSTR psz1, psz2;
+	UNICODE_STRING us1, us2;
 
 	if (wFlags & DISPATCH_METHOD)
 	{
 		switch (dispIdMember)
 		{
+		case e_strupr:
+			if (cArgs != 1)
+			{
+				return DISP_E_BADPARAMCOUNT;
+			}
+
+			if (rgvarg[0].vt != VT_BSTR)
+			{
+				return DISP_E_BADVARTYPE;
+			}
+
+			pVarResult->bstrVal = 0;
+			pVarResult->vt = VT_BSTR;
+
+			if (psz1 = rgvarg[0].bstrVal)
+			{
+				if (psz1 = SysAllocString(_wcsupr(psz1)))
+				{
+					pVarResult->bstrVal = psz1;
+					return S_OK;
+				}
+
+				return E_OUTOFMEMORY;
+			}
+
+			return S_OK;
+
+		case e_Exp:
+			if (cArgs != 2)
+			{
+				return DISP_E_BADPARAMCOUNT;
+			}
+
+			if (rgvarg[0].vt != VT_BSTR || rgvarg[1].vt != VT_BSTR)
+			{
+				return DISP_E_BADVARTYPE;
+			}
+
+			pVarResult->boolVal = VARIANT_FALSE;
+			pVarResult->vt = VT_BOOL;
+
+			if ((psz1 = rgvarg[1].bstrVal) && (psz2 = rgvarg[0].bstrVal))
+			{
+				RtlInitUnicodeString(&us1, psz1);
+				RtlInitUnicodeString(&us2, psz2);
+				RtlUpcaseUnicodeString(&us1, &us1, FALSE);
+				if (RtlIsNameInExpression(&us1, &us2, TRUE, 0))
+				{
+					pVarResult->boolVal = VARIANT_TRUE;
+				}
+			}
+
+			return S_OK;
+
 		case e_strstr:
 			if (cArgs != 2)
 			{
@@ -528,6 +635,27 @@ STDMETHODIMP JsScript::Invoke(
 			if ((psz1 = rgvarg[1].bstrVal) && (psz2 = rgvarg[0].bstrVal))
 			{
 				pVarResult->intVal = wcscmp(psz1, psz2);
+			}
+
+			return S_OK;
+
+		case e_stricmp:
+			if (cArgs != 2)
+			{
+				return DISP_E_BADPARAMCOUNT;
+			}
+
+			if (rgvarg[0].vt != VT_BSTR || rgvarg[1].vt != VT_BSTR)
+			{
+				return DISP_E_BADVARTYPE;
+			}
+
+			pVarResult->vt = VT_I4;
+			pVarResult->intVal = 0;
+
+			if ((psz1 = rgvarg[1].bstrVal) && (psz2 = rgvarg[0].bstrVal))
+			{
+				pVarResult->intVal = _wcsicmp(psz1, psz2);
 			}
 
 			return S_OK;
@@ -608,6 +736,11 @@ STDMETHODIMP JsScript::Invoke(
 				return DISP_E_BADPARAMCOUNT;
 			}
 
+			if (rgvarg->vt != VT_I4)
+			{
+				return DISP_E_BADVARTYPE;
+			}
+
 			if (!_pDoc)
 			{
 				return S_OK;
@@ -620,9 +753,10 @@ STDMETHODIMP JsScript::Invoke(
 				if (rcb)
 				{
 					astr[rcb-1]=0;
+					rcb = strlen(astr);
 					PWSTR psz = 0;
 					cArgs = 0;
-					while (cArgs = MultiByteToWideChar(CP_UTF8, 0, astr, MAXULONG, psz, cArgs))
+					while (cArgs = MultiByteToWideChar(CP_UTF8, 0, astr, len, psz, cArgs))
 					{
 						if (psz)
 						{
@@ -652,7 +786,12 @@ STDMETHODIMP JsScript::Invoke(
 				return DISP_E_BADPARAMCOUNT;
 			}
 
-			if (rgvarg->ulVal & 1)
+			if (rgvarg->vt != VT_I4)
+			{
+				return DISP_E_BADVARTYPE;
+			}
+
+			if ((ULONG_PTR)rgvarg->byref & (__alignof(WCHAR) - 1))
 			{
 				return E_INVALIDARG;
 			}
@@ -675,6 +814,75 @@ STDMETHODIMP JsScript::Invoke(
 					pVarResult->vt = VT_BSTR;
 					return S_OK;
 				}
+			}
+			return E_FAIL;
+
+		case e_toStrU:
+			if (cArgs != 1)
+			{
+				return DISP_E_BADPARAMCOUNT;
+			}
+
+			pVarResult->bstrVal = 0;
+			pVarResult->vt = VT_BSTR;
+
+			if (!_pDoc)
+			{
+				return S_OK;
+			}
+
+#ifdef _WIN64
+			if (_pContext->SegCs == 0x23)
+			{
+				if ((ULONG_PTR)rgvarg->byref & (__alignof(UNICODE_STRING32) - 1))
+				{
+					return E_INVALIDARG;
+				}
+				if (0 > SymReadMemory(_pDoc, rgvarg->byref, &us32, sizeof(us32), &rcb))
+				{
+					return E_INVALIDARG;
+				}
+
+				us.Buffer = (PWSTR)us32.Buffer;
+			}
+			else
+#endif
+			{
+				if ((ULONG_PTR)rgvarg->byref & (__alignof(UNICODE_STRING) - 1))
+				{
+					return E_INVALIDARG;
+				}
+
+				if (0 > SymReadMemory(_pDoc, rgvarg->byref, &us, sizeof(us), &rcb))
+				{
+					return E_INVALIDARG;
+				}
+			}
+
+			if (
+				us.Length > us.MaximumLength ||
+				(us.Length & (sizeof(WCHAR) - 1)) ||
+				(us.MaximumLength & (sizeof(WCHAR) - 1)) ||
+				((ULONG_PTR)us.Buffer & (__alignof(WCHAR) - 1))
+				)
+			{
+				return E_INVALIDARG;
+			}
+
+			if (!us.Length)
+			{
+				return S_OK;
+			}
+
+			if (psz1 = SysAllocStringByteLen(0, us.Length))
+			{
+				if (0 <= SymReadMemory(_pDoc, us.Buffer, psz1, us.Length, &rcb))
+				{
+					pVarResult->bstrVal = psz1;
+					return S_OK;
+				}
+
+				SysFreeString(psz1);
 			}
 			return E_FAIL;
 
