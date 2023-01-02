@@ -2,14 +2,14 @@
 
 struct JsScript : IDispatch, IActiveScriptSite
 {
-	IActiveScript* m_pScript;
-	IActiveScriptParse* m_pscParse;
+	IActiveScript* m_pScript = 0;
+	IActiveScriptParse* m_pscParse = 0;
 	PCONTEXT _pContext;
 	ZDbgDoc* _pDoc;
 	void** _pCtx;
 	ULONG _ThreadId;
 	ULONG _HitCount;
-	LONG m_dwRef;
+	LONG m_dwRef = 1;
 
 	enum{
 		e_reg_qword = 0x80000000,
@@ -35,7 +35,6 @@ struct JsScript : IDispatch, IActiveScriptSite
 		e_Exp,
 	};
 
-	JsScript();
 	~JsScript();
 
 	///////////////////////////////////////////////////////////////

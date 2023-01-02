@@ -336,6 +336,7 @@ class ZMainWnd : public ZMDIFrameWnd
 					}
 				} while (status == STATUS_INFO_LENGTH_MISMATCH);
 			}
+
 		}
 		__super::OnIdle();
 	}
@@ -753,11 +754,6 @@ GLOBALS_EX::GLOBALS_EX()
 
 GLOBALS_EX::~GLOBALS_EX()
 {
-	if (_pipe)
-	{
-		//_pipe->Release();
-	}
-
 	if (_pScript)
 	{
 		_pScript->Stop();
@@ -767,7 +763,7 @@ GLOBALS_EX::~GLOBALS_EX()
 
 	if (_NtSymbolPath)
 	{
-		delete _NtSymbolPath;
+		delete [] _NtSymbolPath;
 	}
 }
 
@@ -826,7 +822,7 @@ BOOL GLOBALS_EX::SetPathNoReg(PCWSTR NtSymbolPath)
 
 		if (_NtSymbolPath)
 		{
-			delete _NtSymbolPath;
+			delete [] _NtSymbolPath;
 		}
 
 		_NtSymbolPath = sz;
@@ -864,9 +860,8 @@ JsScript* GLOBALS_EX::getScript()
 			}
 			else
 			{
-				_pScript->Stop();
-				_pScript->Release();
-				pScript = 0;
+				pScript->Stop();
+				pScript->Release();
 			}
 		}
 	}

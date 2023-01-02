@@ -1307,7 +1307,7 @@ void ZDbgDoc::Detach()
 
 		if (_NtSymbolPath)
 		{
-			delete _NtSymbolPath;
+			delete [] _NtSymbolPath;
 			_NtSymbolPath = 0;
 		}
 

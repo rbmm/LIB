@@ -11,31 +11,36 @@ EXTERN_C NTSYSAPI BOOLEAN NTAPI RtlIsNameInExpression(
 	_In_opt_ PWCH            UpcaseTable
 	);
 
-JsScript::JsScript()
-{
-	m_pscParse = 0;
-	m_pScript = 0;
-	m_dwRef = 1;
-}
-
 JsScript::~JsScript()
 {
-	if (m_pscParse) m_pscParse->Release();
-	if (m_pScript) m_pScript->Release();
+	IUnknown* pUnk;
+	if (pUnk = m_pscParse) pUnk->Release();
+	if (pUnk = m_pScript) pUnk->Release();
 }
 
 BOOL JsScript::CreateScriptEngine()
 {
 	CLSID clsid;
+	IActiveScript* pScript;
+	if (!CLSIDFromProgID(L"JavaScript", &clsid) &&
+		!CoCreateInstance(clsid, 0, CLSCTX_INPROC_SERVER, IID_PPV(pScript)))
+	{
+		m_pScript = pScript;
 
-	return !CLSIDFromProgID(L"JavaScript", &clsid) &&
-		!CoCreateInstance(clsid, 0, CLSCTX_INPROC_SERVER, IID_PPV(m_pScript)) &&
-		!m_pScript->QueryInterface(IID_PPV(m_pscParse)) &&
-		!m_pScript->SetScriptSite(this) &&
-		!m_pscParse->InitNew() &&
-		!m_pScript->SetScriptState(SCRIPTSTATE_INITIALIZED) &&
-		!m_pScript->AddNamedItem(L"#", SCRIPTITEM_ISVISIBLE|SCRIPTITEM_GLOBALMEMBERS) &&
-		!m_pScript->SetScriptState(SCRIPTSTATE_STARTED);
+		IActiveScriptParse* pscParse;
+		if (!pScript->QueryInterface(IID_PPV(pscParse)))
+		{
+			m_pscParse = pscParse;
+
+			return !pScript->SetScriptSite(this) &&
+				!pscParse->InitNew() &&
+				!pScript->SetScriptState(SCRIPTSTATE_INITIALIZED) &&
+				!pScript->AddNamedItem(L"#", SCRIPTITEM_ISVISIBLE|SCRIPTITEM_GLOBALMEMBERS) &&
+				!pScript->SetScriptState(SCRIPTSTATE_STARTED);
+		}
+	}
+
+	return FALSE;
 }
 
 void JsScript::Stop()
