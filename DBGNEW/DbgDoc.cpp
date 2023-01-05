@@ -759,9 +759,9 @@ ZDbgDoc* ZDbgDoc::find(DWORD dwProcessId)
 	return 0;
 }
 
-void ZDbgDoc::StopTrace()
+void ZDbgDoc::StopTrace(ZTraceView* pTraceView)
 {
-	if (_IsInTrace)
+	if (_IsInTrace && pTraceView == _pTraceView)
 	{
 		_IsInTrace = FALSE;
 		_pTraceView->SetStatus();
@@ -1170,17 +1170,6 @@ void ZDbgDoc::Detach()
 
 	if (_IsDebugger) 
 	{
-		if (_IsInTrace)
-		{
-			if (_pTraceView)
-			{
-				DestroyWindow(_pTraceView->ZFrameMultiWnd::getHWND());
-				_pTraceView->Release();
-				_pTraceView = 0;
-			}
-			_IsInTrace = 0;
-		}
-		
 		SaveBOL();
 		deleteBOL();
 		SaveBps();
@@ -2968,7 +2957,7 @@ NTSTATUS ZDbgDoc::OnException(DWORD dwThreadId, PEXCEPTION_RECORD ExceptionRecor
 			{
 				ctx->EFlags &= ~TRACE_FLAG;
 
-				StopTrace();
+				StopTrace(_pTraceView);
 			}
 			return ExceptionCode;
 		}

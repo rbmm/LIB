@@ -411,7 +411,7 @@ public:
 
 	void ScrollAsmUp(){ _pAsm->OnScroll(_pAsm->getHWND(), SB_VERT, SB_LINEUP); }
 
-	void StopTrace();
+	void StopTrace(ZTraceView* pTraceView);
 
 	//////////////////////////////////////////////////////////////////////////
 	// bp

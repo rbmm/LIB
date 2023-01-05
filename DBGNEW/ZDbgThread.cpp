@@ -649,6 +649,7 @@ void ZTraceView::OnDetach()
 	if (_pDoc) 
 	{
 		_pDoc->RemoveNotify(this);
+		_pDoc->StopTrace(this);
 		_pDoc->Release();
 		_pDoc = 0;
 	}
@@ -760,7 +761,7 @@ LRESULT ZTraceView::WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPara
 		return 0;
 
 	case WM_DESTROY:
-		if (pDoc) pDoc->StopTrace();
+		if (pDoc) pDoc->StopTrace(this);
 		break;
 	}
 
