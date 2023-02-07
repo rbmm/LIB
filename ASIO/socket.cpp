@@ -28,7 +28,7 @@ SOCKET _WSASocket(
 				 _In_ DWORD              dwFlags
 				 )
 {
-	if (g_nt_ver.Version >= (NTDDI_WIN7|7601))
+	if (g_nt_ver.FullVersion >= (NTDDI_WIN7|7601))
 	{
 		return WSASocket(af, type, protocol, lpProtocolInfo, g, dwFlags | WSA_FLAG_NO_HANDLE_INHERIT);
 	}
