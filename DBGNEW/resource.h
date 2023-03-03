@@ -27,6 +27,7 @@
 #define IDD_DIALOG20                    156
 #define IDD_DIALOG21                    157
 #define IDD_DIALOG22                    158
+#define IDD_DIALOG23                    159
 #define IDC_CUSTOM1                     1010
 #define ID_FILE_EXIT                    40001
 #define ID_HELP_ABOUT                   40002
@@ -94,7 +95,7 @@
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        159
+#define _APS_NEXT_RESOURCE_VALUE        160
 #define _APS_NEXT_COMMAND_VALUE         40035
 #define _APS_NEXT_CONTROL_VALUE         1011
 #define _APS_NEXT_SYMED_VALUE           101

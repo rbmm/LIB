@@ -1987,6 +1987,14 @@ INT_PTR ZModulesDlg::DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM l
 	case WM_COMMAND:
 		switch (wParam)
 		{
+		case IDC_BUTTON4:
+			if (ZLoadDlg* p = new ZLoadDlg(_pDoc))
+			{
+				p->Create();
+				p->Release();
+			}
+			break;
+
 		case IDC_BUTTON6:
 			if ((iItem = ListView_GetSelectionMark(GetDlgItem(hwndDlg, IDC_LIST1))) < _nDllCount)
 			{
@@ -2896,6 +2904,93 @@ INT_PTR ZSymbolsDlg::DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM l
 	return ZDlg::DialogProc(hwndDlg, uMsg, wParam, lParam);
 }
 
+//////////////////////////////////////////////////////////////////////////
+// ZLoadDlg
+ZLoadDlg::ZLoadDlg(ZDbgDoc* pDoc)
+{
+	_pDoc = pDoc;
+	pDoc->AddRef();
+}
+
+ZLoadDlg::~ZLoadDlg()
+{
+	_pDoc->Release();
+}
+
+HWND ZLoadDlg::Create()
+{
+	return ZDlg::Create((HINSTANCE)&__ImageBase, MAKEINTRESOURCE(IDD_DIALOG23), ZGLOBALS::getMainHWND(), 0);
+}
+
+void ZLoadDlg::OnDetach()
+{
+	DestroyWindow(getHWND());
+}
+
+BOOL ZLoadDlg::OnOk(HWND hwndDlg)
+{
+	WCHAR buf[64], *psz;
+	if (ULONG len = GetDlgItemTextW(hwndDlg, IDC_EDIT1, buf, _countof(buf)))
+	{
+		if (len <= sizeof(PVOID)*2)
+		{
+			if (PVOID pv = (PVOID)(ULONG_PTR)_wcstoi64(buf, &psz, 16))
+			{
+				if (!*psz)
+				{
+					if (_pDoc->getDllByBaseNoRefNoParse(pv))
+					{
+						MessageBoxW(hwndDlg, L"specified image is already loaded", 0, MB_ICONWARNING);
+						return FALSE;
+					}
+					GetDlgItemTextW(hwndDlg, IDC_EDIT2, buf, _countof(buf));
+					DBGKM_LOAD_DLL LoadDll = { 0, pv, 0, 0, buf };
+					_pDoc->Load(&LoadDll, FALSE);
+					if (_pDoc->getDllByBaseNoRefNoParse(pv))
+					{
+						return TRUE;
+					}
+
+					MessageBoxW(hwndDlg, L"not a image !", 0, MB_ICONWARNING);
+					return FALSE;
+				}
+			}
+		}
+	}
+	MessageBoxW(hwndDlg, L"Invalid Address !", 0, MB_ICONWARNING);
+	return FALSE;
+}
+
+INT_PTR ZLoadDlg::DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
+{
+	switch(uMsg)
+	{
+	case WM_DESTROY:
+		_pDoc->RemoveNotify(this);
+		break;
+
+	case WM_INITDIALOG:
+		_pDoc->AddNotify(this);
+		break;
+
+	case WM_COMMAND:
+		switch (wParam)
+		{
+		case IDCANCEL:
+			DestroyWindow(hwndDlg);
+			break;
+
+		case IDOK:
+			if (OnOk(hwndDlg))
+			{
+				EndDialog(hwndDlg, 0);
+			}
+			break;
+		}
+		break;
+	}
+	return __super::DialogProc(hwndDlg, uMsg, wParam, lParam);
+}
 //////////////////////////////////////////////////////////////////////////
 // ZForwardDlg
 struct _SORT_FORWARDS

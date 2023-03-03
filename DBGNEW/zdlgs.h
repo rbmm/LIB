@@ -218,6 +218,21 @@ public:
 	ZForwardDlg(ZDbgDoc* pDoc, ZDll* pDll);
 };
 
+class ZLoadDlg : public ZDlg, ZDetachNotify 
+{
+	ZDbgDoc* _pDoc;
+
+	virtual void OnDetach();
+
+	virtual INT_PTR DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam);
+
+	BOOL OnOk(HWND hwndDlg);
+	~ZLoadDlg();
+public:
+	HWND Create();
+	ZLoadDlg(ZDbgDoc* pDoc);
+};
+
 class ZExecDlg : public ZDlg
 {
 	HANDLE _hSysToken;

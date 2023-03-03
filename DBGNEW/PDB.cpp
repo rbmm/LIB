@@ -340,7 +340,7 @@ NTSTATUS PdbReader::Init(PdbFileHeader* header, SIZE_T ViewSize, PGUID signature
 		return STATUS_INVALID_IMAGE_FORMAT;
 	}
 
-	ULONG nStreams = *pd++;;
+	ULONG nStreams = *pd++;
 	_nStreams = nStreams;
 	_StreamSizes = (PLONG)pd, _StreamPages = pd + _nStreams;
 
@@ -462,6 +462,7 @@ NTSTATUS OpenPdb(PHANDLE hFile,
 				 BOOL& bUserChoice)
 {
 	NTSTATUS status;
+	PWSTR c;
 
 	if (!bUserChoice)
 	{
@@ -478,9 +479,7 @@ NTSTATUS OpenPdb(PHANDLE hFile,
 			}
 		}
 
-		PWSTR c = wcsrchr(PdbFileName, '\\');
-
-		if (c)
+		if (c = wcsrchr(PdbFileName, '\\'))
 		{
 			PdbFileName = c + 1;
 		}
@@ -512,6 +511,10 @@ NTSTATUS OpenPdb(PHANDLE hFile,
 	// try ask user
 
 	*hFile = 0;
+	if (c = wcsrchr(PdbFileName, '\\'))
+	{
+		PdbFileName = c + 1;
+	}
 
 	if (ZPDBPathDlg* dlg = new ZPDBPathDlg(hFile, NtSymbolPath, PdbFileName, Signature, Age))
 	{
@@ -577,12 +580,22 @@ __loop:
 
 	status = Init(BaseAddress, ViewSize, &lpcvh->Signature, lpcvh->Age);
 
-	if (status == STATUS_REVISION_MISMATCH && bUserChoice)
+	if (0 > status)
 	{
+		bUserChoice = TRUE;
 		ZwUnmapViewOfSection(NtCurrentProcess(), BaseAddress);
-		_bUnmap = FALSE;
+		_PdbBase = 0, _bUnmap = FALSE;
 
-		if (MessageBoxW(0,0,L"PDB file mismatch", MB_ICONWARNING|MB_RETRYCANCEL)==IDRETRY)
+		PWSTR psz = 0;
+		if (!FormatMessageW(
+			FORMAT_MESSAGE_ALLOCATE_BUFFER|FORMAT_MESSAGE_FROM_HMODULE|FORMAT_MESSAGE_IGNORE_INSERTS, 
+			GetModuleHandle(L"ntdll"), status, 0, (PWSTR)&psz, 0, 0))
+		{
+			psz = 0;
+		}
+		int i = MessageBoxW(0, psz, L"PDB file mismatch", MB_ICONWARNING|MB_RETRYCANCEL);
+		LocalFree(psz);
+		if (i == IDRETRY)
 		{
 			goto __loop;
 		}
