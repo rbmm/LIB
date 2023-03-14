@@ -1811,7 +1811,10 @@ ZModulesDlg::~ZModulesDlg()
 		ZDll** ppDll = _ppDll;
 		do 
 		{
-			(*ppDll++)->Release();
+			if (ZDll* pDll = *ppDll++)
+			{
+				pDll->Release();
+			}
 		} while (--n);
 
 		delete _ppDll;
@@ -2020,6 +2023,29 @@ INT_PTR ZModulesDlg::DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM l
 				_pDoc->deleteBOL();
 			}
 			DestroyWindow(hwndDlg);
+			break;
+
+		case IDC_BUTTON7:
+			if ((iItem = ListView_GetSelectionMark(GetDlgItem(hwndDlg, IDC_LIST1))) < _nDllCount)
+			{
+				if (MessageBoxW(hwndDlg, L"Are you sure ?", L"reload dll", MB_ICONQUESTION|MB_YESNO) == IDYES)
+				{
+					pDll = _ppDll[iItem];
+					_ppDll[iItem] = 0;
+
+					DBGKM_LOAD_DLL LoadDll = { 0, pDll->getBase(), 0, 0, const_cast<PWSTR>(pDll->path()) };
+
+					_pDoc->OnUnloadDll(LoadDll.BaseOfDll);
+					_pDoc->Load(&LoadDll, FALSE);
+
+					pDll->Release();
+
+					if (!_pDoc->getDllByVa(&_ppDll[iItem], LoadDll.BaseOfDll))
+					{
+						DestroyWindow(hwndDlg);
+					}
+				}
+			}
 			break;
 
 		case IDC_BUTTON3:

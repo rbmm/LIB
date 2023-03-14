@@ -1381,7 +1381,39 @@ void ZDbgDoc::OnCreateThread(DWORD dwThreadId, PDBGUI_CREATE_THREAD CreateThread
 	}
 
 	printf(prThread, L"create thread %x at %p, teb=%p\r\n", dwThreadId, CreateThreadInfo->NewThread.StartAddress, tbi.TebBaseAddress);
-	
+
+	if (ZDll* pDll = getDllByVaNoRef(CreateThreadInfo->NewThread.StartAddress))
+	{
+		char sz[256];
+		PCSTR Name = 0;
+		INT_PTR NameVa = 0;
+		int d = 0;
+		if (PCSTR name = pDll->getNameByVa2(CreateThreadInfo->NewThread.StartAddress, &NameVa))
+		{
+			if (IS_INTRESOURCE(name))
+			{
+				CHAR oname[16];
+				sprintf_s(oname, _countof(oname), "#%u", (ULONG)(ULONG_PTR)name);
+				name = oname;
+			}
+
+			Name = unDNameEx(sz, (PCSTR)name, RTL_NUMBER_OF(sz), UNDNAME_DEFAULT);
+			
+			WCHAR szdisp[32];
+			
+			if (d = RtlPointerToOffset(NameVa, CreateThreadInfo->NewThread.StartAddress))
+			{
+				swprintf_s(szdisp, _countof(szdisp), L"+%x", d);
+			}
+			else
+			{
+				*szdisp = 0;
+			}
+
+			printf(prThread, L"\t%s!%S%s\r\n", pDll->name(), Name, szdisp);
+		}
+	}
+
 	_pDbgTH->AddThread(dwThreadId, tbi.TebBaseAddress, CreateThreadInfo->NewThread.StartAddress);
 
 	if (ZDbgThread* pThread = new ZDbgThread(dwThreadId, HandleToThread, tbi.TebBaseAddress))
@@ -1476,6 +1508,7 @@ __fail:
 		goto __fail;
 	}
 
+	OnLoadDll(dwThreadId, &LoadDll, TRUE, 0);
 	OnCreateThread(dwThreadId, &CreateThreadInfo);
 
 	if (CreateThreadInfo.NewThread.StartAddress)
@@ -1484,8 +1517,6 @@ __fail:
 		swprintf(sz, L"%p; EntryPoint", CreateThreadInfo.NewThread.StartAddress);
 		_pAsm->InsertString(sz);
 	}
-
-	OnLoadDll(dwThreadId, &LoadDll, TRUE, 0);
 
 	static PVOID LdrInitializeThunk;
 	STATIC_ANSI_STRING(aLdrInitializeThunk, "LdrInitializeThunk");
