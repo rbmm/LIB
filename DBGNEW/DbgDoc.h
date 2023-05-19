@@ -392,7 +392,7 @@ public:
 
 	ZDll* getDllByBaseNoRefNoParse(PVOID lpBaseOfDll);
 
-	ZDll* getDllByVaNoRef(PVOID Va);
+	ZDll* getDllByVaNoRef(PVOID Va, BOOL bParse = TRUE);
 
 	ZDll* getDllByPathNoRef(PCWSTR path);
 

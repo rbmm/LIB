@@ -140,6 +140,15 @@ INT_PTR ZPDBPathDlg::DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM l
 		case IDCANCEL:
 			EndDialog(hwndDlg, -1);
 			break;
+		case MAKEWPARAM(IDC_BUTTON1, BN_CLICKED):
+			{
+				static const COMDLG_FILTERSPEC rgSpec[] =
+				{ 
+					{ L"PDB files", L"*.pdb" },
+				};
+				OnBrowse(hwndDlg, IDC_EDIT1, _countof(rgSpec), rgSpec);
+			}
+			break;
 		}
 		break;
 
@@ -253,6 +262,16 @@ INT_PTR ZSrcPathDlg::DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM l
 		case MAKEWPARAM(IDC_CHECK1, BN_CLICKED):
 			_pq->bNotLoad = IsDlgButtonChecked(hwndDlg, IDC_CHECK1) == BST_CHECKED;
 			EnableWindow(GetDlgItem(hwndDlg, IDC_EDIT1), !_pq->bNotLoad);
+			break;
+
+		case MAKEWPARAM(IDC_BUTTON1, BN_CLICKED):
+			{
+				COMDLG_FILTERSPEC rgSpec[] =
+				{ 
+					{ L"", _filename },
+				};
+				OnBrowse(hwndDlg, IDC_EDIT1, _countof(rgSpec), rgSpec);
+			}
 			break;
 		}
 		break;
@@ -3078,7 +3097,7 @@ ZForwardDlg::~ZForwardDlg()
 
 HWND ZForwardDlg::Create()
 {
-	return ZDlg::Create((HINSTANCE)&__ImageBase, MAKEINTRESOURCE(IDD_DIALOG5), ZGLOBALS::getMainHWND(), 0);
+	return ZDlg::Create((HINSTANCE)&__ImageBase, MAKEINTRESOURCE(IDD_DIALOG4), ZGLOBALS::getMainHWND(), 0);
 }
 
 void ZForwardDlg::OnDetach()

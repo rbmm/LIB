@@ -23,6 +23,25 @@ HANDLE g_hDrv;
 BYTE g_ThreadIndex, g_ProcessIndex, g_FileIndex;
 ULONG g_dwGuiThreadId;
 
+EXTERN_C_START
+
+PVOID __imp_NtUserEnableMouseInputForCursorSuppression, __imp_NtUserIsMouseInputEnabled;
+
+WINBASEAPI
+BOOL
+WINAPI
+NtUserEnableMouseInputForCursorSuppression(BOOL bEnable);
+
+WINBASEAPI
+BOOL
+WINAPI
+NtUserIsMouseInputEnabled();
+
+EXTERN_C_END
+
+#pragma comment(linker, "/alternatename:__imp__NtUserEnableMouseInputForCursorSuppression@4=___imp_NtUserEnableMouseInputForCursorSuppression")
+#pragma comment(linker, "/alternatename:__imp__NtUserIsMouseInputEnabled@0=___imp_NtUserIsMouseInputEnabled")
+
 STATIC_UNICODE_STRING_(SOFC);
 
 ZExceptionFC::ZExceptionFC()
@@ -284,9 +303,16 @@ class ZMainWnd : public ZMDIFrameWnd
 	virtual void OnIdle()
 	{
 		ULONG time = GetTickCount();
+
 		if (_checkTime < time)
 		{
 			_checkTime = time + 2000;//2 sec
+			if (__imp_NtUserIsMouseInputEnabled && 
+				__imp_NtUserEnableMouseInputForCursorSuppression &&
+				!NtUserIsMouseInputEnabled())
+			{
+				NtUserEnableMouseInputForCursorSuppression(TRUE);
+			}
 
 			PLIST_ENTRY head = &ZGLOBALS::get()->_docListHead, entry = head;
 
@@ -336,8 +362,8 @@ class ZMainWnd : public ZMDIFrameWnd
 					}
 				} while (status == STATUS_INFO_LENGTH_MISMATCH);
 			}
-
 		}
+
 		__super::OnIdle();
 	}
 
@@ -641,6 +667,7 @@ LRESULT ZMainWnd::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 		}
 		break;
 	}
+
 	return ZMDIFrameWnd::WindowProc(hwnd, uMsg, wParam, lParam);
 }
 
@@ -1082,6 +1109,12 @@ void IO_RUNDOWN::RundownCompleted()
 
 VOID WINAPI FiberProc(PVOID lpFiber)
 {
+	if (HMODULE hmod = GetModuleHandleW(L"user32.dll"))
+	{
+		__imp_NtUserIsMouseInputEnabled = GetProcAddress(hmod, (PCSTR)2520);
+		__imp_NtUserEnableMouseInputForCursorSuppression = GetProcAddress(hmod, (PCSTR)2519);
+	}
+
 	zmain();
 	SwitchToFiber(lpFiber);
 }
