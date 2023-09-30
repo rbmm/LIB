@@ -9,7 +9,7 @@
 
 #ifdef _PRINT_CPP_NAMES_
 
-#define ASM_FUNCTION {__pragma(message(__FUNCDNAME__" proc\r\n" __FUNCDNAME__ " endp"))}
+#define ASM_FUNCTION {__pragma(message("; " __FUNCSIG__ "\r\n" __FUNCDNAME__" proc\r\n" __FUNCDNAME__ " endp"))}
 #define CPP_FUNCTION __pragma(message("; " __FUNCSIG__ "\r\nextern " __FUNCDNAME__ " : PROC"))
 
 #pragma warning(disable : 4100)

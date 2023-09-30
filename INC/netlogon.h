@@ -7,12 +7,12 @@ typedef struct USER_SESSION_KEY {
 }* PUSER_SESSION_KEY;
 
 typedef struct NETLOGON_VALIDATION_SAM_INFO4 {
-	LARGE_INTEGER LogonTime;
-	LARGE_INTEGER LogoffTime;
-	LARGE_INTEGER KickOffTime;
-	LARGE_INTEGER PasswordLastSet;
-	LARGE_INTEGER PasswordCanChange;
-	LARGE_INTEGER PasswordMustChange;
+	OLD_LARGE_INTEGER LogonTime;
+	OLD_LARGE_INTEGER LogoffTime;
+	OLD_LARGE_INTEGER KickOffTime;
+	OLD_LARGE_INTEGER PasswordLastSet;
+	OLD_LARGE_INTEGER PasswordCanChange;
+	OLD_LARGE_INTEGER PasswordMustChange;
 	UNICODE_STRING EffectiveName;
 	UNICODE_STRING FullName;
 	UNICODE_STRING LogonScript;
@@ -33,8 +33,8 @@ typedef struct NETLOGON_VALIDATION_SAM_INFO4 {
 	UCHAR LMKey[8];
 	ULONG UserAccountControl;
 	ULONG SubAuthStatus;
-	LARGE_INTEGER LastSuccessfulILogon;
-	LARGE_INTEGER LastFailedILogon;
+	OLD_LARGE_INTEGER LastSuccessfulILogon;
+	OLD_LARGE_INTEGER LastFailedILogon;
 	ULONG FailedILogonCount;
 	ULONG Reserved4;
 	ULONG SidCount;

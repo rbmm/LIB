@@ -12,6 +12,11 @@ public:
 		v_complete = 0, v_init = 0x80000000
 	};
 
+	BOOL IsRundownCompleted()
+	{
+		return v_complete == _Value;
+	}
+
 	_NODISCARD BOOL IsRundownBegin()
 	{
 		return 0 <= _Value;
@@ -103,3 +108,54 @@ inline _NODISCARD BOOL ObpLock(PLONG pLock)
 
 	return FALSE;
 }
+
+struct UYRundown 
+{
+	ULONG _dwThreadId = GetCurrentThreadId();
+	RundownProtection _rp = RundownProtection::v_init;
+	LONG _dwRefCount = 1;
+
+	void AddRef()
+	{
+		InterlockedIncrementNoFence(&_dwRefCount);
+	}
+
+	void Release()
+	{
+		if (!InterlockedDecrement(&_dwRefCount))
+		{
+			delete this;
+		}
+	}
+
+	_NODISCARD BOOL AcquireProtection()
+	{
+		return _rp.Acquire();
+	}
+
+	void ReleaseProtection()
+	{
+		if (_rp.Release())
+		{
+			ZwAlertThreadByThreadId((HANDLE)(ULONG_PTR)_dwThreadId);
+		}
+	}
+
+	void RunDown()
+	{
+		if (GetCurrentThreadId() != _dwThreadId) __debugbreak();
+
+		if (_rp.Acquire()) 
+		{ 
+			_rp.Rundown_l(); 
+
+			if (!_rp.Release())
+			{
+				do 
+				{
+					ZwWaitForAlertByThreadId(0, 0);
+				} while (!_rp.IsRundownCompleted());
+			}
+		}
+	}
+};

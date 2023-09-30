@@ -14,9 +14,9 @@ typedef enum _UNWIND_OP_CODES {
 
 typedef union _UNWIND_CODE {
 	struct {
-		BYTE CodeOffset;
-		BYTE UnwindOp : 4;
-		BYTE OpInfo   : 4;
+		UCHAR CodeOffset;
+		UCHAR UnwindOp : 4;
+		UCHAR OpInfo   : 4;
 	};
 	USHORT FrameOffset;
 } UNWIND_CODE, *PUNWIND_CODE;
@@ -26,12 +26,12 @@ typedef union _UNWIND_CODE {
 //#define UNW_FLAG_CHAININFO 0x04
 
 typedef struct _UNWIND_INFO {
-	BYTE Version       : 3;
-	BYTE Flags         : 5;
-	BYTE SizeOfProlog;
-	BYTE CountOfCodes;
-	BYTE FrameRegister : 4;
-	BYTE FrameOffset   : 4;
+	UCHAR Version       : 3;
+	UCHAR Flags         : 5;
+	UCHAR SizeOfProlog;
+	UCHAR CountOfCodes;
+	UCHAR FrameRegister : 4;
+	UCHAR FrameOffset   : 4;
 	UNWIND_CODE UnwindCode[1];
 	/*  UNWIND_CODE MoreUnwindCode[((CountOfCodes + 1) & ~1) - 1];
 	*   union {
@@ -68,8 +68,8 @@ typedef EXCEPTION_DISPOSITION (*PEXCEPTION_HANDLER) (
 
 typedef struct SCOPE_RECORD
 {
-	DWORD BeginAddress;
-	DWORD EndAddress;
-	DWORD HandlerAddress;
-	DWORD JumpTarget;
+	ULONG BeginAddress;
+	ULONG EndAddress;
+	ULONG HandlerAddress;
+	ULONG JumpTarget;
 } * PSCOPE_RECORD;
