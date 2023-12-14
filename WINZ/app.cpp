@@ -802,7 +802,7 @@ const VS_FIXEDFILEINFO* GetFileVersion(PCWSTR name)
 	PVOID ImageBase;
 	static LPCWSTR a[3] = { RT_VERSION, MAKEINTRESOURCE(1) };
 	PIMAGE_RESOURCE_DATA_ENTRY pirde;
-	DWORD size, wLength;
+	DWORD size, wLength, wValueLength;
 
 	struct VS_VERSIONINFO_HEADER {
 		WORD             wLength;
@@ -815,22 +815,23 @@ const VS_FIXEDFILEINFO* GetFileVersion(PCWSTR name)
 		(ImageBase = GetModuleHandle(name)) &&
 		0 <= LdrFindResource_U(ImageBase, a, 3, &pirde) && 
 		0 <= LdrAccessResource(ImageBase, pirde, (void**)&pv, &size) && 
-		size > sizeof(*pv) &&
-		(wLength = pv->wLength) <= size &&
-		pv->wValueLength >= sizeof(VS_FIXEDFILEINFO)
+		size > sizeof(VS_VERSIONINFO_HEADER) &&
+		(wLength = pv->wLength) >= sizeof(VS_VERSIONINFO_HEADER) &&
+		(wValueLength = pv->wValueLength) >= sizeof(VS_FIXEDFILEINFO) &&
+		wLength <= size &&
+		wValueLength <= (wLength - sizeof(VS_VERSIONINFO_HEADER))
 		)
 	{
-		PVOID end = RtlOffsetToPointer(pv, wLength);
-		PWSTR sz = pv->szKey;
+		PVOID end = RtlOffsetToPointer(pv, wLength - wValueLength);
+		PCWSTR sz = pv->szKey;
 		do 
 		{
 			if (!*sz++)
 			{
-				VS_FIXEDFILEINFO* pffi = (VS_FIXEDFILEINFO*)((3 + (ULONG_PTR)sz) & ~3);
-				//RtlOffsetToPointer(pv, (RtlPointerToOffset(pv, sz) + 3) & ~3);
-				return RtlPointerToOffset(pffi, end) < wLength && pffi->dwSignature == VS_FFI_SIGNATURE ? pffi : 0;
+				VS_FIXEDFILEINFO* pffi = (VS_FIXEDFILEINFO*)((__alignof(VS_FIXEDFILEINFO) - 1 + (ULONG_PTR)sz) & ~(__alignof(VS_FIXEDFILEINFO) - 1));
+				return VS_FFI_SIGNATURE == pffi->dwSignature ? pffi : 0;
 			}
-		} while (sz < end);
+		} while (sz <= end);
 	}
 
 	return 0;
