@@ -40,6 +40,11 @@ BOOL CWizFrame::OnInitDialog(HWND /*hwndDlg*/)
 	return TRUE;
 }
 
+BOOL CWizFrame::OnInitDialog(HWND hwndDlg, LPARAM /*lParam*/)
+{
+	return OnInitDialog(hwndDlg);
+}
+
 INT_PTR CWizFrame::DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
 	switch (uMsg)
@@ -82,7 +87,7 @@ INT_PTR CWizFrame::DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lPa
 
 	case WM_INITDIALOG:
 		_pActivePage = 0;
-		return OnInitDialog(hwndDlg);
+		return OnInitDialog(hwndDlg, lParam);
 
 	case WM_COMMAND:
 		switch (wParam)

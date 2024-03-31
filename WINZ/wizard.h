@@ -12,6 +12,8 @@ class __declspec(novtable) CWizFrame : public ZDlg
 
 	virtual BOOL OnInitDialog(HWND hwndDlg);
 
+	virtual BOOL OnInitDialog(HWND hwndDlg, LPARAM lParam);
+
 	virtual void DoInstall();
 
 	virtual void SetStatusText(PCWSTR lpCaption, PCWSTR lpText);
