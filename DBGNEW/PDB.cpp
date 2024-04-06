@@ -35,7 +35,7 @@ PdbReader::~PdbReader()
 
 	if (_BaseAddress)
 	{
-		delete _BaseAddress;
+		delete [] _BaseAddress;
 	}
 
 	if (_bUnmap)
@@ -125,7 +125,7 @@ NTSTATUS PdbReader::getStream(ULONG iStream, void** ppv, PULONG pcb, LONG minSiz
 			return STATUS_SUCCESS;
 		}
 
-		delete pv;
+		delete [] pv;
 
 		return STATUS_INVALID_IMAGE_FORMAT;
 	}

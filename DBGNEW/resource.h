@@ -28,6 +28,7 @@
 #define IDD_DIALOG21                    157
 #define IDD_DIALOG22                    158
 #define IDD_DIALOG23                    159
+#define IDD_DIALOG24                    160
 #define IDC_CUSTOM1                     1010
 #define ID_FILE_EXIT                    40001
 #define ID_HELP_ABOUT                   40002
@@ -63,6 +64,8 @@
 #define ID_3_KERNELSTACK40032           40032
 #define ID_5_COPY                       40033
 #define ID_2_SAVE                       40034
+#define ID_3_THREADID                   40035
+#define ID_2_STEPOVER                   40036
 #define ID_EDIT_CLEAR                   0xE120
 #define ID_EDIT_CLEAR_ALL               0xE121
 #define ID_EDIT_COPY                    0xE122
@@ -95,8 +98,8 @@
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        160
-#define _APS_NEXT_COMMAND_VALUE         40035
+#define _APS_NEXT_RESOURCE_VALUE        161
+#define _APS_NEXT_COMMAND_VALUE         40037
 #define _APS_NEXT_CONTROL_VALUE         1011
 #define _APS_NEXT_SYMED_VALUE           101
 #endif

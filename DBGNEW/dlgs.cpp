@@ -1845,7 +1845,6 @@ ZModulesDlg::ZModulesDlg(ZDbgDoc* pDoc)
 {
 	_pDoc = pDoc;
 	pDoc->AddRef();
-	_SortOrder = 1;
 	_ppDll = 0;
 }
 
@@ -1888,7 +1887,7 @@ void ZModulesDlg::OnInitDialog(HWND hwnd)
 	ScreenToClient(hwnd, 1 + (POINT*)&rc);
 	CreateLayout(hwnd, rc.right - 1, rc.bottom - 1);
 
-	ListView_SetExtendedListViewStyle(hwndLV, LVS_EX_BORDERSELECT|LVS_EX_INFOTIP|LVS_EX_FULLROWSELECT|LVS_EX_DOUBLEBUFFER);
+	ListView_SetExtendedListViewStyle(hwndLV, LVS_EX_HEADERDRAGDROP|LVS_EX_BORDERSELECT|LVS_EX_INFOTIP|LVS_EX_FULLROWSELECT|LVS_EX_DOUBLEBUFFER);
 
 	SIZE size = { 8, 16 };
 	if (HDC hdc = GetDC(hwndLV))
@@ -1919,11 +1918,16 @@ void ZModulesDlg::OnInitDialog(HWND hwnd)
 		}
 	} while (--n);
 
+	lvc.iSubItem = 0;
 	do 
 	{
 		lvc.pszText = (PWSTR)headers[lvc.iSubItem], lvc.cx = lens[lvc.iSubItem] * size.cx;
 		ListView_InsertColumn(hwndLV, lvc.iSubItem, &lvc);
-	} while (++lvc.iSubItem < RTL_NUMBER_OF(headers));
+	} while (++lvc.iSubItem < _countof(headers));
+
+	lvc.mask = LVCF_FMT;
+	lvc.fmt = LVCFMT_LEFT|HDF_SORTUP;
+	ListView_SetColumn(hwndLV, 0, &lvc);
 
 	SendMessage(ListView_GetToolTips(hwndLV), TTM_SETDELAYTIME, TTDT_AUTOPOP, MAKELONG(MAXSHORT, 0));
 
@@ -1973,6 +1977,33 @@ int ZDll::Compare(ZDll* p, ZDll* q, int iSubItem, int s)
 	if (a < b) return -s;
 	if (a > b) return +s;
 	return 0;
+}
+
+void ZModulesDlg::SortColum(HWND hwndLV, ULONG iSubItem)
+{
+	if (iSubItem < CID_MAX)
+	{
+		SORT_DLLS ss;
+		ss.s = _bittestandcomplement(&_sortbits, iSubItem) ? -1 : +1;
+		ss.iSubItem = iSubItem;
+		qsort(_ppDll, _nDllCount, sizeof(PVOID), QSORTFN(compareDLL));
+
+		LVCOLUMN lc = { LVCF_FMT, LVCFMT_LEFT | (0 < ss.s ? HDF_SORTUP : HDF_SORTDOWN) };
+
+		ListView_SetColumn(hwndLV, iSubItem, &lc);
+
+		if (_iSubItem != iSubItem)
+		{
+			if (_iSubItem < CID_MAX)
+			{
+				lc.fmt = LVCFMT_LEFT;
+				ListView_SetColumn(hwndLV, _iSubItem, &lc);
+			}
+			_iSubItem = iSubItem;
+		}
+
+		InvalidateRect(hwndLV, 0, 0);
+	}
 }
 
 INT_PTR ZModulesDlg::DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
@@ -2153,14 +2184,7 @@ __showexp:
 				goto __showexp;
 
 			case LVN_COLUMNCLICK:
-				if ((iItem = ((LPNMLISTVIEW)lParam)->iSubItem) < 4)
-				{
-					SORT_DLLS ss;
-					ss.s = _bittestandcomplement(&_SortOrder, iItem) ? -1 : +1;
-					ss.iSubItem = iItem;
-					qsort(_ppDll, _nDllCount, sizeof(PVOID), QSORTFN(compareDLL));
-					InvalidateRect(((LPNMHDR)lParam)->hwndFrom, 0, 0);
-				}
+				SortColum(((LPNMHDR)lParam)->hwndFrom, ((LPNMLISTVIEW)lParam)->iSubItem);
 				break;
 
 			case LVN_GETINFOTIP:
@@ -2194,16 +2218,16 @@ __showexp:
 
 					switch (((NMLVDISPINFO*)lParam)->item.iSubItem)
 					{
-					case 0:
+					case CID_INDEX:
 						_snwprintf(pszText, cchTextMax, L"%03u", pDll->_index);
 						break;
-					case 1:
+					case CID_BASE:
 						_snwprintf(pszText, cchTextMax, L"%p", pDll->_BaseOfDll);
 						break;
-					case 2:
+					case CID_SIZE:
 						_snwprintf(pszText, cchTextMax, L"%08x", pDll->_SizeOfImage);
 						break;
-					case 3:
+					case CID_NAME:
 						if (ImagePath = pDll->_ImageName)
 						{
 __copy:
@@ -2644,7 +2668,6 @@ ZSymbolsDlg::ZSymbolsDlg(ZDbgDoc* pDoc, ZDll* pDll)
 	pDoc->AddRef();
 	_pDll = pDll;
 	pDll->AddRef();
-	_SortOrder = 1;
 	_pIndexes = 0;
 	if (DWORD n = pDll->_nSymbols)
 	{
@@ -2705,6 +2728,10 @@ void ZSymbolsDlg::OnInitDialog(HWND hwnd)
 		ListView_InsertColumn(hwnd, lvc.iSubItem, &lvc);
 	} while (++lvc.iSubItem < RTL_NUMBER_OF(headers));
 
+	lvc.mask = LVCF_FMT;
+	lvc.fmt = LVCFMT_LEFT|HDF_SORTUP;
+	ListView_SetColumn(hwnd, 0, &lvc);
+
 	SendMessage(ListView_GetToolTips(hwnd), TTM_SETDELAYTIME, TTDT_AUTOPOP, MAKELONG(MAXSHORT, 0));
 	
 	ListView_SetItemCountEx(hwnd, _nItems, 0);
@@ -2731,7 +2758,7 @@ struct _SORT_SYMBOLS
 	{
 		if (ofs)
 		{
-			delete ofs;
+			delete [] ofs;
 		}
 	}
 
@@ -2801,6 +2828,47 @@ int __cdecl compareSymbols(int& i, int& j)
 	}
 }
 
+void ZSymbolsDlg::SortColum(HWND hwndLV, ULONG iSubItem)
+{
+	if (iSubItem < CID_MAX)
+	{
+		SORT_SYMBOLS ss;
+		ss.iSubItem = iSubItem;
+		ss.s = _bittestandcomplement(&_sortbits, iSubItem) ? -1 : +1;
+		ss.pRO = _pDll->_pSymbols;
+
+		switch (iSubItem)
+		{
+		case CID_EXPORT:
+		case CID_NAME:
+			if (!(ss.ofs = new ULONG[_nItems << 6]))
+			{
+				return ;
+			}
+			RtlFillMemoryUlong(ss.ofs, _nItems << 6, 0);
+			ss.cb = (_nItems << 8) - (_nItems << 2);
+			ss.buf = ss.undNames = (PSTR)(ss.ofs + _nItems);
+			break;
+		}
+		qsort(_pIndexes, _nItems, sizeof(DWORD), QSORTFN(compareSymbols));
+
+		LVCOLUMN lc = { LVCF_FMT, LVCFMT_LEFT | (0 < ss.s ? HDF_SORTUP : HDF_SORTDOWN) };
+
+		ListView_SetColumn(hwndLV, iSubItem, &lc);
+
+		if (_iSubItem != iSubItem)
+		{
+			if (_iSubItem < CID_MAX)
+			{
+				lc.fmt = LVCFMT_LEFT;
+				ListView_SetColumn(hwndLV, _iSubItem, &lc);
+			}
+			_iSubItem = iSubItem;
+		}
+
+		InvalidateRect(hwndLV, 0, 0);
+	}
+}
 INT_PTR ZSymbolsDlg::DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
 	DWORD iItem;
@@ -2851,29 +2919,7 @@ INT_PTR ZSymbolsDlg::DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM l
 				break;
 
 			case LVN_COLUMNCLICK:
-				if ((iItem = ((LPNMLISTVIEW)lParam)->iSubItem) < 3)
-				{
-					SORT_SYMBOLS ss;
-					ss.iSubItem = iItem;
-					ss.s = _bittestandcomplement(&_SortOrder, iItem) ? -1 : +1;
-					ss.pRO = _pDll->_pSymbols;
-
-					switch (iItem)
-					{
-					case 1:
-					case 2:
-						if (!(ss.ofs = new ULONG[_nItems << 6]))
-						{
-							return 0;
-						}
-						RtlFillMemoryUlong(ss.ofs, _nItems << 6, 0);
-						ss.cb = (_nItems << 8) - (_nItems << 2);
-						ss.buf = ss.undNames = (PSTR)(ss.ofs + _nItems);
-						break;
-					}
-					qsort(_pIndexes, _nItems, sizeof(DWORD), QSORTFN(compareSymbols));
-					InvalidateRect(((LPNMHDR)lParam)->hwndFrom, 0, 0);
-				}
+				SortColum(((LPNMHDR)lParam)->hwndFrom, ((LPNMLISTVIEW)lParam)->iSubItem);
 				break;
 
 			case LVN_GETINFOTIP:
@@ -3085,7 +3131,6 @@ ZForwardDlg::ZForwardDlg(ZDbgDoc* pDoc, ZDll* pDll)
 	pDoc->AddRef();
 	_pDll = pDll;
 	pDll->AddRef();
-	_SortOrder = 1;
 	_nItems = pDll->_nForwards;
 }
 
@@ -3139,7 +3184,39 @@ void ZForwardDlg::OnInitDialog(HWND hwnd)
 		ListView_InsertColumn(hwnd, lvc.iSubItem, &lvc);
 	} while (++lvc.iSubItem < RTL_NUMBER_OF(headers));
 
+	lvc.mask = LVCF_FMT;
+	lvc.fmt = LVCFMT_LEFT|HDF_SORTUP;
+	ListView_SetColumn(hwnd, 0, &lvc);
+
 	ListView_SetItemCountEx(hwnd, _nItems, 0);
+}
+
+void ZForwardDlg::SortColum(HWND hwndLV, ULONG iSubItem)
+{
+	if (iSubItem < CID_MAX)
+	{
+		SORT_FORWARDS ss;
+		ss.iSubItem = iSubItem;
+		ss.s = _bittestandcomplement(&_sortbits, iSubItem) ? -1 : +1;
+		ss.Names = _pDll->_szForwards;
+		qsort(_pDll->_pForwards, _nItems, sizeof(RVAOFS), QSORTFN(compareForwards));
+
+		LVCOLUMN lc = { LVCF_FMT, LVCFMT_LEFT | (0 < ss.s ? HDF_SORTUP : HDF_SORTDOWN) };
+
+		ListView_SetColumn(hwndLV, iSubItem, &lc);
+
+		if (_iSubItem != iSubItem)
+		{
+			if (_iSubItem < CID_MAX)
+			{
+				lc.fmt = LVCFMT_LEFT;
+				ListView_SetColumn(hwndLV, _iSubItem, &lc);
+			}
+			_iSubItem = iSubItem;
+		}
+
+		InvalidateRect(hwndLV, 0, 0);
+	}
 }
 
 INT_PTR ZForwardDlg::DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
@@ -3194,15 +3271,7 @@ INT_PTR ZForwardDlg::DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM l
 				break;
 
 			case LVN_COLUMNCLICK:
-				if ((iItem = ((LPNMLISTVIEW)lParam)->iSubItem) < 2)
-				{
-					SORT_FORWARDS ss;
-					ss.iSubItem = iItem;
-					ss.s = _bittestandcomplement(&_SortOrder, iItem) ? -1 : +1;
-					ss.Names = _pDll->_szForwards;
-					qsort(_pDll->_pForwards, _nItems, sizeof(RVAOFS), QSORTFN(compareForwards));
-					InvalidateRect(((LPNMHDR)lParam)->hwndFrom, 0, 0);
-				}
+				SortColum(((LPNMHDR)lParam)->hwndFrom, ((LPNMLISTVIEW)lParam)->iSubItem);
 				break;
 
 			case LVN_GETDISPINFO:

@@ -68,7 +68,7 @@ class ZTabFrame : public ZFrameMultiWnd, ZTabBar
 
 	virtual PCUNICODE_STRING getPosName();
 
-	void ShowStackTrace(ZDbgThread* pThread, bool bKernel);
+	void ShowStackTrace(ZDbgThread* pThread, BOOL bKernel);
 
 public:
 	ULONG GetCurrentThreadId();
@@ -96,6 +96,7 @@ class ZTraceView : public ZFrameMultiWnd, public ZStatusBar, ZDetachNotify
 	ULONG_PTR		_HighLevelStack[64];	
 	ULONG_PTR		_LastStack;
 	ULONG_PTR		_LastPC;
+	ULONG_PTR		_OutStack = 0;
 	PVOID			_ExceptionAddress;
 	ZDbgDoc*		_pDoc;
 	HWND			_hwndTV;

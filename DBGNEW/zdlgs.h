@@ -130,11 +130,16 @@ class ZModulesDlg : public ZDlg, public CUILayot
 	ZDbgDoc* _pDoc;
 	ZDll** _ppDll;
 	DWORD _nDllCount;
-	LONG _SortOrder;
+	LONG _sortbits = 1;
+	ULONG _iSubItem = 0;
+
+	enum { CID_INDEX, CID_BASE, CID_SIZE, CID_NAME, CID_MAX };
 
 	void OnInitDialog(HWND hwndDlg);
 
 	void OnDestroy(HWND hwnd);
+
+	void SortColum(HWND hwndLV, ULONG iSubItem);
 
 	virtual INT_PTR DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
@@ -185,7 +190,12 @@ class ZSymbolsDlg : public ZDlg, public CUILayot, ZDetachNotify
 	ZDll* _pDll;
 	PDWORD _pIndexes;
 	DWORD _nItems;
-	LONG _SortOrder;
+	LONG _sortbits = 1;
+	ULONG _iSubItem = 0;
+
+	enum { CID_ADDRESS, CID_EXPORT, CID_NAME, CID_MAX };
+
+	void SortColum(HWND hwndLV, ULONG iSubItem);
 
 	virtual void OnDetach();
 
@@ -204,7 +214,12 @@ class ZForwardDlg : public ZDlg, public CUILayot, ZDetachNotify
 	ZDbgDoc* _pDoc;
 	ZDll* _pDll;
 	DWORD _nItems;
-	LONG _SortOrder;
+	LONG _sortbits = 1;
+	ULONG _iSubItem = 0;
+
+	enum { CID_NAME, CID_FORWARD, CID_MAX };
+
+	void SortColum(HWND hwndLV, ULONG iSubItem);
 
 	virtual void OnDetach();
 

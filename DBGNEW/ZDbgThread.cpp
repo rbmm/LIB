@@ -135,7 +135,50 @@ PCUNICODE_STRING ZTabFrame::getPosName()
 extern PVOID gLocalKernelImageBase;
 extern ULONG gLocalKernelImageSize;
 
-void ZTabFrame::ShowStackTrace(ZDbgThread* pThread, bool bKernel)
+#ifdef _WIN64
+void UpdateContext(_In_ ZDbgDoc* pDocument, _In_ ULONG_PTR id, _Inout_ PCONTEXT ctx)
+{
+	if (ULONG KernelStackOffset = GetKernelStackOffset(pDocument))
+	{
+		ULONG_PTR Rsp, Rip, KernelStack[64], *pKernelStack = KernelStack;
+		IO_STATUS_BLOCK iosb;
+		if (0 <= NtDeviceIoControlFile(g_hDrv, 0, 0, 0, &iosb, IOCTL_LookupThreadByThreadId, &id, sizeof(id), 0, 0))
+		{
+			if (0 <= pDocument->Read((PVOID)(iosb.Information + KernelStackOffset), &Rsp, sizeof(Rsp)) &&
+				0 <= pDocument->Read((void**)Rsp - 1, KernelStack, sizeof(KernelStack)))
+			{
+				int n = _countof(KernelStack);
+				do 
+				{
+					Rip = *pKernelStack++;
+
+					if (Rip - (ULONG_PTR)gLocalKernelImageBase < gLocalKernelImageSize)
+					{
+						struct LocalCall 
+						{
+							UCHAR pad[3];
+							UCHAR E8;
+							LONG ofs;
+						} lc;
+
+						if (0 <= pDocument->Read((PBYTE)Rip - 5, &lc.E8, 5) && lc.E8 == 0xE8 &&
+							((Rip + (LONG_PTR)lc.ofs) - (ULONG_PTR)gLocalKernelImageBase < gLocalKernelImageSize))
+						{
+							ctx->SegCs = 0x33;
+							ctx->Rip = Rip;
+							ctx->Rsp = Rsp;
+							ctx->P2Home = 1;
+							break;
+						}
+					}
+				} while (Rsp += sizeof(ULONG_PTR), --n);
+			}
+		}
+	}
+}
+#endif
+
+void ZTabFrame::ShowStackTrace(ZDbgThread* pThread, BOOL bKernel)
 {
 	CONTEXT ctx{};
 
@@ -144,6 +187,16 @@ void ZTabFrame::ShowStackTrace(ZDbgThread* pThread, bool bKernel)
 	ZDbgDoc* pDocument = _pDoc;
 
 #ifdef _WIN64
+	if (!pThread)
+	{
+		UpdateContext(pDocument, bKernel, &ctx);
+		if (ctx.Rsp)
+		{
+			goto __1;
+		}
+		return ;
+	}
+
 	if (!pDocument->Is64BitProcess() && !pDocument->IsCurrentThread(pThread) && !pDocument->IsRemoteDebugger())
 	{
 		WOW64_CONTEXT x86_ctx;
@@ -174,51 +227,55 @@ void ZTabFrame::ShowStackTrace(ZDbgThread* pThread, bool bKernel)
 		if (bKernel && !pDocument->IsRemoteDebugger())
 		{
 __0:
-			if (ULONG KernelStackOffset = GetKernelStackOffset(pDocument))
-			{
-				ULONG_PTR id = pThread->getID(), Rsp, Rip, KernelStack[64], *pKernelStack = KernelStack;
-				IO_STATUS_BLOCK iosb;
-				if (0 <= NtDeviceIoControlFile(g_hDrv, 0, 0, 0, &iosb, IOCTL_LookupThreadByThreadId, &id, sizeof(id), 0, 0))
-				{
-					if (0 <= pDocument->Read((PVOID)(iosb.Information + KernelStackOffset), &Rsp, sizeof(Rsp)) &&
-						0 <= pDocument->Read((void**)Rsp - 1, KernelStack, sizeof(KernelStack)))
-					{
-						int n = _countof(KernelStack);
-						do 
-						{
-							Rip = *pKernelStack++;
-
-							if (Rip - (ULONG_PTR)gLocalKernelImageBase < gLocalKernelImageSize)
-							{
-								struct LocalCall 
-								{
-									UCHAR pad[3];
-									UCHAR E8;
-									LONG ofs;
-								} lc;
-								
-								if (0 <= pDocument->Read((PBYTE)Rip - 5, &lc.E8, 5) && lc.E8 == 0xE8 &&
-									((Rip + (LONG_PTR)lc.ofs) - (ULONG_PTR)gLocalKernelImageBase < gLocalKernelImageSize))
-								{
-									ctx.SegCs = 0x33;
-									ctx.Rip = Rip;
-									ctx.Rsp = Rsp;
-									ctx.P2Home = 1;
-									break;
-								}
-							}
-						} while (Rsp += sizeof(ULONG_PTR), --n);
-					}
-				}
-			}
+			UpdateContext(pDocument, pThread->getID(), &ctx);
 		}
 #endif
-		if (ctx.Xsp) ShowStackTrace(ctx);
+		if (ctx.Xsp) {
+__1:
+			ShowStackTrace(ctx);
+		}
 		TabCtrl_SetCurSel(ZTabBar::getHWND(), 1);
 		ShowWindow(_hwndST, SW_SHOW);
 		ShowWindow(_hwndTH, SW_HIDE);
 		_hwndCur = _hwndST;
 	}
+}
+
+static INT_PTR CALLBACK GetNumberDialogProc(HWND hwndDlg,
+											UINT uMsg,
+											WPARAM wParam,
+											LPARAM lParam
+											)
+{
+	WCHAR sz[16], *psz;
+	switch (uMsg)
+	{
+	case WM_COMMAND:
+		switch (wParam)
+		{
+		case IDOK:
+			if (GetDlgItemTextW(hwndDlg, IDC_EDIT1, sz, _countof(sz)))
+			{
+				if (ULONG tid = wcstoul(sz, &psz, 16))
+				{
+					if (!*psz)
+					{
+						EndDialog(hwndDlg, tid);
+					}
+				}
+			}
+			break;
+		case IDCANCEL:
+			EndDialog(hwndDlg, 0);
+			break;
+		}
+		break;
+	case WM_INITDIALOG:
+		SetWindowPos(hwndDlg, 0, reinterpret_cast<POINT*>(lParam)->x, reinterpret_cast<POINT*>(lParam)->y, 
+			0, 0, SWP_NOSIZE|SWP_NOZORDER|SWP_NOACTIVATE|SWP_NOREDRAW);
+		break;
+	}
+	return 0;
 }
 
 LRESULT ZTabFrame::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
@@ -275,6 +332,13 @@ LRESULT ZTabFrame::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam
 								if (ZDbgThread* pThread = _pDoc->getThreadById((DWORD)item.lParam))
 								{
 									ShowStackTrace(pThread, true);
+								}
+								break;
+							case ID_3_THREADID:
+								if (0 < (lParam = DialogBoxParamW((HINSTANCE)&__ImageBase, 
+									MAKEINTRESOURCEW(IDD_DIALOG24), hwnd, GetNumberDialogProc, (LPARAM)&pt)))
+								{
+									ShowStackTrace(0, (ULONG)lParam);
 								}
 								break;
 							}
@@ -730,10 +794,28 @@ LRESULT ZTraceView::WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPara
 						EnableMenuItem(hSubMenu, ID_2_STOP, bInTrace ? MF_BYCOMMAND|MF_ENABLED : MF_BYCOMMAND|MF_GRAYED);
 						EnableMenuItem(hSubMenu, ID_2_SAVE, bInTrace ? MF_BYCOMMAND|MF_GRAYED : MF_BYCOMMAND|MF_ENABLED);
 
+						ULONG_PTR OutStack = 0;
+
+						if (bInTrace && 0 < _Level)
+						{
+							HTREEITEM* nodes = _Nodes;
+							ULONG i = _Level;
+							do 
+							{
+								if (*nodes == item.hItem)
+								{
+									OutStack = _HighLevelStack[_Level-i];
+									break;
+								}
+							} while (nodes++, --i);
+						}
+
+						EnableMenuItem(hSubMenu, ID_2_STEPOVER, OutStack ? MF_BYCOMMAND|MF_ENABLED : MF_BYCOMMAND|MF_GRAYED);
+
 						switch (TrackPopupMenu(hSubMenu, TPM_RETURNCMD, pt.x, pt.y, 0, hWnd, 0))
 						{
 						case ID_2_GOTOFROM:
-							if (PWSTR lpsz = wcschr(item.pszText, L'('))
+							if (PWSTR lpsz = wcsrchr(item.pszText, L'('))
 							{
 								ULONG_PTR Va;
 								if ((Va = uptoul(lpsz + 1, &lpsz, 16)) && *lpsz == L')')
@@ -751,6 +833,10 @@ LRESULT ZTraceView::WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPara
 						case ID_2_SAVE:
 							item.mask = TVIF_TEXT;
 							Save(hWnd, &item, _dwSize);
+							break;
+						case ID_2_STEPOVER:
+							_OutStack = OutStack;
+							break;
 						}
 						DestroyMenu(hmenu);
 					}
@@ -858,6 +944,23 @@ NTSTATUS ZTraceView::OnException(CONTEXT* ctx)
 	ctx->Dr3 = (ULONG_PTR)pKiUserExceptionDispatcher;
 	ctx->Dr7 = 0x55;
 	ctx->EFlags |= TRACE_FLAG|RESUME_FLAG;
+
+	if (ULONG_PTR OutStack = _OutStack)
+	{
+		_OutStack = 0;
+
+		if (Stack < OutStack)
+		{
+			ctx->EFlags &= ~TRACE_FLAG;
+			ctx->Dr0 = OutStack;
+			ctx->Dr1 = 0;
+			ctx->Dr2 = 0;
+			ctx->Dr3 = 0;
+			ctx->Dr6 = 0;
+			ctx->Dr7 = 0x000F0055;
+			return DBG_CONTINUE;
+		}
+	}
 
 	if (Stack == LastStack)
 	{
