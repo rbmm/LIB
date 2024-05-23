@@ -1014,10 +1014,11 @@ BOOL CALLBACK EnumWindowsProc(HWND hwnd, ENUM_WND_DATA& ctx)
 	return TRUE;
 }
 
+ZDbgDoc* GetDocumentByPID(ULONG dwProcessId);
+
 class CMainDlg : public ZDlg, ZIdle
 {
 	HANDLE m_dwThreadId, m_dwProcessId;
-	DWORD _Dr7;
 	BOOL _fLoadEnabled;
 
 	~CMainDlg()
@@ -1064,7 +1065,7 @@ class CMainDlg : public ZDlg, ZIdle
 
 	void OnInitDialog(HWND hwndDlg)
 	{
-		COMBOBOXINFO cbi = { sizeof cbi };
+		COMBOBOXINFO cbi = { sizeof (cbi) };
 
 		int i = IDC_COMBO4;
 		do 
@@ -1078,14 +1079,32 @@ class CMainDlg : public ZDlg, ZIdle
 
 		CheckDlgButton(hwndDlg, IDC_RADIO31, BST_CHECKED);
 
-		i = 3;
+		HWND hwnd = GetDlgItem(hwndDlg, IDC_COMBO5);
+		static const PCWSTR szNum[] = { L"3", L"2", L"1", L"0" };
+		i = _countof(szNum);
 		do 
 		{
-			CheckDlgButton(hwndDlg, IDC_RADIO3 + 7 * i, BST_CHECKED);
-			CheckDlgButton(hwndDlg, IDC_RADIO5 + 7 * i, BST_CHECKED);
-		} while(i--);
+			ComboBox_AddString(hwnd, szNum[--i]);
+		} while (i);
+		ComboBox_SetCurSel(hwnd, 3);
 
-		SetDlgItemText(hwndDlg, IDC_STATIC1, L"      00");
+		hwnd = GetDlgItem(hwndDlg, IDC_COMBO6);
+		static const PCWSTR szState[] = { L"R", L"D", L"W", L"E" };
+		i = _countof(szState);
+		do 
+		{
+			ComboBox_AddString(hwnd, szState[--i]);
+		} while (i);
+		ComboBox_SetCurSel(hwnd, 2);
+
+		hwnd = GetDlgItem(hwndDlg, IDC_COMBO7);
+		static const PCWSTR szLen[] = { L"4", L"2", L"1" };
+		i = _countof(szLen);
+		do 
+		{
+			ComboBox_AddString(hwnd, szLen[--i]);
+		} while (i);
+		ComboBox_SetCurSel(hwnd, 0);
 	}
 
 	virtual void OnIdle()
@@ -1482,7 +1501,6 @@ class CMainDlg : public ZDlg, ZIdle
 							{
 								MessageBox(0, 0, L"Unload Ok", 0);
 							}
-
 						}
 					}
 				}
@@ -1499,39 +1517,110 @@ class CMainDlg : public ZDlg, ZIdle
 			case IDC_BUTTON15:
 				if (m_dwThreadId)
 				{
+					ULONG m[3], i = _countof(m), Dr7h = 0, Dr7l = 0, mh = 0xF0000, ml = 1;
+					do 
+					{
+						int s = ComboBox_GetCurSel(GetDlgItem(hwndDlg, IDC_COMBO5 + --i));
+						if (0 > s)
+						{
+							return 0;
+						}
+						m[i] = s;
+					} while (i);
+
+					if ((i = m[0]) > 3)
+					{
+						return 0;
+					}
+
+					if (!GetDlgItemTextW(hwndDlg, IDC_EDIT1, sz, _countof(sz)))
+					{
+						return 0;
+					}
+
+					ULONG_PTR DrN = (ULONG_PTR)_wcstoui64(sz, &c, 16);
+
+					if (*c)
+					{
+						return 0;
+					}
+
+					switch (m[1])
+					{
+					case 0:// execute
+						Dr7l = 0x1;
+						goto __E;
+					case 1:// write
+						Dr7h = 0x10000;
+						Dr7l = 0x1;
+						break;
+					case 2://disable
+						Dr7h = 0x20000;
+						break;
+					case 3:// read
+						Dr7h = 0x30000;
+						Dr7l = 0x1;
+						break;
+					default:
+						return 0;
+					}
+
+					switch (m[2])
+					{
+					case 0:// 1 byte
+						break;
+					case 1:// 2 byte
+						Dr7h |= 0x40000;
+						break;
+					case 2://4 byte
+						Dr7h |= 0xc0000;
+						break;
+					default:
+						return 0;
+					}
+
+__E:
+					RtlZeroMemory(&ctx, sizeof(ctx));
+					ctx.ContextFlags = CONTEXT_DEBUG_REGISTERS;
+
+					PCONTEXT pReg = 0;
+
+					if (ZDbgDoc* pDoc = ZDbgDoc::find((ULONG)(ULONG_PTR)m_dwProcessId))
+					{
+						if (pDoc->IsCurrentThread((ULONG)(ULONG_PTR)m_dwThreadId))
+						{
+							pReg = pDoc->getContext();
+							memcpy(&ctx, pReg, sizeof(CONTEXT));
+						}
+						pDoc->Release();
+					}
+					
 					cid.UniqueProcess = 0;
 					cid.UniqueThread = m_dwThreadId;
-					if (0 <= ZwOpenThread(&hThread, THREAD_SET_CONTEXT, &zoa, &cid))
-					{
-						PULONG_PTR pd = &ctx.Dr0;
-						ctx.Dr0 = 0;
-						ctx.Dr1 = 0;
-						ctx.Dr2 = 0;
-						ctx.Dr3 = 0;
-						ULONG Id = IDC_EDIT1;
-						do 
-						{
-							HWND hwnd = GetDlgItem(hwndDlg, Id);
-							if (IsWindowEnabled(hwnd))
-							{
-								if (
-									!GetWindowText(hwnd, sz, RTL_NUMBER_OF(sz)) || 
-									(*pd = uptoul(sz, &c, 16), *c)
-									)
-								{										
-									break;
-								}
-							}
-						} while(++pd, ++Id < IDC_EDIT5);
 
-						if (Id == IDC_EDIT5)
+					if (0 <= (status = pReg ? STATUS_SUCCESS : 
+						MyOpenThread(&hThread, THREAD_SET_CONTEXT|THREAD_GET_CONTEXT, &zoa, &cid)))
+					{
+						*(&ctx.Dr0 + i)= DrN;
+
+						ctx.Dr7 &= ~(ULONG_PTR)((mh << 4*i)|(ml << 2*i));
+						ctx.Dr7 |= (Dr7h << 4*i)|(Dr7l << 2*i);
+						ctx.Dr6 = 0;
+
+						if (pReg)
 						{
-							ctx.Dr7 = _Dr7;
-							ctx.Dr6 = 0;
-							ctx.ContextFlags = CONTEXT_DEBUG_REGISTERS;
-							MySetContextThread(hThread, &ctx);
+							static_cast<ZRegView*>(pReg)->SetContext(&ctx);
 						}
-						NtClose(hThread);
+						else
+						{
+							status = MySetContextThread(hThread, &ctx);
+							NtClose(hThread);
+						}
+					}
+
+					if (0 > status)
+					{
+						ShowNTStatus(hwndDlg, status, L"Set DrX");
 					}
 				}
 				break;
@@ -1681,35 +1770,10 @@ class CMainDlg : public ZDlg, ZIdle
 			case MAKEWPARAM(IDC_COMBO3, CBN_SELCHANGE):
 				OnSelChangeComboProcess(hwndDlg, (HWND)lParam);
 				break;
-			default:
-				if (wParam - IDC_RADIO1 <= IDC_RADIO28 - IDC_RADIO1)
-				{
-					int n = ((DWORD)wParam -  IDC_RADIO1)/7, m = ((DWORD)wParam -  IDC_RADIO1) % 7, i;
-					DWORD mask;
-					if (m < 4) {
-						BOOL b = m != 2;
-						mask = 1 << (n << 1);
-						if (b ^ ((_Dr7 & mask) != 0))
-						{
-							i = 2;
-							do EnableWindow(GetDlgItem(hwndDlg, IDC_RADIO5 + i + 7 * n), b); while(i--);
-							EnableWindow(GetDlgItem(hwndDlg, IDC_EDIT1 + n), b);
-						}
-						b ? _Dr7 |= mask : _Dr7 &= ~mask;
-						_Dr7 = (_Dr7 & ~(0x30000 << (n << 2))) | ((m & 3) << (16 + (n << 2)));
-					} else {
-						_Dr7 = (_Dr7 & ~(0xc0000 << (n << 2))) | ((m == 6 ? 3 : m - 4) << (18 + (n << 2)));
-					}
-					c = sz;
-					swprintf(sz, L"%08X", _Dr7);
-					mask = 0x40;
-					do 
-					{
-						if (!(_Dr7 & mask)) *c = L' ';
-					} while(c++, mask >>= 2);
-					sz[4] = L' ', sz[5] = L' ';
-					SetDlgItemText(hwndDlg, IDC_STATIC1, sz);
-				}
+
+			case MAKEWPARAM(IDC_EDIT1, EN_CHANGE):
+				EnableDR_Value(hwndDlg, TRUE, (HWND)lParam);
+				break;
 			}
 			break;
 		}
@@ -1736,26 +1800,62 @@ class CMainDlg : public ZDlg, ZIdle
 		SetDlgItemText(hwndDlg, IDC_EDIT7, szid);
 	}
 
+	static void EnableDR_Value(HWND hwndDlg, BOOL bThreadId, HWND hwnd)
+	{
+		if (bThreadId)
+		{
+			WCHAR sz[17], *psz;
+			ULONG64 v = 0;
+			if (GetWindowTextW(hwnd, sz, _countof(sz)))
+			{
+				v = _wcstoui64(sz, &psz, 16);
+				bThreadId = !*psz;
+			}
+			else
+			{
+				bThreadId = FALSE;
+			}
+		}
+
+		EnableWindow(GetDlgItem(hwndDlg, IDC_BUTTON15), bThreadId);
+	}
+
 	void _OnChangeThreads(HWND hwndDlg, HANDLE ThreadId)
 	{
 		m_dwThreadId = ThreadId;
 
 		BOOL bThreadId = ThreadId != 0;
 
-		int i = IDC_BUTTON22, j;
+		int i = IDC_BUTTON22;
 		do EnableWindow(GetDlgItem(hwndDlg, i), bThreadId); while(i-- != IDC_BUTTON13);
-		i = 3;
-		do 
-		{
-			j = 3;
-			do EnableWindow(GetDlgItem(hwndDlg, IDC_RADIO1 + j + 7 * i), bThreadId); while(j--);
-			BOOL b = bThreadId && (IsDlgButtonChecked(hwndDlg, IDC_RADIO3 + 7 * i) != BST_CHECKED);
-			j = 2;
-			do EnableWindow(GetDlgItem(hwndDlg, IDC_RADIO5 + j + 7 * i), b); while(j--);
-			EnableWindow(GetDlgItem(hwndDlg, IDC_EDIT1 + i), b);
-		} while(i--);
 
 		SetDlgItemText(hwndDlg, IDC_STATIC2, L"");
+
+		HWND hwnd = GetDlgItem(hwndDlg, IDC_COMBO5);
+		EnableWindow(hwnd, bThreadId);
+
+		if (bThreadId && 0 > ComboBox_GetCurSel(hwnd))
+		{
+			bThreadId = FALSE;
+		}
+
+		EnableWindow(hwnd = GetDlgItem(hwndDlg, IDC_COMBO6), bThreadId);
+
+		if (bThreadId && 0 > ComboBox_GetCurSel(hwnd))
+		{
+			bThreadId = FALSE;
+		}
+
+		EnableWindow(hwnd = GetDlgItem(hwndDlg, IDC_COMBO7), bThreadId);
+
+		if (bThreadId && 0 > ComboBox_GetCurSel(hwnd))
+		{
+			bThreadId = FALSE;
+		}
+
+		EnableWindow(hwnd = GetDlgItem(hwndDlg, IDC_EDIT1), bThreadId);
+
+		EnableDR_Value(hwndDlg, bThreadId, hwnd);
 	}
 
 	void OnChangeProcess(HWND hwndDlg, HANDLE UniqueProcessId)
@@ -1816,7 +1916,7 @@ public:
 
 	CMainDlg()
 	{
-		m_dwThreadId = 0, m_dwProcessId = 0, _fLoadEnabled = FALSE, _Dr7 = 0;
+		m_dwThreadId = 0, m_dwProcessId = 0, _fLoadEnabled = FALSE;
 		if (ZToolBar* tb = ZGLOBALS::getMainFrame())
 		{
 			tb->EnableCmd(IDB_BITMAP20, FALSE);

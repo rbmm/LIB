@@ -2006,6 +2006,91 @@ void ZModulesDlg::SortColum(HWND hwndLV, ULONG iSubItem)
 	}
 }
 
+void ZModulesDlg::CopyAll(HWND hwndDlg)
+{
+	if (DWORD iItem = _nDllCount)
+	{
+		ULONG cchTextMax = 0x200 * iItem;
+		if (PWSTR buf = new WCHAR[cchTextMax])
+		{
+			PWSTR pszText = buf;
+			ZDll** ppDll = _ppDll;
+			do 
+			{
+				ZDll* pDll = *ppDll++;
+
+				int len = swprintf_s(pszText, cchTextMax, L"%03u %p %08x %s\r\n", 
+					pDll->_index, pDll->_BaseOfDll, pDll->_SizeOfImage, pDll->_ImageName);
+
+				if (0 >= len)
+				{
+					break;
+				}
+
+				pszText += len, cchTextMax -= len;
+
+			} while (--iItem);
+
+			if (OpenClipboard(hwndDlg))
+			{
+				if (HGLOBAL hg = GlobalAlloc(GMEM_MOVEABLE, RtlPointerToOffset(buf, pszText)))
+				{
+					memcpy(GlobalLock(hg), buf, RtlPointerToOffset(buf, pszText));
+
+					GlobalUnlock(hg);
+
+					if (!SetClipboardData(CF_UNICODETEXT, hg)) GlobalFree(hg);
+				}
+				CloseClipboard();
+			}
+
+			delete [] buf;
+		}
+	}
+}
+
+void ZModulesDlg::CopyLine(HWND hwndDlg, ZDll* pDll)
+{
+	PWSTR pszText = 0;
+	int len = 0;
+	HGLOBAL hg = 0;
+
+	while (0 < (len = _snwprintf(pszText, len, L"%03u %p %08x %s\r\n", 
+		pDll->_index, pDll->_BaseOfDll, pDll->_SizeOfImage, pDll->_ImagePath)))
+	{
+		if (pszText)
+		{
+			GlobalUnlock(hg);
+			
+			pszText = 0;
+
+			if (OpenClipboard(hwndDlg))
+			{
+				if (SetClipboardData(CF_UNICODETEXT, hg)) hg = 0;
+
+				CloseClipboard();
+			}
+
+			break;
+		}
+
+		if (!(hg = GlobalAlloc(GMEM_MOVEABLE, ++len * sizeof(WCHAR))) || !(pszText = (PWSTR)GlobalLock(hg)))
+		{
+			break;
+		}
+	}
+
+	if (hg)
+	{
+		if (pszText)
+		{
+			GlobalUnlock(hg);
+		}
+
+		GlobalFree(hg);
+	}
+}
+
 INT_PTR ZModulesDlg::DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
 	DWORD iItem, cchTextMax;
@@ -2057,6 +2142,13 @@ INT_PTR ZModulesDlg::DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM l
 				{
 					_pDoc->GoTo(pDll->_EntryPoint);
 				}
+			}
+			break;
+
+		case IDC_BUTTON1:
+			if ((iItem = ListView_GetSelectionMark(GetDlgItem(hwndDlg, IDC_LIST1))) < _nDllCount)
+			{
+				CopyLine(hwndDlg, _ppDll[iItem]);
 			}
 			break;
 
@@ -2175,6 +2267,19 @@ __showexp:
 		{
 			switch (((LPNMHDR)lParam)->code)
 			{
+			case LVN_KEYDOWN:
+
+				switch (reinterpret_cast<NMLVKEYDOWN*>(lParam)->wVKey)
+				{
+				case 'c':
+				case 'C':
+					if (0 > GetKeyState(VK_CONTROL))
+					{
+						CopyAll(hwndDlg);
+					}
+				}
+				break;
+
 			case NM_SETFOCUS:
 				SendMessage(((LPNMHDR)lParam)->hwndFrom, WM_KILLFOCUS, 0, 0);
 				break;
@@ -2231,15 +2336,7 @@ __showexp:
 						if (ImagePath = pDll->_ImageName)
 						{
 __copy:
-							do 
-							{
-								*pszText++ = c = *ImagePath++;
-							} while (c && --cchTextMax);
-
-							if (c)
-							{
-								pszText[-1] = 0;
-							}
+							swprintf_s(pszText, cchTextMax, ImagePath);
 						}
 						break;
 					default: pszText[0] = 0;
@@ -2869,6 +2966,7 @@ void ZSymbolsDlg::SortColum(HWND hwndLV, ULONG iSubItem)
 		InvalidateRect(hwndLV, 0, 0);
 	}
 }
+
 INT_PTR ZSymbolsDlg::DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
 	DWORD iItem;
@@ -2905,8 +3003,94 @@ INT_PTR ZSymbolsDlg::DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM l
 
 		if (wParam == IDC_LIST1)
 		{
-			switch (((LPNMHDR)lParam)->code)
+			switch (reinterpret_cast<NMHDR*>(lParam)->code)
 			{
+			case LVN_KEYDOWN:
+				switch (reinterpret_cast<NMLVKEYDOWN*>(lParam)->wVKey)
+				{
+				case 'c':
+				case 'C':
+					if (0 > GetKeyState(VK_CONTROL))
+					{
+						if (iItem = _nItems)
+						{
+							union {
+								RVAOFS *pSymbols;
+								PSTR szSymbols;
+							};
+							pSymbols = _pDll->_pSymbols;
+							ULONG* pIndexes = _pIndexes;
+
+							if (ULONG s = iItem * 32 + (ULONG)HeapSize(GetProcessHeap(), 0, pSymbols - 1))
+							{
+								if (HGLOBAL hg = GlobalAlloc(GMEM_MOVEABLE, s * sizeof(WCHAR)))
+								{
+									if (pszText = (PWSTR)GlobalLock(hg))
+									{
+										PVOID buf = pszText;
+										int len;
+										do 
+										{
+											RVAOFS* p = &pSymbols[*pIndexes++];
+
+											ULONG ofs = p->ofs, rva = p->rva;
+
+											WCHAR c;
+
+											switch (NAME_FLAGS(ofs))
+											{
+											case FLAG_NOEXPORT:
+												c = ' ';
+												break;
+											case FLAG_RVAEXPORT:
+												c = (WCHAR)'+';
+												break;
+											case 0:
+												c = '*';
+												break;
+											default:
+												__debugbreak();
+												c = 0;
+												break;
+											}
+
+											if (ofs & FLAG_ORDINAL)
+											{
+												len = swprintf_s(pszText, s, L"%08x %c #%u\r\n", rva, c, NANE_OFS(ofs));
+											}
+											else
+											{
+												len = swprintf_s(pszText, s, L"%08x %c %S\r\n", rva, c,
+													unDNameEx(undName, szSymbols + NANE_OFS(ofs), sizeof(undName), UNDNAME_NAME_ONLY));
+											}
+
+											if (0 >= len)
+											{
+												break;
+											}
+
+											pszText += len, s -= len;
+
+										} while (--iItem);
+
+										GlobalUnlock(hg);
+
+										if (OpenClipboard(hwndDlg))
+										{
+											hg = GlobalReAlloc(hg, RtlPointerToOffset(buf, pszText), GMEM_MOVEABLE);
+											if (SetClipboardData(CF_UNICODETEXT, hg)) hg = 0;
+											CloseClipboard();
+										}
+									}
+									GlobalFree(hg);
+								}
+							}
+						}
+					}
+					break;
+				}
+				break;
+
 			case NM_SETFOCUS:
 				SendMessage(((LPNMHDR)lParam)->hwndFrom, WM_KILLFOCUS, 0, 0);
 				break;
@@ -3256,6 +3440,69 @@ INT_PTR ZForwardDlg::DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM l
 		{
 			switch (((LPNMHDR)lParam)->code)
 			{
+			case LVN_KEYDOWN:
+				switch (reinterpret_cast<NMLVKEYDOWN*>(lParam)->wVKey)
+				{
+				case 'c':
+				case 'C':
+					if (0 > GetKeyState(VK_CONTROL))
+					{
+						if (iItem = _nItems)
+						{
+							union {
+								RVAOFS *pForwards;
+							};
+							pForwards = _pDll->_pForwards;
+							PSTR szForwards = _pDll->_szForwards;
+
+							if (ULONG s = iItem * 16 + (ULONG)HeapSize(GetProcessHeap(), 0, pForwards))
+							{
+								if (HGLOBAL hg = GlobalAlloc(GMEM_MOVEABLE, s * sizeof(WCHAR)))
+								{
+									if (pszText = (PWSTR)GlobalLock(hg))
+									{
+										PVOID buf = pszText;
+										int len;
+										do 
+										{
+											ULONG ofs = pForwards->ofs, rva = pForwards->rva;
+
+											if (ofs & FLAG_ORDINAL)
+											{
+												len = swprintf_s(pszText, s, L"#%u %S\r\n", NANE_OFS(ofs), szForwards + rva);
+											}
+											else
+											{
+												len = swprintf_s(pszText, s, L"%S %S\r\n", szForwards + NANE_OFS(ofs), szForwards + rva);
+											}
+
+											if (0 >= len)
+											{
+												break;
+											}
+
+											pszText += len, s -= len;
+
+										} while (pForwards++, --iItem);
+
+										GlobalUnlock(hg);
+
+										if (OpenClipboard(hwndDlg))
+										{
+											hg = GlobalReAlloc(hg, RtlPointerToOffset(buf, pszText), GMEM_MOVEABLE);
+											if (SetClipboardData(CF_UNICODETEXT, hg)) hg = 0;
+											CloseClipboard();
+										}
+									}
+									GlobalFree(hg);
+								}
+							}
+						}
+					}
+					break;
+				}
+				break;
+
 			case NM_SETFOCUS:
 				SendMessage(((LPNMHDR)lParam)->hwndFrom, WM_KILLFOCUS, 0, 0);
 				break;
@@ -3293,16 +3540,15 @@ INT_PTR ZForwardDlg::DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM l
 					case 0:
 						if ((iItem = pRO->ofs) & FLAG_ORDINAL)
 						{
-							_snwprintf(pszText, cchTextMax, L"#%u", NANE_OFS(iItem));
+							swprintf_s(pszText, cchTextMax, L"#%u", NANE_OFS(iItem));
 						}
 						else
 						{
-							_snwprintf(pszText, cchTextMax, L"%S", _pDll->_szForwards + NANE_OFS(iItem));
-
+							swprintf_s(pszText, cchTextMax, L"%S", _pDll->_szForwards + NANE_OFS(iItem));
 						}
 						break;
 					case 1:
-						_snwprintf(pszText, cchTextMax, L"%S", _pDll->_szForwards + pRO->rva);
+						swprintf_s(pszText, cchTextMax, L"%S", _pDll->_szForwards + pRO->rva);
 						break;
 					}
 				}

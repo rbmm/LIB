@@ -259,6 +259,8 @@ public:
 	BOOLEAN IsWaitContinue() { return _IsWaitContinue; }
 
 	BOOLEAN IsCurrentThread(ZDbgThread* pThread) { return _IsWaitContinue && _pThread == pThread; }
+	
+	BOOLEAN IsCurrentThread(ULONG dwThreadId);
 
 	BOOLEAN IsDebugger() { return _IsDebugger; }
 

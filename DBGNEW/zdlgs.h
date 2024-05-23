@@ -141,6 +141,9 @@ class ZModulesDlg : public ZDlg, public CUILayot
 
 	void SortColum(HWND hwndLV, ULONG iSubItem);
 
+	void CopyAll(HWND hwndDlg);
+	void CopyLine(HWND hwndDlg, ZDll* pDll);
+
 	virtual INT_PTR DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
 	~ZModulesDlg();

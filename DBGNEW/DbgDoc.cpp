@@ -736,6 +736,11 @@ void ZDbgDoc::SaveBps()
 	InitializeListHead(head);
 }
 
+BOOLEAN ZDbgDoc::IsCurrentThread(ULONG dwThreadId) 
+{ 
+	return _IsWaitContinue && _pThread && _pThread->getID() == dwThreadId; 
+}
+
 ZDbgDoc* ZDbgDoc::find(DWORD dwProcessId)
 {
 	PLIST_ENTRY head = &ZGLOBALS::get()->_docListHead, entry = head;
