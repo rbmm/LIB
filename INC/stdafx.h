@@ -10,6 +10,12 @@
 #define _CRT_NON_CONFORMING_SWPRINTFS
 #define _NO_CRT_STDIO_INLINE
 #define _CRT_SECURE_CPP_OVERLOAD_SECURE_NAMES 0
+#define _ALLOW_COMPILER_AND_STL_VERSION_MISMATCH
+#define __EDG__
+#define USE_ATL_THUNK2
+
+#define DPAPI_IMP __declspec(dllimport)
+#define _CRTIMP_ALT __declspec(dllimport)
 
 #define _NT_BEGIN namespace NT {
 #define _NT_END }
