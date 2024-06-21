@@ -42,6 +42,9 @@ template<typename C> struct RTL_FRAME : public _RTL_FRAME, public C
 
 	static C* get()
 	{
+#ifdef _PRINT_CPP_NAMES_
+		__pragma(message("; " __FUNCSIG__ "\r\nextern " __FUNCDNAME__ " : PROC"))
+#endif
 		return static_cast<RTL_FRAME*>(_RTL_FRAME::get(getContext()));
 	}
 };

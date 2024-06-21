@@ -9,7 +9,7 @@ class RundownProtection
 public:
 
 	enum {
-		v_complete = 0, v_init = 0x80000000
+		v_complete = 0, v_init = 1 << 31
 	};
 
 	BOOL IsRundownCompleted()

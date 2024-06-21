@@ -14,8 +14,13 @@
 #define __EDG__
 #define USE_ATL_THUNK2
 
-#define DPAPI_IMP __declspec(dllimport)
-#define _CRTIMP_ALT __declspec(dllimport)
+#ifndef DECLSPEC_IMPORT
+#define DECLSPEC_IMPORT __declspec(dllimport)
+#endif
+
+#define DPAPI_IMP DECLSPEC_IMPORT
+#define _CRTIMP DECLSPEC_IMPORT
+#define _CRTIMP_ALT DECLSPEC_IMPORT
 
 #define _NT_BEGIN namespace NT {
 #define _NT_END }

@@ -1,4 +1,4 @@
-typedef void (__cdecl *_PVFV)();
+typedef void (__cdecl *_PVFV)(void);
 
 #ifdef _PAGE_
 #pragma comment(linker, "/merge:.CRT=PAGER")

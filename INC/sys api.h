@@ -1,6 +1,6 @@
 #pragma once
 
-#define NTDLL__(type)	extern "C" __declspec(dllimport) type 
+#define NTDLL__(type)	DECLSPEC_IMPORT type 
 #define NTDLL_(type)	NTDLL__(type) CALLBACK
 #define NTDLL			NTDLL_(NTSTATUS)
 #define NTDLL_V NTDLL_(void)
@@ -8,13 +8,13 @@
 #include "ntlpcapi.h"
 #include "ntdbg.h"
 
+EXTERN_C_START
+
 typedef int (__cdecl *QSORTFN)(const void*, const void*);
 
 NTDLL_(_PEB*) RtlGetCurrentPeb();
 
 NTDLL CsrNewThread();
-
-NTDLL ZwImpersonateClientOfPort(HANDLE hPort, PPORT_MESSAGE pm);
 
 NTDLL RtlGetLastNtStatus();
 
@@ -301,21 +301,6 @@ ZwRemoveIoCompletion
 	);
 
 NTDLL
-ZwNotifyChangeKey
-(
-	HANDLE hKey,
-	HANDLE hEvent,
-	PIO_APC_ROUTINE pfnApc,
-	PVOID ApcContext,
-	PIO_STATUS_BLOCK IoStatusBlock,
-	ULONG NotifyFilter,
-	BOOLEAN WatchSubtree,
-	PVOID Buffer = 0,
-	ULONG BufferLength = 0,
-	BOOLEAN Asynchronous = TRUE
-	);
-
-NTDLL
 ZwQueryInformationThread
 (
 	HANDLE hThread,
@@ -486,13 +471,6 @@ ZwCreateToken
 	PTOKEN_SOURCE Source 
 );
 
-NTDLL ZwSetInformationToken(
-							HANDLE hToken, 
-							TOKEN_INFORMATION_CLASS TokenInformationClass, 
-							PVOID TokenInformation, 
-							DWORD TokenInformationLength
-							);
-
 NTDLL 
 ZwQueryAttributesFile
 (POBJECT_ATTRIBUTES poa, PFILE_BASIC_INFORMATION pfbi);
@@ -509,25 +487,6 @@ NTDLL
 ZwImpersonateAnonymousToken
 (
 	IN HANDLE hThread
-);
-
-NTDLL
-ZwDuplicateToken
-(
-	IN HANDLE ExistingTokenHandle,
-	IN ACCESS_MASK DesiredAccess,
-	IN POBJECT_ATTRIBUTES ObjectAttributes,
-	IN BOOLEAN EffectiveOnly,
-	IN TOKEN_TYPE TokenType,
-	OUT PHANDLE NewTokenHandle
-);
-
-NTDLL 
-ZwOpenEvent
-(
-	OUT	PHANDLE hEvent,
-	IN  ULONG Access,
-	IN  POBJECT_ATTRIBUTES ObjectAttributes
 );
 
 NTDLL 
@@ -684,22 +643,6 @@ ZwCreateProcessEx
 	HANDLE ExceptionPort,
 	ULONG
 	);
-
-NTDLL
-ZwOpenProcess
-(
-	OUT PHANDLE ProcessHandle,
-	IN ULONG DesiredAccess,
-	IN POBJECT_ATTRIBUTES ObjectAttributes,
-	IN PCLIENT_ID Cid OPTIONAL
-);
-
-NTDLL
-ZwTerminateProcess
-(
-	IN HANDLE ProcessHandle OPTIONAL,
-	IN NTSTATUS ExitStatus
-);
 
 NTDLL
 ZwSetContextThread
@@ -965,14 +908,6 @@ ZwCreateThread
 	IN BOOLEAN CreateSuspended
 	);
 
-NTDLL ZwPowerInformation(
-						 POWER_INFORMATION_LEVEL InformationLevel,
-						 PVOID lpInputBuffer,
-						 ULONG nInputBufferSize,
-						 PVOID lpOutputBuffer,
-						 ULONG nOutputBufferSize
-						 );
-
 NTDLL
 RtlExpandEnvironmentStrings_U(
 							  IN PVOID                Environment OPTIONAL,
@@ -1066,7 +1001,7 @@ RtlDosApplyFileIsolationRedirection_Ustr(IN ULONG Flags,
 										 IN PSIZE_T FilePathLength,
 										 IN PSIZE_T MaxPathSize);
 
-EXTERN_C NTSYSAPI BOOLEAN NTAPI RtlDoesFileExists_U( _In_ PCWSTR FileName );
+NTSYSAPI BOOLEAN NTAPI RtlDoesFileExists_U( _In_ PCWSTR FileName );
 
 NTDLL_(ULONG) RtlGetNtGlobalFlags();
 
@@ -1262,12 +1197,6 @@ RtlFindActivationContextSectionString
 
 NTDLL RtlValidAcl(PACL Acl);
 
-NTDLL RtlConvertSidToUnicodeString(
-								   PUNICODE_STRING UnicodeString,
-								   PSID Sid,
-								   BOOLEAN AllocateDestinationString
-								   );
-
 NTDLL
 ZwAdjustPrivilegesToken (
 						 __in      HANDLE TokenHandle,
@@ -1301,7 +1230,6 @@ ZwQuerySection
 #define RTL_USER_PROC_IMAGE_KEY_MISSING 0x00004000
 #define RTL_USER_PROC_OPTIN_PROCESS 0x00020000
 
-EXTERN_C
 NTSYSAPI
 NTSTATUS
 NTAPI
@@ -1318,7 +1246,6 @@ RtlCreateProcessParameters(
 						   _In_opt_ PCUNICODE_STRING RuntimeData
 						   );
 
-EXTERN_C
 NTSYSAPI
 NTSTATUS
 NTAPI
@@ -1336,7 +1263,6 @@ RtlCreateProcessParametersEx(
 							 _In_ ULONG Flags // pass RTL_USER_PROC_PARAMS_NORMALIZED to keep parameters normalized
 							 );
 
-EXTERN_C
 NTSYSAPI
 NTSTATUS
 NTAPI
@@ -1344,7 +1270,6 @@ RtlDestroyProcessParameters(
 							_In_ _Post_invalid_ PRTL_USER_PROCESS_PARAMETERS ProcessParameters
 							);
 
-EXTERN_C
 NTSYSAPI
 PRTL_USER_PROCESS_PARAMETERS
 NTAPI
@@ -1352,7 +1277,6 @@ RtlNormalizeProcessParams(
 						  _Inout_ PRTL_USER_PROCESS_PARAMETERS ProcessParameters
 						  );
 
-EXTERN_C
 NTSYSAPI
 PRTL_USER_PROCESS_PARAMETERS
 NTAPI
@@ -1411,16 +1335,6 @@ NTDLL_(TEB_ACTIVE_FRAME*) RtlGetFrame();
 
 NTDLL_(VOID) RtlPushFrame(TEB_ACTIVE_FRAME* Frame);
 NTDLL_(VOID) RtlPopFrame(TEB_ACTIVE_FRAME* Frame);
-
-NTDLL
-ZwQueryObject
-(
-	IN HANDLE ObjHandle,
-	IN OBJECT_INFORMATION_CLASS InfoCls,
-	OUT PVOID ObjectInfo,
-	IN ULONG ObjectInfoLen,
-	OUT PULONG RetLen OPTIONAL
-);
 
 NTDLL
 ZwSetInformationObject
@@ -1627,4 +1541,4 @@ NTDLL__(VOID) FASTCALL ExfReleasePushLock(PEX_PUSH_LOCK PushLock);
 NTDLL__(VOID) FASTCALL ExfReleasePushLockShared(PEX_PUSH_LOCK PushLock);
 NTDLL__(VOID) FASTCALL ExfReleasePushLockExclusive(PEX_PUSH_LOCK PushLock);
 
-
+EXTERN_C_END

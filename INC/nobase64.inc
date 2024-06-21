@@ -7,10 +7,6 @@ name proc
 name endp
 endm
 
-createAstringEx macro name
-createAstring @CatStr(@,name), '&name'
-endm
-
 WSTRING macro text
 	FORC arg, text
 	DW '&arg'
@@ -55,18 +51,12 @@ name proc
 name endp
 endm
 
-createFunc2 macro hmod, name
+createFunc macro hmod, name
 _createFunc2 hmod, name, '&name'
 endm
 
-createFunc macro name
-createFunc2 ntdll, name
-endm
-
-extern ?get_hmod@NT@@YAPEAXPEB_W@Z : PROC ; void *__cdecl get_hmod(const wchar_t *)
-extern ?GetFuncAddressEx@NT@@YAPEAXPEAU_IMAGE_DOS_HEADER@@PEBD@Z : PROC ; void *__cdecl GetFuncAddressEx(struct _IMAGE_DOS_HEADER *,const char *)
-
-_TEXT$sc1 segment
+extern ?get_hmod@@YAPEAXPEB_W@Z : PROC ; void *__cdecl get_hmod(const wchar_t *)
+extern ?GetFuncAddressEx@@YAPEAXPEAU_IMAGE_DOS_HEADER@@PEBD@Z : PROC ; void *__cdecl GetFuncAddressEx(struct _IMAGE_DOS_HEADER *,const char *)
 
 common_imp_call proc private
   mov rax,[r10]
@@ -83,14 +73,14 @@ common_imp_call proc private
   test rax,rax
   jnz @@2
   lea rcx,[r11 + 8]
-  call ?get_hmod@NT@@YAPEAXPEB_W@Z
+  call ?get_hmod@@YAPEAXPEB_W@Z
   mov r11,[rsp + 28h]
   mov r10,[rsp + 30h]
   mov [r11],rax
 @@2:
   lea rdx,[r10 + 8]
   mov rcx,rax
-  call ?GetFuncAddressEx@NT@@YAPEAXPEAU_IMAGE_DOS_HEADER@@PEBD@Z
+  call ?GetFuncAddressEx@@YAPEAXPEAU_IMAGE_DOS_HEADER@@PEBD@Z
   add rsp,28h
   pop r11
   pop r10
@@ -103,23 +93,4 @@ common_imp_call proc private
   jmp rax
 common_imp_call endp
 
-?fmemcmp@NT@@YADPEBX0_K@Z proc
-  mov rax,rsi
-  mov rsi,rcx
-  xchg rdi,rdx
-  mov ecx,r8d
-  repe cmpsb
-  mov rsi,rax
-  mov rdi,rdx
-  mov al,0
-  jz @@2
-  js @@1
-  inc al
-@@2:
-  ret
-@@1:
-  dec al
-  ret
-?fmemcmp@NT@@YADPEBX0_K@Z endp
-
-_TEXT$sc1 ends
+_HMOD ntdll,<>
