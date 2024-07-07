@@ -300,6 +300,54 @@ void ShowText(PCWSTR caption, PCWSTR text)
 	}
 }
 
+typedef struct SYSTEM_PROCESS_ID_INFORMATION
+{
+	HANDLE ProcessId;
+	UNICODE_STRING ImageName;
+} *PSYSTEM_PROCESS_ID_INFORMATION;
+
+NTSTATUS GetPathFromProcessID(HANDLE dwProcessId, _Out_ PWSTR* ppszPath)
+{
+	*ppszPath = 0;
+
+	SYSTEM_PROCESS_ID_INFORMATION spii = { dwProcessId, { 0, 0x200 } };
+	NTSTATUS status;
+
+	ULONG rcb;
+	do 
+	{
+		status = STATUS_NO_MEMORY;
+
+		if (spii.ImageName.Buffer = new WCHAR[spii.ImageName.MaximumLength / sizeof(WCHAR)])
+		{
+			if (0 <= (status = NtQuerySystemInformation(SystemProcessIdInformation, &spii, sizeof(spii), &rcb)))
+			{
+				*ppszPath = spii.ImageName.Buffer;
+
+				return STATUS_SUCCESS;
+			}
+
+			delete [] spii.ImageName.Buffer;
+		}
+
+	} while (status == STATUS_INFO_LENGTH_MISMATCH);
+
+	return status;
+}
+
+void ShowImagePath(HWND hwnd, HANDLE UniqueProcess)
+{
+	WCHAR caption[32], *psz;
+	if (NTSTATUS status = GetPathFromProcessID(UniqueProcess, &psz))
+	{
+		ShowNTStatus(hwnd, status, 0);
+		return ;
+	}
+	swprintf(caption, L"%X Process", (DWORD)(ULONG_PTR)UniqueProcess);
+	ShowText(caption, psz);
+	delete [] psz;
+}
+
 void ShowCmdLineUI(HANDLE UniqueProcess, PUNICODE_STRING CmdLine)
 {
 	*(PWSTR)RtlOffsetToPointer(CmdLine->Buffer, CmdLine->Length) = 0;
@@ -1253,6 +1301,13 @@ class CMainDlg : public ZDlg, ZIdle
 			case IDCANCEL:
 				DestroyWindow(hwndDlg);
 				break;
+
+			case IDC_BUTTON28:
+				if (m_dwProcessId)
+				{
+					ShowImagePath(hwndDlg, m_dwProcessId);
+				}
+				break;
 			
 			case MAKEWPARAM(IDC_EDIT7, EN_CHANGE):
 				cid.UniqueThread = 0;
@@ -1886,6 +1941,8 @@ __E:
 		EnableWindow(GetDlgItem(hwndDlg, IDC_COMBO2), bEnable);
 		int i = IDC_BUTTON12, j = UniqueProcessId ? IDC_BUTTON3 : IDC_BUTTON1;
 		do EnableWindow(GetDlgItem(hwndDlg, i), bEnable); while(i-- != j);
+
+		EnableWindow(GetDlgItem(hwndDlg, IDC_BUTTON28), bEnable);
 
 		if (bEnable)
 		{

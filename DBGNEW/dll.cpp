@@ -463,6 +463,8 @@ void ZDll::Parse(ZDbgDoc* pDoc)
 				}
 			}
 		}
+
+		pDoc->OnDllParsed(this);
 	}
 }
 

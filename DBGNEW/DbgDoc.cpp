@@ -1129,7 +1129,13 @@ void ZDbgDoc::UpdateThreads(PSYSTEM_PROCESS_INFORMATION pspi)
 								{
 									Win32StartAddress = TH->StartAddress;
 								}
-								_pDbgTH->AddThread(dwThreadId, TH->TebAddress, Win32StartAddress);
+								pThread->_StartAddress = Win32StartAddress;
+
+								WCHAR buf[0x100];
+								FormatNameForAddress(Win32StartAddress, buf, _countof(buf));
+
+
+								_pDbgTH->AddThread(dwThreadId, TH->TebAddress, Win32StartAddress, buf);
 							}
 							else
 							{
@@ -1374,6 +1380,90 @@ ZDbgThread* ZDbgDoc::getThreadById(DWORD dwThreadId)
 	return 0;
 }
 
+void ZDbgDoc::FormatNameForAddress(ZDll* pDll, PVOID Address, PWSTR buf, ULONG cch, BOOL bReparse /*= FALSE*/)
+{
+	char sz[256];
+	PCSTR Name = 0;
+	INT_PTR NameVa = 0;
+	int d = 0;
+	PCSTR name;
+	if (pDll->_IsParsed && ( name = pDll->getNameByVa2(Address, &NameVa)))
+	{
+		if (IS_INTRESOURCE(name))
+		{
+			CHAR oname[16];
+			sprintf_s(oname, _countof(oname), "#%u", (ULONG)(ULONG_PTR)name);
+			name = oname;
+		}
+
+		Name = unDNameEx(sz, (PCSTR)name, RTL_NUMBER_OF(sz), UNDNAME_DEFAULT);
+
+		WCHAR szdisp[32];
+
+		if (d = RtlPointerToOffset(NameVa, Address))
+		{
+			swprintf_s(szdisp, _countof(szdisp), L"+%x", d);
+		}
+		else
+		{
+			*szdisp = 0;
+		}
+
+		if (!bReparse) printf(prThread, L"\t%s!%S%s\r\n", pDll->name(), Name, szdisp);
+
+		if (buf)
+		{
+			swprintf_s(buf, cch, L"%s!%S%s", pDll->name(), Name, szdisp);
+		}
+	}
+	else
+	{
+		if (!bReparse) printf(prThread, L"\t%s+%x\r\n", pDll->name(), RtlPointerToOffset(pDll->getBase(), Address));
+
+		if (buf)
+		{
+			swprintf_s(buf, cch, L"%s+%x", pDll->name(), RtlPointerToOffset(pDll->getBase(), Address));
+		}
+	}
+}
+
+void ZDbgDoc::FormatNameForAddress(PVOID Address, PWSTR buf, ULONG cch)
+{
+	if (buf)
+	{
+		*buf = 0;
+	}
+	if (ZDll* pDll = getDllByVaNoRef(Address, FALSE))
+	{
+		FormatNameForAddress(pDll, Address, buf, cch);
+	}
+}
+
+void ZDbgDoc::OnDllParsed(ZDll* pDll)
+{
+	PLIST_ENTRY head = &_threadListHead, entry = head;
+
+	PVOID _StartAddress = 0;
+	while ((entry = entry->Flink) != head)
+	{
+		ZDbgThread* pThread = static_cast<ZDbgThread*>(entry);
+
+		PVOID StartAddress = pThread->_StartAddress;
+
+		if (pDll->VaInImage(StartAddress))
+		{
+			WCHAR buf[0x100];
+			if (_StartAddress != StartAddress)
+			{
+				*buf = 0;
+				_StartAddress = StartAddress;
+				FormatNameForAddress(pDll, StartAddress, buf, _countof(buf), TRUE);
+			}
+			_pDbgTH->UpdateThread(pThread->_dwThreadId, buf);
+		}
+	}
+}
+
 void ZDbgDoc::OnCreateThread(DWORD dwThreadId, PDBGUI_CREATE_THREAD CreateThreadInfo)
 {
 	THREAD_BASIC_INFORMATION tbi;
@@ -1385,51 +1475,23 @@ void ZDbgDoc::OnCreateThread(DWORD dwThreadId, PDBGUI_CREATE_THREAD CreateThread
 		tbi.TebBaseAddress = 0;
 	}
 
-	printf(prThread, L"create thread %x at %p, teb=%p\r\n", dwThreadId, CreateThreadInfo->NewThread.StartAddress, tbi.TebBaseAddress);
-
-	if (ZDll* pDll = getDllByVaNoRef(CreateThreadInfo->NewThread.StartAddress, FALSE))
+	if (!CreateThreadInfo->NewThread.StartAddress)
 	{
-		if (pDll->_IsParsed)
-		{
-			char sz[256];
-			PCSTR Name = 0;
-			INT_PTR NameVa = 0;
-			int d = 0;
-			if (PCSTR name = pDll->getNameByVa2(CreateThreadInfo->NewThread.StartAddress, &NameVa))
-			{
-				if (IS_INTRESOURCE(name))
-				{
-					CHAR oname[16];
-					sprintf_s(oname, _countof(oname), "#%u", (ULONG)(ULONG_PTR)name);
-					name = oname;
-				}
-
-				Name = unDNameEx(sz, (PCSTR)name, RTL_NUMBER_OF(sz), UNDNAME_DEFAULT);
-
-				WCHAR szdisp[32];
-
-				if (d = RtlPointerToOffset(NameVa, CreateThreadInfo->NewThread.StartAddress))
-				{
-					swprintf_s(szdisp, _countof(szdisp), L"+%x", d);
-				}
-				else
-				{
-					*szdisp = 0;
-				}
-
-				printf(prThread, L"\t%s!%S%s\r\n", pDll->name(), Name, szdisp);
-			}
-		}
-		else
-		{
-			printf(prThread, L"\t%s+%x\r\n", pDll->name(), RtlPointerToOffset(pDll->getBase(), CreateThreadInfo->NewThread.StartAddress));
-		}
+		ZwQueryInformationThread(HandleToThread, ThreadQuerySetWin32StartAddress, 
+			&CreateThreadInfo->NewThread.StartAddress, sizeof(CreateThreadInfo->NewThread.StartAddress), 0);
 	}
 
-	_pDbgTH->AddThread(dwThreadId, tbi.TebBaseAddress, CreateThreadInfo->NewThread.StartAddress);
+	printf(prThread, L"create thread %x at %p, teb=%p\r\n", dwThreadId, CreateThreadInfo->NewThread.StartAddress, tbi.TebBaseAddress);
+
+	WCHAR buf[0x100];
+	FormatNameForAddress(CreateThreadInfo->NewThread.StartAddress, buf, _countof(buf));
+
+	_pDbgTH->AddThread(dwThreadId, tbi.TebBaseAddress, CreateThreadInfo->NewThread.StartAddress, buf);
 
 	if (ZDbgThread* pThread = new ZDbgThread(dwThreadId, HandleToThread, tbi.TebBaseAddress))
 	{
+		pThread->_StartAddress = CreateThreadInfo->NewThread.StartAddress;
+
 		InsertHeadList(&_threadListHead, pThread);
 
 		if (_SuspendCount)
@@ -2132,8 +2194,13 @@ void ZDbgDoc::OnActivate(BOOL bActivate)
 		}
 		else
 		{
-			WCHAR sz[32];
-			swprintf(sz, L"PID=%X", _dwProcessId);
+			if (!IsListEmpty(&_dllListHead))
+			{
+				pFrame->SetStatusText(PATH_INDEX, static_cast<ZDll*>(_dllListHead.Flink)->path());
+			}
+
+			WCHAR sz[64];
+			swprintf(sz, L"PID=%X(%u)", _dwProcessId, _dwProcessId);
 			pFrame->SetStatusText(2, sz);
 			swprintf(sz, L"peb=%p", _PebBaseAddress);
 			pFrame->SetStatusText(4, sz);
@@ -2153,10 +2220,7 @@ void ZDbgDoc::OnActivate(BOOL bActivate)
 #ifdef _WIN64
 		pFrame->SetStatusText(5, L"");
 #endif
-		if (_IsDump)
-		{
-			pFrame->SetStatusText(PATH_INDEX, L"");
-		}
+		pFrame->SetStatusText(PATH_INDEX, L"");
 	}
 
 	if (_pReg && IsWaitContinue())
@@ -2889,7 +2953,7 @@ NTSTATUS ZDbgDoc::OnWaitStateChange(DBGKD_WAIT_STATE_CHANGE* pwsc)
 			return DBG_EXCEPTION_NOT_HANDLED;
 		}
 
-		_pDbgTH->AddThread(Processor, 0, 0);//!! kpcrb,t
+		_pDbgTH->AddThread(Processor, 0, 0, 0);//!! kpcrb,t
 	}
 
 	pThread->_lpThreadLocalBase = (PVOID)(ULONG_PTR)pwsc->Thread;

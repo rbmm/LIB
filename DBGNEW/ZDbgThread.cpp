@@ -439,16 +439,18 @@ BOOL ZTabFrame::CreateClient(HWND hWndParent, int nWidth, int nHeight, PVOID /*l
 	_hwndST = 0, _hwndTH = 0; 
 	if (HWND hwnd = ZTabBar::Create(hWndParent, 0, 0, nWidth))
 	{
-		LV_COLUMN lvclmn = { LVCF_TEXT | LVCF_WIDTH };
+		//LV_COLUMN lvclmn = { LVCF_TEXT | LVCF_WIDTH };
+		LV_COLUMN lvclmn = { 
+			LVCF_TEXT | LVCF_WIDTH | LVCF_FMT | LVCF_SUBITEM
+		};
+
 		TCITEM item = { TCIF_PARAM|TCIF_TEXT, 0, 0, const_cast<PWSTR>(L"Threads") };
 		HFONT hFont = ZGLOBALS::getFont()->getStatusFont();
 		RECT rc = {};
 
-		SIZE size;
-		HDC hdc = GetDC(hwnd);
-		HGDIOBJ o = SelectObject(hdc, hFont);
-
-		GetTextExtentPoint32(hdc, L"W", 1, &size);
+		NONCLIENTMETRICS ncm = { sizeof(NONCLIENTMETRICS) };
+		SystemParametersInfo(SPI_GETNONCLIENTMETRICS, sizeof(ncm), &ncm, 0);
+		ncm.iMenuHeight = 0 > ncm.lfStatusFont.lfHeight ? -ncm.lfStatusFont.lfHeight : +ncm.lfStatusFont.lfHeight;
 
 		if (_pDoc->IsDump())
 		{
@@ -477,18 +479,29 @@ BOOL ZTabFrame::CreateClient(HWND hWndParent, int nWidth, int nHeight, PVOID /*l
 
 #ifdef _WIN64
 #define STACK_REG L"Rsp"
-#define ADDR_W 18
+#define ADDR_W 11
 #else
 #define STACK_REG L"Ebp"
-#define ADDR_W 10
+#define ADDR_W 6
 #endif
 
-			lvclmn.pszText = const_cast<PWSTR>(L" Teb "), lvclmn.cx = ADDR_W * size.cx;
-			ListView_InsertColumn((HWND)item.lParam, lvclmn.iSubItem = 0, &lvclmn);
-			lvclmn.pszText = const_cast<PWSTR>(L" ID"), lvclmn.cx = 6 * size.cx;
-			ListView_InsertColumn((HWND)item.lParam, lvclmn.iSubItem = 1, &lvclmn);
-			lvclmn.pszText = const_cast<PWSTR>(L" StartAddress "), lvclmn.cx = (ADDR_W+2) * size.cx;
-			ListView_InsertColumn((HWND)item.lParam, lvclmn.iSubItem = 2, &lvclmn);
+			static const PCWSTR headers[] = {
+				L" Teb ", L" ID", L" StartAddress ", L" FuncName "
+			};
+
+			static const ULONG lens[] = { ADDR_W, 4, ADDR_W + 1, 44 };
+
+			C_ASSERT(_countof(headers) == _countof(lens));
+
+			do
+			{
+				lvclmn.pszText = const_cast<PWSTR>(headers[lvclmn.iSubItem]);
+				lvclmn.cx = lens[lvclmn.iSubItem] * ncm.iMenuHeight;
+
+				ListView_InsertColumn((HWND)item.lParam, lvclmn.iSubItem, &lvclmn);
+			} while (++lvclmn.iSubItem < _countof(headers));
+
+			lvclmn.iSubItem = 0;
 		}
 
 __1:		
@@ -505,25 +518,31 @@ __1:
 			ListView_SetExtendedListViewStyle((HWND)item.lParam, 
 				LVS_EX_INFOTIP|LVS_EX_FULLROWSELECT|LVS_EX_HEADERDRAGDROP|LVS_EX_DOUBLEBUFFER);
 
+			_hwndST = (HWND)item.lParam;
+
 			if (hFont)
 			{
 				SendMessage((HWND)item.lParam, WM_SETFONT, (WPARAM)hFont, 0);
 			}
 
-			lvclmn.pszText = const_cast<PWSTR>(STACK_REG), lvclmn.cx = ADDR_W * size.cx;
-			ListView_InsertColumn((HWND)item.lParam, lvclmn.iSubItem = 0, &lvclmn);
-			lvclmn.pszText = const_cast<PWSTR>(L"RetAddr"), lvclmn.cx = ADDR_W * size.cx;
-			ListView_InsertColumn((HWND)item.lParam, lvclmn.iSubItem = 1, &lvclmn);
-			lvclmn.pszText = const_cast<PWSTR>(L"FuncName"), lvclmn.cx = 64 * size.cx;
-			ListView_InsertColumn((HWND)item.lParam, lvclmn.iSubItem = 2, &lvclmn);
+			static const PCWSTR headers[] = {
+				STACK_REG, L" RetAddr ", L" FuncName "
+			};
 
-			_hwndST = (HWND)item.lParam;
+			static const ULONG lens[] = { ADDR_W, ADDR_W, 64 };
+
+			C_ASSERT(_countof(headers) == _countof(lens));
+
+			do
+			{
+				lvclmn.pszText = const_cast<PWSTR>(headers[lvclmn.iSubItem]);
+				lvclmn.cx = lens[lvclmn.iSubItem] * ncm.iMenuHeight;
+
+				ListView_InsertColumn((HWND)item.lParam, lvclmn.iSubItem, &lvclmn);
+			} while (++lvclmn.iSubItem < _countof(headers));
 		}
 
 		_Stack = 0;
-
-		SelectObject(hdc, o);
-		ReleaseDC(hwnd, hdc);
 
 		return TRUE;
 	}
@@ -531,7 +550,7 @@ __1:
 	return FALSE;
 }
 
-void ZTabFrame::AddThread(DWORD dwThreadId, PVOID lpThreadLocalBase, PVOID lpStartAddress)
+void ZTabFrame::AddThread(DWORD dwThreadId, PVOID lpThreadLocalBase, PVOID lpStartAddress, PWSTR pcszFuncName)
 {
 	WCHAR sz[32];
 	swprintf(sz, L"%p", lpThreadLocalBase);
@@ -555,15 +574,34 @@ void ZTabFrame::AddThread(DWORD dwThreadId, PVOID lpThreadLocalBase, PVOID lpSta
 	swprintf(sz, L"%p", lpStartAddress);
 	item.iSubItem++;
 	ListView_SetItem(_hwndTH, &item);
+
+	if (pcszFuncName)
+	{
+		item.iSubItem++;
+		item.pszText = pcszFuncName;
+		ListView_SetItem(_hwndTH, &item);
+	}
 }
 
 void ZTabFrame::DelThread(DWORD dwThreadId)
 {
 	LVFINDINFO fi = { LVFI_PARAM, 0, dwThreadId };
-	int i = ListView_FindItem(_hwndTH, 0, &fi);
+	int i = ListView_FindItem(_hwndTH, -1, &fi);
 	if (0 <= i)
 	{
 		ListView_DeleteItem(_hwndTH, i);
+	}
+}
+
+void ZTabFrame::UpdateThread(DWORD dwThreadId, PWSTR pcszFuncName)
+{
+	LVFINDINFO fi = { LVFI_PARAM, 0, dwThreadId };
+	LVITEM item {LVIF_TEXT};
+	if (0 <= (item.iItem = ListView_FindItem(_hwndTH, -1, &fi)))
+	{
+		item.iSubItem = 3;
+		item.pszText = pcszFuncName;
+		ListView_SetItem(_hwndTH, &item);
 	}
 }
 

@@ -21,6 +21,7 @@ class ZDbgThread : public LIST_ENTRY
 
 	HANDLE _hThread;
 	PVOID _lpThreadLocalBase;
+	PVOID _StartAddress;
 	ULONG_PTR _Dr[4];
 	PVOID _Ctx[4];
 	PVOID _pbpVa;
@@ -73,9 +74,11 @@ class ZTabFrame : public ZFrameMultiWnd, ZTabBar
 public:
 	ULONG GetCurrentThreadId();
 
-	void AddThread(DWORD dwThreadId, PVOID lpThreadLocalBase, PVOID lpStartAddress);
+	void AddThread(DWORD dwThreadId, PVOID lpThreadLocalBase, PVOID lpStartAddress, PWSTR pcszFuncName);
 
 	void DelThread(DWORD dwThreadId);
+	
+	void UpdateThread(DWORD dwThreadId, PWSTR pcszFuncName);
 
 	void ShowStackTrace(CONTEXT& ctx);
 

@@ -399,17 +399,17 @@ BOOL ZMainWnd::CreateSB(HWND hwnd)
 	if (hwnd = ZStatusBar::Create(hwnd))
 	{
 		static const int pp[] = { 
-			256, 
-			256 + 168, 
-			256 + 168 + 168, 
-			256 + 168 + 168 + 168, 
-			256 + 168 + 168 + 168 + 256, 
+			8, 
+			8 + 168, 
+			8 + 168 + 180, 
+			8 + 168 + 180 + 168, 
+			8 + 168 + 180 + 168 + 256, 
 #ifdef _WIN64
-			256 + 168 + 168 + 168 + 256 + 256, 
+			8 + 168 + 180 + 168 + 256 + 256, 
 #endif
 			-1 
 		};
-		SetParts(pp, RTL_NUMBER_OF(pp));
+		SetParts(pp, _countof(pp));
 		return TRUE;
 	}
 	return FALSE;
@@ -447,6 +447,52 @@ BOOL ZMainWnd::CreateTB(HWND hwnd)
 
 //////////////////////////////////////////////////////////////////////////
 
+void CopyDocInfo(HWND hwnd, ZDocument* pDoc, NMMOUSE* lpnm)
+{
+	ZDbgDoc* pDbg;
+	if (0 <= pDoc->QI(IID_PPV(pDbg)))
+	{
+		if (HMENU hmenu = CreatePopupMenu())
+		{
+			MENUITEMINFO mii = { sizeof(mii), MIIM_ID|MIIM_STRING, 0, 0, 1, 0, 0, 0, 0, L"Copy"};
+			InsertMenuItem(hmenu, 0, TRUE, &mii);
+
+			ClientToScreen(lpnm->hdr.hwndFrom, &lpnm->pt);
+			ULONG cmd = TrackPopupMenu(hmenu, TPM_NONOTIFY|TPM_RETURNCMD , lpnm->pt.x, lpnm->pt.y, 0, hwnd, 0);
+			DestroyMenu(hmenu);
+			switch (cmd)
+			{
+			case 1:
+				WCHAR sz[0x200];
+#ifdef _WIN64
+				int len = swprintf_s(sz, _countof(sz), L"%x(%u) %p %p", pDbg->getId(), pDbg->getId(), pDbg->getPEB(), pDbg->getWowPEB());
+#else
+				int len = swprintf_s(sz, _countof(sz), L"%x(%u) %p", pDbg->getId(), pDbg->getId(), pDbg->getPEB());
+#endif
+				if (0 < len)
+				{
+					if (OpenClipboard(hwnd))
+					{
+						ULONG cb = ++len*sizeof(WCHAR);
+						if (HGLOBAL hg = GlobalAlloc(GMEM_MOVEABLE, cb))
+						{
+							memcpy(GlobalLock(hg), sz, cb);
+
+							GlobalUnlock(hg);
+
+							if (!SetClipboardData(CF_UNICODETEXT, hg)) GlobalFree(hg);
+						}
+						CloseClipboard();
+					}
+				}
+
+				break;
+			}
+		}
+		pDbg->Release();
+	}
+}
+
 LRESULT ZMainWnd::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
 	union {
@@ -454,6 +500,7 @@ LRESULT ZMainWnd::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 		NMHDR* hdr;
 		NMTTDISPINFOW* lpnmtdi;
 		LPNMTOOLBAR lpnmtb;
+		NMMOUSE * lpnm;
 	};
 	POINT pt;
 
@@ -464,6 +511,19 @@ LRESULT ZMainWnd::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 		switch (hdr->code)
 		{
+		case NM_CLICK:
+		case NM_RCLICK:
+			switch (hdr->idFrom)
+			{
+			case AFX_IDW_STATUS_BAR:
+				if (ZDocument* pDoc = GetActiveDoc())
+				{
+					CopyDocInfo(hwnd, pDoc, lpnm);
+				}
+				break;
+			}
+			break;
+
 		case TBN_DROPDOWN:
 			switch (lpnmtb->iItem)
 			{

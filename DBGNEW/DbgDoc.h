@@ -168,7 +168,13 @@ class __declspec(uuid("AD893927-328E-4d71-B19C-6E90A88E4CBC")) ZDbgDoc :
 
 	void SetDbgFlags(ZSDIFrameWnd* pFrame);
 
+	void FormatNameForAddress(ZDll* pDll, PVOID Address, PWSTR buf, ULONG cch, BOOL bReparse = FALSE);
+
 public:
+
+	void OnDllParsed(ZDll* pDll);
+
+	void FormatNameForAddress(PVOID Address, PWSTR buf, ULONG cch);
 
 	BOOL InTrace()
 	{
@@ -200,7 +206,16 @@ public:
 	{
 		return _IsWow64Process;
 	}
+	PVOID getWowPEB()
+	{
+		return _wowPeb;
+	}
 #endif
+
+	PVOID getPEB()
+	{
+		return _PebBaseAddress;
+	}
 
 	void ShowProcessList()
 	{
