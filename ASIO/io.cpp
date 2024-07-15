@@ -27,14 +27,6 @@ void IO_RUNDOWN::RundownCompletedNop()
 #pragma comment(linker, "/alternatename:?RundownCompleted@IO_RUNDOWN@NT@@MAEXXZ=?RundownCompletedNop@IO_RUNDOWN@NT@@AAEXXZ")
 #endif
 
-NTSTATUS (NTAPI *fnSetIoCompletionCallback)(HANDLE , LPOVERLAPPED_COMPLETION_ROUTINE , ULONG ) = 
-	(NTSTATUS (NTAPI *)(HANDLE , LPOVERLAPPED_COMPLETION_ROUTINE , ULONG ))RtlSetIoCompletionCallback;
-
-NTSTATUS BindIoCompletionEx(HANDLE hObject, LPOVERLAPPED_COMPLETION_ROUTINE CompletionRoutine)
-{
-	return fnSetIoCompletionCallback(hObject, CompletionRoutine, 0);
-}
-
 NTSTATUS SkipCompletionOnSuccess(HANDLE hObject)
 {
 	IO_STATUS_BLOCK iosb;
@@ -87,6 +79,17 @@ void IO_OBJECT::Close()
 	}
 }
 
+NTSTATUS IO_OBJECT::BindIoCompletionCB(HANDLE hFile, PTP_IO_CALLBACK Callback)
+{
+	TP_CALLBACK_ENVIRON CallbackEnviron, *pCallbackEnviron = 0;
+	if (_G_Pool)
+	{
+		TpInitializeCallbackEnviron(&CallbackEnviron);
+		TpSetCallbackThreadpool(&CallbackEnviron, _G_Pool);
+		pCallbackEnviron = &CallbackEnviron;
+	}
+	return TpAllocIoCompletion(&m_Io, hFile, Callback, this, pCallbackEnviron);
+}
 //////////////////////////////////////////////////////////////////////////
 // IO_IRP
 
@@ -100,15 +103,18 @@ IO_IRP::IO_IRP(IO_OBJECT* pObj, DWORD Code, CDataPacket* packet, PVOID Ptr)
 	hEvent = 0;
 	m_Code = Code;
 	m_packet = packet;
-	m_pObj = pObj;
-	pObj->AddRef();
 	if (packet) packet->AddRef();
+	pObj->StartIo();
 }
 
-IO_IRP::~IO_IRP()
+VOID IO_IRP::OnIoComplete(PVOID Context, PIO_STATUS_BLOCK IoSB)
 {
-	if (m_packet) m_packet->Release();
-	m_pObj->Release();
+	CPP_FUNCTION;
+	BOOL bDelete = Pointer != this;
+	reinterpret_cast<IO_OBJECT*>(Context)->IOCompletionRoutine(m_packet, m_Code, IoSB->Status, IoSB->Information, Pointer);
+	reinterpret_cast<IO_OBJECT*>(Context)->Release();
+	if (m_packet) m_packet->Release(), m_packet = 0;
+	if (bDelete) delete this;
 }
 
 void* IO_IRP::operator new(size_t size, size_t cb)
@@ -146,7 +152,7 @@ void IO_IRP::operator delete(PVOID p)
 	IO_RUNDOWN::g_IoRundown.Release();
 }
 
-DWORD IO_IRP::CheckErrorCode(DWORD dwErrorCode, BOOL bSkippedOnSynchronous)
+void IO_IRP::CheckErrorCode(IO_OBJECT* pObj, DWORD dwErrorCode, BOOL bSkippedOnSynchronous)
 {
 	switch (dwErrorCode)
 	{
@@ -154,13 +160,13 @@ DWORD IO_IRP::CheckErrorCode(DWORD dwErrorCode, BOOL bSkippedOnSynchronous)
 		if (!bSkippedOnSynchronous)
 		{
 	case ERROR_IO_PENDING:
-			return NOERROR;
+			return ;
 		}
 	}
-	IOCompletionRoutine(dwErrorCode, InternalHigh);
 
-	// handle possible error in IOCompletionRoutine
-	return NOERROR;
+	TpCancelAsyncIoOperation(pObj->m_Io);
+	Internal = dwErrorCode;
+	OnIoComplete(pObj, reinterpret_cast<PIO_STATUS_BLOCK>(this));
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -168,20 +174,19 @@ DWORD IO_IRP::CheckErrorCode(DWORD dwErrorCode, BOOL bSkippedOnSynchronous)
 
 BLOCK_HEAP NT_IRP::s_bh;
 
-NTSTATUS NT_IRP::CheckNtStatus(NTSTATUS status, BOOL bSkippedOnSynchronous)
+void NT_IRP::CheckNtStatus(IO_OBJECT* pObj, NTSTATUS status, BOOL bSkippedOnSynchronous)
 {
 	if (status == STATUS_PENDING)
 	{
-		return STATUS_PENDING;
+		return ;
 	}
 
 	if (NT_ERROR(status) || bSkippedOnSynchronous)
 	{
-		IOCompletionRoutine(status, Information);
+		TpCancelAsyncIoOperation(pObj->m_Io);
+		Status = status;
+		OnIoComplete(pObj, this);
 	}
-
-	// handle possible error in IOCompletionRoutine
-	return 0;
 }
 
 void* NT_IRP::operator new(size_t size, size_t cb)
@@ -227,16 +232,22 @@ NT_IRP::NT_IRP(IO_OBJECT* pObj, DWORD Code, CDataPacket* packet, PVOID Ptr)
 	Pointer = Ptr;
 	m_Code = Code;
 	m_packet = packet;
-	m_pObj = pObj;
-	pObj->AddRef();
 	if (packet) packet->AddRef();
+	pObj->StartIo();
 }
 
-NT_IRP::~NT_IRP()
+VOID NT_IRP::OnIoComplete(
+				  _Inout_opt_ PVOID Context, 
+				  _In_ PIO_STATUS_BLOCK IoSB)
 {
-	if (m_packet) m_packet->Release();
-	m_pObj->Release();
+	CPP_FUNCTION;
+	BOOL bDelete = Pointer != this;
+	reinterpret_cast<IO_OBJECT*>(Context)->IOCompletionRoutine(m_packet, m_Code, IoSB->Status, IoSB->Information, Pointer);
+	reinterpret_cast<IO_OBJECT*>(Context)->Release();
+	if (m_packet) m_packet->Release(), m_packet = 0;
+	if (bDelete) delete this;
 }
+
 
 //////////////////////////////////////////////////////////////////////////
 // RtlWait

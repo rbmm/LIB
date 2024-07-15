@@ -1,5 +1,8 @@
 #pragma once
 
+EXTERN_C_START
+#include "../inc/nttp.h"
+EXTERN_C_END
 #include "../inc/rundown.h"
 #include "../inc/asmfunc.h"
 #include "packet.h"
@@ -18,10 +21,6 @@ __pragma(comment(linker, "/alternatename:@?FastReferenceDll=@?FastReferenceDllNo
 __pragma(comment(linker, "/alternatename:?ReferenceDll@NT@@" VSIFN "=@?FastReferenceDllNopa" ))
 __pragma(comment(linker, "/alternatename:?DereferenceDll@NT@@" VSIFN "=@?FastReferenceDllNopa" ))
 
-extern NTSTATUS (NTAPI *fnSetIoCompletionCallback)(HANDLE , LPOVERLAPPED_COMPLETION_ROUTINE , ULONG );
-
-NTSTATUS NTAPI BindIoCompletionEx(HANDLE hObject, LPOVERLAPPED_COMPLETION_ROUTINE CompletionRoutine);
-
 NTSTATUS NTAPI SkipCompletionOnSuccess(HANDLE hObject);
 
 struct IO_RUNDOWN : public RUNDOWN_REF 
@@ -38,26 +37,39 @@ class __declspec(novtable) IO_OBJECT
 	friend class IO_IRP;
 	friend class NT_IRP;
 
+	NTSTATUS BindIoCompletionCB(HANDLE hFile, PTP_IO_CALLBACK Callback);	
+
 	virtual void IOCompletionRoutine(CDataPacket* packet, DWORD Code, NTSTATUS status, ULONG_PTR dwNumberOfBytesTransfered, PVOID Pointer) = 0;
 
-	HANDLE				m_hFile;
+	HANDLE				m_hFile = 0;
+	PTP_IO				m_Io = 0;
 	RundownProtection	m_HandleLock;
-	LONG				m_nRef;
+	LONG				m_nRef = 1;
 
 	_NODISCARD BOOL LockHandle()
 	{
 		return m_HandleLock.Acquire();
 	}
 
+	void StartIo()
+	{
+		AddRef();
+		if (m_Io) TpStartAsyncIoOperation(m_Io);
+	}
+
 protected:
 
-	IO_OBJECT() : m_nRef(1), m_hFile(0)
+	IO_OBJECT()
 	{
 		ReferenceDll();
 	}
 
 	virtual ~IO_OBJECT()
 	{
+		if (m_Io)
+		{
+			TpReleaseIoCompletion(m_Io);
+		}
 		Close();
 		DereferenceDll();
 	}
@@ -68,6 +80,8 @@ protected:
 	}
 
 public:
+
+	static inline PTP_POOL _G_Pool = 0;
 
 	_NODISCARD BOOL LockHandle(HANDLE& hFile);
 
@@ -121,35 +135,38 @@ class IO_IRP : public OVERLAPPED
 {
 	static BLOCK_HEAP s_bh;
 
-	IO_OBJECT* m_pObj;
 	CDataPacket* m_packet;
 	PVOID Pointer;
 	DWORD m_Code;
 	PVOID m_buf[];
 
-protected:
-
-	~IO_IRP();
-
 public:
-	VOID IOCompletionRoutine(DWORD dwErrorCode, ULONG_PTR dwNumberOfBytesTransfered)
+
+	static ULONG BindIoCompletion( IO_OBJECT* pObj, HANDLE hFile)
 	{
-		CPP_FUNCTION;
-		BOOL bDelete = Pointer != this;
-		m_pObj->IOCompletionRoutine(m_packet, m_Code, dwErrorCode, dwNumberOfBytesTransfered, Pointer);
-		if (bDelete) delete this;
+		NTSTATUS status = pObj->BindIoCompletionCB(hFile, S_OnIoComplete);
+		return 0 > status ? RtlNtStatusToDosError(status) : NOERROR;
 	}
 
-	static VOID CALLBACK _IOCompletionRoutine(NTSTATUS status, ULONG_PTR dwNumberOfBytesTransfered, LPOVERLAPPED lpOverlapped)ASM_FUNCTION;
+	VOID OnIoComplete(PVOID Context, PIO_STATUS_BLOCK IoSB);
+
+	static VOID NTAPI S_OnIoComplete(
+		_Inout_ PTP_CALLBACK_INSTANCE Instance,
+		_Inout_opt_ PVOID Context,
+		_In_ PVOID ApcContext,
+		_In_ PIO_STATUS_BLOCK IoSB,
+		_In_ PTP_IO Io
+		)ASM_FUNCTION;
 
 	PVOID SetPointer()
 	{
 		return Pointer = m_buf;
 	}
 
-	void NotDelete()
+	PVOID NotDelete()
 	{
 		Pointer = this;
+		return m_buf;
 	}
 
 	void Delete()
@@ -167,23 +184,18 @@ public:
 
 	IO_IRP(IO_OBJECT* pObj, DWORD Code, CDataPacket* packet, PVOID Ptr = 0);
 
-	DWORD CheckError(BOOL fOk, BOOL bSkippedOnSynchronous = FALSE)
+	void CheckError(IO_OBJECT* pObj, BOOL fOk, BOOL bSkippedOnSynchronous = FALSE)
 	{
-		return CheckErrorCode(fOk ? NOERROR : GetLastError(), bSkippedOnSynchronous);
+		CheckErrorCode(pObj, fOk ? NOERROR : GetLastError(), bSkippedOnSynchronous);
 	}
 
-	DWORD CheckErrorCode(DWORD dwErrorCode, BOOL bSkippedOnSynchronous = FALSE);
+	void CheckErrorCode(IO_OBJECT* pObj, DWORD dwErrorCode, BOOL bSkippedOnSynchronous = FALSE);
 
 	void* operator new(size_t size);
 
 	void* operator new(size_t size, size_t cb);
 
 	void operator delete(PVOID p);
-
-	static ULONG BindIoCompletion(HANDLE hObject)
-	{
-		return RtlNtStatusToDosError(BindIoCompletionEx(hObject, (LPOVERLAPPED_COMPLETION_ROUTINE)_IOCompletionRoutine));
-	}
 };
 
 //////////////////////////////////////////////////////////////////////////
@@ -193,33 +205,33 @@ class NT_IRP : public IO_STATUS_BLOCK
 {
 	static BLOCK_HEAP s_bh;
 
-	IO_OBJECT* m_pObj;
 	CDataPacket* m_packet;
 	PVOID Pointer;
 	DWORD m_Code;
 	PVOID m_buf[];
 
-	VOID IOCompletionRoutine(NTSTATUS status, ULONG_PTR dwNumberOfBytesTransfered)
-	{
-		CPP_FUNCTION;
-		BOOL bDelete = Pointer != this;
-		m_pObj->IOCompletionRoutine(m_packet, m_Code, status, dwNumberOfBytesTransfered, Pointer);
-		if (bDelete) delete this;
-	}
-
-protected:
-
-	~NT_IRP();
+	VOID OnIoComplete(PVOID Context, PIO_STATUS_BLOCK IoSB);
 
 public:
 
+	static NTSTATUS BindIoCompletion( IO_OBJECT* pObj, HANDLE hFile)
+	{
+		return pObj->BindIoCompletionCB(hFile, S_OnIoComplete);
+	}
+
 	static VOID NTAPI ApcRoutine (
-		PVOID /*ApcContext*/,
-		PIO_STATUS_BLOCK IoStatusBlock,
+		PVOID ApcContext,
+		PIO_STATUS_BLOCK IoSB,
 		ULONG /*Reserved*/
 		)ASM_FUNCTION;
 
-	static VOID CALLBACK _IOCompletionRoutine(NTSTATUS status, ULONG_PTR dwNumberOfBytesTransfered, PVOID ApcContext)ASM_FUNCTION;
+	static VOID NTAPI S_OnIoComplete(
+		_Inout_ PTP_CALLBACK_INSTANCE Instance,
+		_Inout_opt_ PVOID Context,
+		_In_ PVOID ApcContext,
+		_In_ PIO_STATUS_BLOCK IoSB,
+		_In_ PTP_IO Io
+		)ASM_FUNCTION;
 
 	PVOID SetPointer()
 	{
@@ -252,18 +264,13 @@ public:
 
 	NT_IRP(IO_OBJECT* pObj, DWORD Code, CDataPacket* packet, PVOID Ptr = 0);
 
-	NTSTATUS CheckNtStatus(NTSTATUS status, BOOL bSkippedOnSynchronous = FALSE);
+	void CheckNtStatus(IO_OBJECT* pObj, NTSTATUS status, BOOL bSkippedOnSynchronous = FALSE);
 
 	void* operator new(size_t size, size_t cb);
 
 	void* operator new(size_t size);
 
 	void operator delete(PVOID p);
-
-	static NTSTATUS RtlBindIoCompletion(HANDLE hObject)
-	{
-		return BindIoCompletionEx(hObject, (LPOVERLAPPED_COMPLETION_ROUTINE)_IOCompletionRoutine);
-	}
 };
 
 //////////////////////////////////////////////////////////////////////////

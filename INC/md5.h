@@ -13,8 +13,12 @@ struct MD5_CTX {
 	};
 } ;
 
+EXTERN_C_START
+
 NTDLL_V MD5Init(MD5_CTX *);
 NTDLL_V MD5Update(MD5_CTX *, const void *, unsigned int);
 NTDLL_V MD5Final(MD5_CTX *);
+
+EXTERN_C_END
 
 #define MD5_HASH_LEN 16

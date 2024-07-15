@@ -75,7 +75,7 @@ void MailSlot::ReadWrite(PVOID Buffer, ULONG Length, ULONG op, NTSTATUS (NTAPI *
 			status = fn(hFile, 0, 0, irp, irp, Buffer, Length, 0, 0);
 			UnlockHandle();
 		}
-		irp->CheckNtStatus(status);
+		irp->CheckNtStatus(this, status);
 	}
 	else
 	{
@@ -102,7 +102,7 @@ NTSTATUS MailSlot::Init(HANDLE hFile)
 
 	Assign(hFile);
 
-	return NT_IRP::RtlBindIoCompletion(hFile);
+	return NT_IRP::BindIoCompletion(this, hFile);
 }
 
 NTSTATUS MailSlot::Create(

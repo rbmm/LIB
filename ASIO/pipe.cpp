@@ -123,7 +123,7 @@ NTSTATUS CPipeEnd::Assign(HANDLE hFile)
 
 	if (!UseApcCompletion())
 	{
-		NTSTATUS status = NT_IRP::RtlBindIoCompletion(hFile);
+		NTSTATUS status = NT_IRP::BindIoCompletion(this, hFile);
 		
 		if (0 > status)
 		{
@@ -203,7 +203,7 @@ NTSTATUS CPipeEnd::Read(PVOID pv, ULONG cb)
 					NtReadFile(hPipe, 0,                  0,  Irp, Irp, pv, cb, 0, 0);
 				UnlockHandle();
 			}
-			return Irp->CheckNtStatus(status);
+			return Irp->CheckNtStatus(this, status), 0;
 		}
 
 		UnlockConnection();
@@ -239,7 +239,7 @@ NTSTATUS CPipeEnd::Write(CDataPacket* packet)
 				UnlockHandle();
 			}
 
-			return Irp->CheckNtStatus(status);
+			return Irp->CheckNtStatus(this, status), 0;
 		}
 
 		UnlockConnection();
@@ -281,7 +281,7 @@ NTSTATUS CPipeEnd::Listen()
 				NtFsControlFile(hPipe, 0,                  0,  Irp, Irp, FSCTL_PIPE_LISTEN, 0, 0, 0, 0);
 			UnlockHandle();
 		}
-		return Irp->CheckNtStatus(status);
+		return Irp->CheckNtStatus(this, status), 0;
 	}
 
 	IOCompletionRoutine(0, op_listen, STATUS_INSUFFICIENT_RESOURCES, 0, 0);
@@ -333,7 +333,7 @@ void CPipeEnd::Disconnect()
 				UnlockHandle();
 			}
 
-			Irp->CheckNtStatus(status);
+			Irp->CheckNtStatus(this, status);
 			return ;
 		}
 

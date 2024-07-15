@@ -3,11 +3,11 @@ extern ?DereferenceDll@NT@@YAXXZ:proc
 
 extern __imp_RtlNtStatusToDosError:QWORD
 
-; void IO_IRP::IOCompletionRoutine(unsigned long,unsigned __int64)
-extern ?IOCompletionRoutine@IO_IRP@NT@@QEAAXK_K@Z : PROC
+; void __cdecl NT::IO_IRP::OnIoComplete(void *,struct NT::_IO_STATUS_BLOCK *)
+extern ?OnIoComplete@IO_IRP@NT@@QEAAXPEAXPEAU_IO_STATUS_BLOCK@2@@Z : PROC
 
-; void NT_IRP::IOCompletionRoutine(long,unsigned __int64)
-extern ?IOCompletionRoutine@NT_IRP@NT@@AEAAXJ_K@Z : PROC
+; void __cdecl NT::NT_IRP::OnIoComplete(void *Context, IO_STATUS_BLOCK * iosb)
+extern ?OnIoComplete@NT_IRP@NT@@AEAAXPEAXPEAU_IO_STATUS_BLOCK@2@@Z : PROC
 
 ; void __cdecl NT::RtlTimer::TimerCallback(void)
 extern ?TimerCallback@RtlTimer@NT@@AEAAXXZ : PROC
@@ -19,63 +19,61 @@ extern ?WaitCallback@RtlWait@NT@@AEAAXE@Z : PROC
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;VOID NTAPI ApcRoutine (
-;	PVOID /*ApcContext*/,
+;	PVOID ApcContext,
 ;	PIO_STATUS_BLOCK IoStatusBlock,
 ;	ULONG /*Reserved*/
 ;	)
-;{
-;	static_cast<NT_IRP*>(IoStatusBlock)->IOCompletionRoutine(IoStatusBlock->Status, IoStatusBlock->Information);
-;}
+
 
 ALIGN 16 ; must be 16 byte aligned !!! for not confuse with wow apc
 
 ?ApcRoutine@NT_IRP@NT@@SAXPEAXPEAU_IO_STATUS_BLOCK@2@K@Z proc
 	call @?FastReferenceDll
 	sub rsp,28h
-	mov rcx,rdx
-	mov rdx,[rcx]
-	mov r8,[rcx + 8]
-	call ?IOCompletionRoutine@NT_IRP@NT@@AEAAXJ_K@Z
-	add rsp,28h
-	jmp ?DereferenceDll@NT@@YAXXZ
+	mov r8,rdx
+	mov rdx,rcx
+	mov rcx,r8
+	jmp $@$
 ?ApcRoutine@NT_IRP@NT@@SAXPEAXPEAU_IO_STATUS_BLOCK@2@K@Z endp
 
+; void __cdecl NT::NT_IRP::S_OnIoComplete(
+;	TP_CALLBACK_INSTANCE *,
+;	void *Context,
+;	void *ApcContext,
+;	IO_STATUS_BLOCK *,
+;	TP_IO *)
+	
+?S_OnIoComplete@NT_IRP@NT@@SAXPEAU_TP_CALLBACK_INSTANCE@@PEAX1PEAU_IO_STATUS_BLOCK@2@PEAU_TP_IO@@@Z proc
+	call @?FastReferenceDll
+	sub rsp,28h
+	mov rcx,r8
+	mov r8,r9
+$@$ LABEL PROC
+	call ?OnIoComplete@NT_IRP@NT@@AEAAXPEAXPEAU_IO_STATUS_BLOCK@2@@Z
+	add rsp,28h
+	jmp ?DereferenceDll@NT@@YAXXZ
+
+?S_OnIoComplete@NT_IRP@NT@@SAXPEAU_TP_CALLBACK_INSTANCE@@PEAX1PEAU_IO_STATUS_BLOCK@2@PEAU_TP_IO@@@Z endp
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;VOID CALLBACK _IOCompletionRoutine(NTSTATUS status, ULONG_PTR dwNumberOfBytesTransfered, LPOVERLAPPED lpOverlapped)
-;{
-;	static_cast<IO_IRP*>(lpOverlapped)->IOCompletionRoutine(RtlNtStatusToDosError(status), dwNumberOfBytesTransfered);
-;}
 
-?_IOCompletionRoutine@IO_IRP@NT@@SAXJ_KPEAU_OVERLAPPED@@@Z proc
+; void __cdecl NT::IO_IRP::S_OnIoComplete(TP_CALLBACK_INSTANCE *,void *,void *,IO_STATUS_BLOCK *,TP_IO *)
+?S_OnIoComplete@IO_IRP@NT@@SAXPEAU_TP_CALLBACK_INSTANCE@@PEAX1PEAU_IO_STATUS_BLOCK@2@PEAU_TP_IO@@@Z proc
 	call @?FastReferenceDll
 	sub rsp,28h
 	mov [rsp + 30h],rdx
 	mov [rsp + 38h],r8
+	mov [rsp + 40h],r9
+	mov rcx,[r9]
 	call __imp_RtlNtStatusToDosError
-	mov r8,[rsp + 30h]
-	mov edx,eax
+	mov r8,[rsp + 40h]
 	mov rcx,[rsp + 38h]
-	call ?IOCompletionRoutine@IO_IRP@NT@@QEAAXK_K@Z
+	mov rdx,[rsp + 30h]
+	mov [r8],rax
+	call ?OnIoComplete@IO_IRP@NT@@QEAAXPEAXPEAU_IO_STATUS_BLOCK@2@@Z
 	add rsp,28h
 	jmp ?DereferenceDll@NT@@YAXXZ
-?_IOCompletionRoutine@IO_IRP@NT@@SAXJ_KPEAU_OVERLAPPED@@@Z endp
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;VOID CALLBACK _IOCompletionRoutine(NTSTATUS status, ULONG_PTR dwNumberOfBytesTransfered, PVOID ApcContext)
-;{
-;	reinterpret_cast<NT_IRP*>(ApcContext)->IOCompletionRoutine(status, dwNumberOfBytesTransfered);
-;}
-
-?_IOCompletionRoutine@NT_IRP@NT@@SAXJ_KPEAX@Z proc
-	call @?FastReferenceDll
-	sub rsp,28h
-	xchg r8,rcx
-	xchg r8,rdx
-	call ?IOCompletionRoutine@NT_IRP@NT@@AEAAXJ_K@Z
-	add rsp,28h
-	jmp ?DereferenceDll@NT@@YAXXZ
-?_IOCompletionRoutine@NT_IRP@NT@@SAXJ_KPEAX@Z endp
+?S_OnIoComplete@IO_IRP@NT@@SAXPEAU_TP_CALLBACK_INSTANCE@@PEAX1PEAU_IO_STATUS_BLOCK@2@PEAU_TP_IO@@@Z endp
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;VOID CALLBACK _TimerCallback(PVOID pTimer, BOOLEAN /*TimerOrWaitFired*/)

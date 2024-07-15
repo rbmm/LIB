@@ -110,7 +110,7 @@ ULONG CSocketObject::Create(int af, int type, int protocol)
 		return WSAGetLastError();
 	}
 
-	if (ULONG err = IO_IRP::BindIoCompletion((HANDLE)socket))
+	if (ULONG err = IO_IRP::BindIoCompletion(this, (HANDLE)socket))
 	{
 		closesocket(socket);
 		return err;
@@ -230,7 +230,9 @@ ULONG CUdpEndpoint::SendTo(PSOCKADDR Address, DWORD AddressLength, CDataPacket* 
 			err = WSA_ERROR(WSASendTo(socket, &wb, 1, &n, 0, Address, AddressLength, Irp, 0));
 			UnlockSocket();
 		}
-		return Irp->CheckErrorCode(err);
+
+		Irp->CheckErrorCode(this, err);
+		return NOERROR;
 	}
 
 	return ERROR_NO_SYSTEM_RESOURCES;
@@ -263,7 +265,7 @@ ULONG CUdpEndpoint::RecvFrom(CDataPacket* packet)
 
 			UnlockSocket();
 		}
-		return Irp->CheckErrorCode(err);
+		return Irp->CheckErrorCode(this, err), NOERROR;
 	}
 
 	return ERROR_NO_SYSTEM_RESOURCES;
@@ -367,7 +369,7 @@ void CTcpEndpoint::Disconnect(DWORD dwErrorReason)
 				err = BOOL_TO_ERR(lpfnDisconnectEx(socket, Irp, TF_REUSE_SOCKET, 0));
 				UnlockSocket();
 			}
-			Irp->CheckErrorCode(err);
+			Irp->CheckErrorCode(this, err);
 			return;
 		}
 
@@ -485,7 +487,7 @@ ULONG CTcpEndpoint::Listen(ULONG dwReceiveDataLength)
 			UnlockSocket();
 		}
 
-		return Irp->CheckErrorCode(err);
+		return Irp->CheckErrorCode(this, err), NOERROR;
 	}
 
 	// if fail begin IO, direct call with error
@@ -591,7 +593,7 @@ ULONG CTcpEndpoint::Connect_l(SOCKET socket, PSOCKADDR RemoteAddress, DWORD Remo
 		err = BOOL_TO_ERR(g_lpfnConnectEx(socket, RemoteAddress, RemoteAddressLength, 
 			lpSendBuffer, dwSendDataLength, &dwBytes, Irp));
 
-		return Irp->CheckErrorCode(err);
+		return Irp->CheckErrorCode(this, err), NOERROR;
 	}
 
 	// if fail begin IO, direct call with error
@@ -638,7 +640,7 @@ ULONG CTcpEndpoint::SendFile(HANDLE hFile,
 				UnlockSocket();
 			}
 
-			return Irp->CheckErrorCode(err);
+			return Irp->CheckErrorCode(this, err), NOERROR;
 		}
 
 		UnlockConnection();
@@ -676,7 +678,6 @@ ULONG CTcpEndpoint::Send(CDataPacket* packet)
 
 		if (IO_IRP* Irp = new IO_IRP(this, send, packet))
 		{
-
 			err = ERROR_INVALID_HANDLE;
 
 			SOCKET socket;
@@ -687,7 +688,7 @@ ULONG CTcpEndpoint::Send(CDataPacket* packet)
 				UnlockSocket();
 			}
 
-			return Irp->CheckErrorCode(err);
+			return Irp->CheckErrorCode(this, err), NOERROR;
 		}
 
 		UnlockConnection();
@@ -742,7 +743,7 @@ ULONG CTcpEndpoint::Recv(WSABUF* lpBuffers, DWORD dwBufferCount, PVOID buf)
 				UnlockSocket();
 			}
 
-			return Irp->CheckErrorCode(err);
+			return Irp->CheckErrorCode(this, err), NOERROR;
 		}
 
 		UnlockConnection();
