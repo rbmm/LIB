@@ -95,6 +95,7 @@ BEGIN
     POPUP "3"
     BEGIN
         MENUITEM "Context",                     ID_3_CONTEXT
+        MENUITEM "TEB",                         ID_3_TEB
         MENUITEM "Windows",                     ID_3_WINDOWS
         MENUITEM "KernelStack",                 ID_3_KERNELSTACK
         MENUITEM "Thread ID",                   ID_3_THREADID
@@ -497,6 +498,30 @@ BEGIN
     EDITTEXT        IDC_EDIT1,7,7,40,14
 END
 
+IDD_DIALOG25 DIALOGEX 0, 0, 257, 51
+STYLE DS_SETFONT | DS_MODALFRAME | DS_3DLOOK | DS_FIXEDSYS | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION " Kernal debugging over network"
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    DEFPUSHBUTTON   "OK",IDOK,210,30,40,14
+    EDITTEXT        IDC_EDIT1,26,7,224,14
+    EDITTEXT        IDC_EDIT2,26,30,30,14,ES_NUMBER
+    LTEXT           "Key:",IDC_STATIC,7,10,16,8
+    LTEXT           "Port:",IDC_STATIC,7,33,17,8
+    CONTROL         "Ipv4",IDC_RADIO1,"Button",BS_AUTORADIOBUTTON,128,33,31,10
+    CONTROL         "Ipv6",IDC_RADIO2,"Button",BS_AUTORADIOBUTTON,168,33,31,10
+END
+
+IDD_DIALOG26 DIALOGEX 0, 0, 227, 66
+STYLE DS_SETFONT | DS_MODALFRAME | DS_3DLOOK | DS_FIXEDSYS | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "DbgKdGetStringApi:"
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    DEFPUSHBUTTON   "OK",IDOK,170,45,50,14
+    CTEXT           "Break, or Ignore (bi)?",IDC_STATIC,7,7,213,8
+    EDITTEXT        IDC_EDIT1,7,26,213,14
+END
+
 
 /////////////////////////////////////////////////////////////////////////////
 //
@@ -672,6 +697,22 @@ BEGIN
         RIGHTMARGIN, 47
         TOPMARGIN, 7
         BOTTOMMARGIN, 21
+    END
+
+    IDD_DIALOG25, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 250
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 44
+    END
+
+    IDD_DIALOG26, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 220
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 59
     END
 END
 #endif    // APSTUDIO_INVOKED

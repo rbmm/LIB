@@ -104,7 +104,7 @@ class CInjectDlg : public ZDlg
 
 					if (0 > status)
 					{
-						ShowNTStatus(hwndDlg, status, L"ApcInjector");
+						ShowErrorBox(hwndDlg, status, L"ApcInjector");
 					}
 					else
 					{
@@ -167,8 +167,6 @@ struct _SORTMODE
 {
 	int mode;
 };
-
-#include "../inc/rtlframe.h"
 
 typedef RTL_FRAME<_SORTMODE> SORTMODE;
 
@@ -257,35 +255,6 @@ PCSTR GetThreadStateName(THREAD_STATE st)
 	return st<RTL_NUMBER_OF(stNames) ? stNames[st] : "?";
 }
 
-void ShowNTStatus(HWND hwnd, NTSTATUS status, PCWSTR caption)
-{
-	WCHAR buf[256], *sz = buf;
-
-	sz += swprintf(sz, L"//%08x\r\n", status);
-	
-	FormatMessage(FORMAT_MESSAGE_IGNORE_INSERTS|FORMAT_MESSAGE_FROM_HMODULE,
-		ZDll::_hmod_nt, status, 0, sz, RTL_NUMBER_OF(buf) - (DWORD)(sz - buf), 0);
-
-	switch ((DWORD)status >> 30)
-	{
-	case 0:
-		status = MB_OK;
-		break;
-	case 1:
-		status = MB_OK|MB_ICONINFORMATION;
-		break;
-	case 2:
-		status = MB_OK|MB_ICONWARNING;
-		break;
-	case 3:
-		status = MB_OK|MB_ICONHAND;
-		break;
-	default:__assume(false);
-	}
-
-	MessageBox(hwnd, buf, caption, status);
-}
-
 void ShowText(PCWSTR caption, PCWSTR text)
 {
 	_ZGLOBALS* globals = ZGLOBALS::get();
@@ -340,7 +309,7 @@ void ShowImagePath(HWND hwnd, HANDLE UniqueProcess)
 	WCHAR caption[32], *psz;
 	if (NTSTATUS status = GetPathFromProcessID(UniqueProcess, &psz))
 	{
-		ShowNTStatus(hwnd, status, 0);
+		ShowErrorBox(hwnd, status, 0);
 		return ;
 	}
 	swprintf(caption, L"%X Process", (DWORD)(ULONG_PTR)UniqueProcess);
@@ -439,7 +408,7 @@ void ShowCmdLineEx(HANDLE UniqueProcess)
 	{
 		WCHAR caption[32];
 		swprintf(caption, L"%X Process CmdLine", (DWORD)(ULONG_PTR)UniqueProcess);
-		ShowNTStatus(0, status, caption);
+		ShowErrorBox(0, status, caption);
 	}
 }
 
@@ -921,7 +890,7 @@ void OnDropdownComboDlls(HWND hwndDlg, HWND hwndCtl, HANDLE dwProcessId)
 	}
 	else
 	{
-		ShowNTStatus(hwndDlg, status, L"Query Modules Fail");
+		ShowErrorBox(hwndDlg, status, L"Query Modules Fail");
 	}
 }
 
@@ -1000,8 +969,8 @@ void CopyContext(HANDLE dwThreadId)
 	
 	if (0 > status)
 	{
-		FormatMessage(FORMAT_MESSAGE_IGNORE_INSERTS|FORMAT_MESSAGE_FROM_HMODULE,
-			ZDll::_hmod_nt, status, 0, sz + swprintf(sz, L"%x: ", status) , RTL_NUMBER_OF(sz) - 16, 0);
+		FormatMessageW(FORMAT_MESSAGE_IGNORE_INSERTS|FORMAT_MESSAGE_FROM_HMODULE,
+			GetNtMod(), status, 0, sz + swprintf(sz, L"%x: ", status) , RTL_NUMBER_OF(sz) - 16, 0);
 	}
 
 	ShowText(caption, sz);
@@ -1064,6 +1033,14 @@ BOOL CALLBACK EnumWindowsProc(HWND hwnd, ENUM_WND_DATA& ctx)
 
 ZDbgDoc* GetDocumentByPID(ULONG dwProcessId);
 
+void EnableCmd(UINT cmd, BOOL bEnable)
+{
+	if (ZToolBar* tb = ZGLOBALS::getMainFrame())
+	{
+		tb->EnableCmd(cmd, bEnable);
+	}
+}
+
 class CMainDlg : public ZDlg, ZIdle
 {
 	HANDLE m_dwThreadId, m_dwProcessId;
@@ -1071,10 +1048,7 @@ class CMainDlg : public ZDlg, ZIdle
 
 	~CMainDlg()
 	{
-		if (ZToolBar* tb = ZGLOBALS::getMainFrame())
-		{
-			tb->EnableCmd(IDB_BITMAP20, TRUE);
-		}
+		EnableCmd(IDB_BITMAP20, TRUE);
 	}
 
 	void SuspendResumeThread(HWND hwndDlg, NTSTATUS (*pfn)(HANDLE hThread, PULONG SuspendCount), int d)
@@ -1234,7 +1208,7 @@ class CMainDlg : public ZDlg, ZIdle
 
 			if (0 > status)
 			{
-				ShowNTStatus(hwndDlg, status, L"Atach to Process Fail");
+				ShowErrorBox(hwndDlg, status, L"Atach to Process Fail");
 			}
 			else
 			{
@@ -1260,7 +1234,7 @@ class CMainDlg : public ZDlg, ZIdle
 
 			if (0 > status)
 			{
-				ShowNTStatus(hwndDlg, status, L"Debug Process Fail");
+				ShowErrorBox(hwndDlg, status, L"Debug Process Fail");
 			}
 			else
 			{
@@ -1421,7 +1395,7 @@ class CMainDlg : public ZDlg, ZIdle
 
 					if (0 > status)
 					{
-						ShowNTStatus(hwndDlg, status, caption);
+						ShowErrorBox(hwndDlg, status, caption);
 					}
 					//if (m_dwThreadId != (HANDLE)(ULONG_PTR)GetCurrentThreadId()) RevertToSelf();
 				}
@@ -1461,7 +1435,7 @@ class CMainDlg : public ZDlg, ZIdle
 
 					if (0 > status)
 					{
-						ShowNTStatus(hwndDlg, status, caption);
+						ShowErrorBox(hwndDlg, status, caption);
 					}
 				}
 				break;
@@ -1478,7 +1452,7 @@ class CMainDlg : public ZDlg, ZIdle
 					}
 					else
 					{
-						ShowNTStatus(hwndDlg, status, L"Fail Open Thread");
+						ShowErrorBox(hwndDlg, status, L"Fail Open Thread");
 					}
 				}
 				break;
@@ -1495,7 +1469,7 @@ class CMainDlg : public ZDlg, ZIdle
 					}
 					else
 					{
-						ShowNTStatus(hwndDlg, status, L"Fail Open Process");
+						ShowErrorBox(hwndDlg, status, L"Fail Open Process");
 					}
 				}
 				break;
@@ -1550,7 +1524,7 @@ class CMainDlg : public ZDlg, ZIdle
 
 							if (0 > status)
 							{
-								ShowNTStatus(hwndDlg, status, L"RemoteUnload");
+								ShowErrorBox(hwndDlg, status, L"RemoteUnload");
 							}
 							else
 							{
@@ -1675,7 +1649,7 @@ __E:
 
 					if (0 > status)
 					{
-						ShowNTStatus(hwndDlg, status, L"Set DrX");
+						ShowErrorBox(hwndDlg, status, L"Set DrX");
 					}
 				}
 				break;
@@ -1694,7 +1668,7 @@ __E:
 						}
 						if (0 > status)
 						{
-							ShowNTStatus(hwndDlg, status, L"Terminate Process");
+							ShowErrorBox(hwndDlg, status, L"Terminate Process");
 						}
 					}
 				}
@@ -1714,7 +1688,7 @@ __E:
 						}
 						if (0 > status)
 						{
-							ShowNTStatus(hwndDlg, status, L"Terminate Thread");
+							ShowErrorBox(hwndDlg, status, L"Terminate Thread");
 						}
 					}
 				}
@@ -1974,10 +1948,7 @@ public:
 	CMainDlg()
 	{
 		m_dwThreadId = 0, m_dwProcessId = 0, _fLoadEnabled = FALSE;
-		if (ZToolBar* tb = ZGLOBALS::getMainFrame())
-		{
-			tb->EnableCmd(IDB_BITMAP20, FALSE);
-		}
+		EnableCmd(IDB_BITMAP20, FALSE);
 	}
 };
 

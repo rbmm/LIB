@@ -172,7 +172,7 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalOptions="/EMITPOGOPHASEINFO"
-				AdditionalDependencies="msvcrt.lib ntdllp.lib ntver.lib winZ.lib asio.lib msdis170.lib kernel32.lib user32.lib gdi32.lib comctl32.lib ole32.lib oleaut32.lib advapi32.lib uxtheme.lib bcrypt.lib $(NOINHERIT)"
+				AdditionalDependencies="msvcrt.lib ntdllp.lib ntver.lib winZ.lib kernel32.lib user32.lib gdi32.lib comctl32.lib ole32.lib oleaut32.lib advapi32.lib uxtheme.lib bcrypt.lib msdis170.lib ws2_32.lib crypt32.lib $(NOINHERIT)"
 				LinkIncremental="1"
 				AdditionalLibraryDirectories="&quot;$(SolutionDir)lib\$(PlatformName)&quot;;&quot;$(OutDir)&quot;"
 				GenerateManifest="false"
@@ -326,8 +326,32 @@
 				>
 			</File>
 			<File
-				RelativePath=".\kdcom.cpp"
+				RelativePath=".\KDDEBUGGER_DATA.cpp"
 				>
+			</File>
+			<File
+				RelativePath=".\kdnet.cpp"
+				>
+				<FileConfiguration
+					Name="Release|Win32"
+					ExcludedFromBuild="true"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+					/>
+				</FileConfiguration>
+			</File>
+			<File
+				RelativePath=".\kdnet_32.cpp"
+				>
+				<FileConfiguration
+					Name="Release|x64"
+					ExcludedFromBuild="true"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+					/>
+				</FileConfiguration>
 			</File>
 			<File
 				RelativePath=".\lineheap.cpp"
@@ -351,6 +375,10 @@
 			</File>
 			<File
 				RelativePath=".\memview.cpp"
+				>
+			</File>
+			<File
+				RelativePath=".\msgbox.cpp"
 				>
 			</File>
 			<File
@@ -496,10 +524,6 @@
 				>
 			</File>
 			<File
-				RelativePath=".\DbgPipe.h"
-				>
-			</File>
-			<File
 				RelativePath=".\dll.h"
 				>
 			</File>
@@ -529,6 +553,10 @@
 			</File>
 			<File
 				RelativePath=".\kdbg.h"
+				>
+			</File>
+			<File
+				RelativePath=".\KdNet.h"
 				>
 			</File>
 			<File

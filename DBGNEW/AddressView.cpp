@@ -204,6 +204,7 @@ void ZAddressView::Invalidate(HWND hwnd)
 		_BytesPerLine = 1, _cc = 1;
 
 		DestroyCaret(hwnd);
+		//SetCursor(CCursorCashe::GetCursor(CCursorCashe::ARROW));
 
 		SCROLLINFO si = { sizeof(SCROLLINFO), SIF_ALL };
 		SetScrollInfo(hwnd, SB_VERT, &si, FALSE);

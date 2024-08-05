@@ -326,6 +326,7 @@ class ZMainWnd : public ZMDIFrameWnd
 				if (!pDoc->QI(IID_PPV(pDbg)))
 				{
 					ExistAttached = pDbg->IsAttached();
+					pDbg->OnIdle();
 					pDbg->Release();
 				}
 			}
@@ -420,7 +421,7 @@ BOOL ZMainWnd::CreateTB(HWND hwnd)
 	static const TBBUTTON g_btns[] = {
 		{IMAGE_ENHMETAFILE, IDB_BITMAP1, TBSTATE_ENABLED, BTNS_AUTOSIZE, {}, (DWORD_PTR)L"Exceptions", -1},
 #ifdef _WIN64
-		{IMAGE_ENHMETAFILE, ID_PIPE, TBSTATE_ENABLED|TBSTATE_INDETERMINATE, BTNS_AUTOSIZE, {}, (DWORD_PTR)L"\\\\.\\pipe\\VmDbgPipe", -1},
+		{IMAGE_ENHMETAFILE, ID_PIPE, TBSTATE_ENABLED, BTNS_AUTOSIZE, {}, (DWORD_PTR)L"Net Debug", -1},
 #endif
 		{IMAGE_ENHMETAFILE, IDB_BITMAP2, TBSTATE_ENABLED, BTNS_AUTOSIZE, {}, (DWORD_PTR)L"Debug", -1},
 		{IMAGE_ENHMETAFILE, ID_PATH, TBSTATE_ENABLED, BTNS_AUTOSIZE, {}, (DWORD_PTR)L"Symbol File Path", -1 },
@@ -446,47 +447,101 @@ BOOL ZMainWnd::CreateTB(HWND hwnd)
 }
 
 //////////////////////////////////////////////////////////////////////////
+struct ZType* FindType(PVOID UdtCtx, PCSTR name);
+void ZWatch_Create(ZDbgDoc* pDoc, ULONG_PTR Address, ULONG_PTR Type);
 
 void CopyDocInfo(HWND hwnd, ZDocument* pDoc, NMMOUSE* lpnm)
 {
 	ZDbgDoc* pDbg;
 	if (0 <= pDoc->QI(IID_PPV(pDbg)))
 	{
-		if (HMENU hmenu = CreatePopupMenu())
+		PVOID Address = 0;
+		union {
+			PCWSTR pcwz;
+			PCSTR pcszType = 0;
+		};
+		WCHAR sz[0x40];
+
+		switch (lpnm->dwItemSpec)
 		{
-			MENUITEMINFO mii = { sizeof(mii), MIIM_ID|MIIM_STRING, 0, 0, 1, 0, 0, 0, 0, L"Copy"};
-			InsertMenuItem(hmenu, 0, TRUE, &mii);
-
-			ClientToScreen(lpnm->hdr.hwndFrom, &lpnm->pt);
-			ULONG cmd = TrackPopupMenu(hmenu, TPM_NONOTIFY|TPM_RETURNCMD , lpnm->pt.x, lpnm->pt.y, 0, hwnd, 0);
-			DestroyMenu(hmenu);
-			switch (cmd)
+		case stThread:
+			if (Address = pDbg->GetThreadData())
 			{
-			case 1:
-				WCHAR sz[0x200];
-#ifdef _WIN64
-				int len = swprintf_s(sz, _countof(sz), L"%x(%u) %p %p", pDbg->getId(), pDbg->getId(), pDbg->getPEB(), pDbg->getWowPEB());
-#else
-				int len = swprintf_s(sz, _countof(sz), L"%x(%u) %p", pDbg->getId(), pDbg->getId(), pDbg->getPEB());
-#endif
-				if (0 < len)
+				if (pDbg->IsRemoteDebugger())
 				{
-					if (OpenClipboard(hwnd))
+					if (pDbg->getUdtCtxEx())
 					{
-						ULONG cb = ++len*sizeof(WCHAR);
-						if (HGLOBAL hg = GlobalAlloc(GMEM_MOVEABLE, cb))
-						{
-							memcpy(GlobalLock(hg), sz, cb);
-
-							GlobalUnlock(hg);
-
-							if (!SetClipboardData(CF_UNICODETEXT, hg)) GlobalFree(hg);
-						}
-						CloseClipboard();
+						pcszType = "_ETHREAD";
 					}
 				}
+				else if (pDbg->IsDebugger())
+				{
+					pcszType = "_TEB";
+				}
+			}
+			break;
+		case stPEB:
+			if (pDbg->IsLocalMemory())
+			{
+				Address = pDbg->getPEB();
+				pcszType = "_PEB";
+			}
+			break;
+#ifdef _WIN64
+		case stWowPEB:
+			if (pDbg->IsLocalMemory())
+			{
+				Address = pDbg->getWowPEB();
+				pcszType = "_PEB32";
+			}
+			break;
+#endif
+		case stName:
+			if (pDbg->IsLocalMemory())
+			{
+				pcwz = pDbg->GetAppPath();
+			}
+			else
+			{
+				if (0 <= pDbg->FormatFromAddress(sz, _countof(sz)))
+				{
+					pcwz = sz;
+				}
+			}
+			if (pcwz)
+			{
+				if (HMENU hmenu = LoadMenu((HINSTANCE)&__ImageBase, MAKEINTRESOURCE(IDR_MENU2)))
+				{
+					ClientToScreen(lpnm->hdr.hwndFrom, &lpnm->pt);
+					ULONG cmd = TrackPopupMenu(GetSubMenu(hmenu, 5), TPM_NONOTIFY|TPM_RETURNCMD , lpnm->pt.x, lpnm->pt.y, 0, hwnd, 0);
+					DestroyMenu(hmenu);
+					if (ID_5_COPY == cmd)
+					{
+						if (OpenClipboard(hwnd))
+						{
+							size_t cb = (1 + wcslen(pcwz))*sizeof(WCHAR);
+							if (HGLOBAL hg = GlobalAlloc(GMEM_MOVEABLE, cb))
+							{
+								memcpy(GlobalLock(hg), pcwz, cb);
 
-				break;
+								GlobalUnlock(hg);
+
+								if (!SetClipboardData(CF_UNICODETEXT, hg)) GlobalFree(hg);
+							}
+							CloseClipboard();
+						}
+					}
+				}
+				pcwz = 0;
+			}
+			break;
+		}
+
+		if (Address && pcszType)
+		{
+			if (ZType* type = FindType(pDbg->getUdtCtx(), pcszType))
+			{
+				ZWatch_Create(pDbg, (ULONG_PTR)Address, (ULONG_PTR)type);
 			}
 		}
 		pDbg->Release();
@@ -597,17 +652,6 @@ LRESULT ZMainWnd::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 		}
 		break;
 
-	case WM_DESTROY:
-		if (GLOBALS_EX* globals = static_cast<GLOBALS_EX*>(ZGLOBALS::get()))
-		{
-			if (globals->_pipe)
-			{
-				StopDebugPipe(globals->_pipe);
-				globals->_pipe = 0;
-			}
-		}
-		break;
-
 	case WM_COMMAND:
 		switch (wParam)
 		{
@@ -709,21 +753,15 @@ LRESULT ZMainWnd::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			}
 			return 0;
 
+#ifdef _WIN64
 		case ID_PIPE:
-			if (GLOBALS_EX* globals = static_cast<GLOBALS_EX*>(ZGLOBALS::get()))
+			// L"196fubrgy2f4n.3upyqaeev7stl.37egal79mhgeg.96lqgax8xhhy.", AF_INET6, _byteswap_ushort(50000)
+			if (HRESULT hr = StartKdNet(hwnd))
 			{
-				if (globals->_pipe)
-				{
-					StopDebugPipe(globals->_pipe);
-					globals->_pipe = 0;
-					IndeterminateCmd(ID_PIPE, TRUE);
-				}
-				else if (StartDebugPipe(&globals->_pipe))
-				{
-					IndeterminateCmd(ID_PIPE, FALSE);
-				}
+				ShowErrorBox(hwnd, hr, L"KDNET Start Fail");
 			}
 			return 0;
+#endif
 		}
 		break;
 	}
@@ -830,13 +868,6 @@ NTSTATUS ImpersonateSystemToken(PBYTE buf)
 		NtClose(hToken);
 	}
 	return status;
-}
-
-GLOBALS_EX::GLOBALS_EX()
-{
-	_NtSymbolPath = 0;
-	_pScript = 0;
-	_pipe = 0;
 }
 
 GLOBALS_EX::~GLOBALS_EX()
@@ -1146,39 +1177,6 @@ void RedirectHeap()
 }
 #endif//_HEAP_CHECK_
 
-#include "../inc/rundown.h"
-#include "../asio/io.h"
-
-void IO_RUNDOWN::RundownCompleted()
-{
-	DbgPrint("RundownCompleted\n");
-
-	if (g_hDrv)
-	{
-		NtClose(g_hDrv);
-	}
-
-	destroyterm();
-
-#ifdef _HEAP_CHECK_
-	CheckHeap();
-	HeapDestroy(ghHeap);
-#endif
-	ExitProcess(0);
-}
-
-VOID WINAPI FiberProc(PVOID lpFiber)
-{
-	if (HMODULE hmod = GetModuleHandleW(L"user32.dll"))
-	{
-		__imp_NtUserIsMouseInputEnabled = GetProcAddress(hmod, (PCSTR)2520);
-		__imp_NtUserEnableMouseInputForCursorSuppression = GetProcAddress(hmod, (PCSTR)2519);
-	}
-
-	zmain();
-	SwitchToFiber(lpFiber);
-}
-
 #include "../wow/wow.h"
 extern DLL_LIST_0 ntdll;
 
@@ -1224,21 +1222,29 @@ void ep(_PEB*)
 	{
 		initIndexes();
 
-		if (PVOID MainFiber = ConvertThreadToFiber(0))
+		if (HMODULE hmod = GetModuleHandleW(L"user32.dll"))
 		{
-			if (PVOID Fiber = CreateFiberEx(0x100000*sizeof(PVOID), 0x200000*sizeof(PVOID), 0, FiberProc, MainFiber))
-			{
-				SwitchToFiber(Fiber);
-				DeleteFiber(Fiber);
-			}
-
-			ConvertFiberToThread();
+			__imp_NtUserIsMouseInputEnabled = GetProcAddress(hmod, (PCSTR)2520);
+			__imp_NtUserEnableMouseInputForCursorSuppression = GetProcAddress(hmod, (PCSTR)2519);
 		}
+
+		zmain();
 
 		CoUninitialize();
 	}
 
-	IO_RUNDOWN::g_IoRundown.BeginRundown();
+	if (g_hDrv)
+	{
+		NtClose(g_hDrv);
+	}
+
+	destroyterm();
+
+#ifdef _HEAP_CHECK_
+	CheckHeap();
+	HeapDestroy(ghHeap);
+#endif
+	ExitProcess(0);
 }
 
 _NT_END

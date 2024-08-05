@@ -221,7 +221,6 @@ public:
 
 	static int Compare(ZDll* p, ZDll* q, int iSubItem, int sortOrder);
 
-	static inline HMODULE _hmod_nt = GetModuleHandleW(L"ntdll");
 	static inline PVOID LdrpDispatchUserCallTarget = 0;
 	static inline PVOID LdrpDispatchUserCallTargetES = 0;
 };

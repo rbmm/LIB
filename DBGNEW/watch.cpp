@@ -50,10 +50,7 @@ class ZWatch : public ZFrameWnd, ZView
 			delete _pvRoot;
 		}
 	}
-
-public:
-
-	static void Create(ZDbgDoc* pDoc, ULONG_PTR _Address, ULONG_PTR _Type);
+	friend void ZWatch_Create(ZDbgDoc* pDoc, ULONG_PTR _Address, ULONG_PTR _Type);
 };
 
 void DoCollapse(HWND hwnd, HTREEITEM hItem)
@@ -170,7 +167,7 @@ ZWatch::ZWatch(ZDbgDoc* pDoc) : ZView(pDoc)
 	_pvRoot = 0;
 }
 
-void ZWatch::Create(ZDbgDoc* pDoc, ULONG_PTR Address, ULONG_PTR Type)
+void ZWatch_Create(ZDbgDoc* pDoc, ULONG_PTR Address, ULONG_PTR Type)
 {
 	if (ZWatch* p = new ZWatch(pDoc))
 	{
@@ -237,7 +234,7 @@ __m:
 			case IDOK:
 				if (_Address && _Type)
 				{
-					ZWatch::Create(_pDoc, _Address, _Type);
+					ZWatch_Create(_pDoc, _Address, _Type);
 				}
 				break;
 			case IDCANCEL:

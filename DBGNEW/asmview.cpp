@@ -28,8 +28,9 @@ enum : UINT {
 	IdXrefs,
 	IdRefreshCache,
 	IdProcessList,
-	IdTags,
+	IdDbgData,
 	IdCopy,
+	IdTags,
 	IdMax
 };
 
@@ -1147,7 +1148,7 @@ void ZAsmView::ShowTarget()
 		name = L"ia16";
 		break;
 	}
-	ZGLOBALS::getMainFrame()->SetStatusText(1, name);
+	ZGLOBALS::getMainFrame()->SetStatusText(stASM, name);
 }
 
 BOOL ZAsmView::SetTarget(DIS::DIST i)
@@ -1169,7 +1170,7 @@ BOOL ZAsmView::SetTarget(DIS::DIST i)
 		return TRUE;
 	}
 
-	if (DIS * pDisasm = DIS::PdisNew(i))
+	if (DIS * pDisasm = DIS::PdisNew(i))//
 	{
 		_iDist = i;
 		_pDisasm = pDisasm;
@@ -1222,6 +1223,9 @@ void ZAsmView::OnMenuItemSelect(HMENU hmenu, DWORD id, HWND hwnd)
 	case IdAddWatch:
 		AddWatch(pDoc);
 		return;
+	case IdDbgData:
+		pDoc->ShowDbgData();
+		return ;
 	case IdGotoSrc:
 		GotoSrc(_Va);
 		return;
@@ -1337,6 +1341,13 @@ HMENU ZAsmView::GetContextMenu(HMENU& rhsubmenu)
 		{
 			mii.wID = IdAddWatch;
 			mii.dwTypeData = const_cast<PWSTR>(L"Add Watch");
+			InsertMenuItem(hmenu, 0, TRUE, &mii);
+		}
+
+		if (pDoc->_IsRemoteDebugger && pDoc->IsRemoteInit())
+		{
+			mii.wID = IdDbgData;
+			mii.dwTypeData = const_cast<PWSTR>(L"KDDEBUGGER_DATA");
 			InsertMenuItem(hmenu, 0, TRUE, &mii);
 		}
 
@@ -1736,8 +1747,15 @@ void ZAsmView::DrawLine(HDC hdc, DWORD x, DWORD y, DWORD line, DWORD column, DWO
 		return ;
 	}
 	
+	ULONG_PTR uLine = (_BaseAddress + line) - _Address;
+
+	if (uLine > _nLines)
+	{
+		return ;
+	}
+
 	WCHAR buf[0x400], *sz;
-	LINEINFO* pLI = &_pLI[((_BaseAddress + line) - _Address)];
+	LINEINFO* pLI = &_pLI[uLine];
 
 	LONG Flags = pLI->Flags;
 

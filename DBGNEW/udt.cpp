@@ -5,7 +5,6 @@ _NT_BEGIN
 #include "pdb.h"
 #include "common.h"
 #include "udt.h"
-#include "../inc/rtlframe.h"
 #include "../winZ/str.h"
 
 //#define _PRINT_CPP_NAMES_

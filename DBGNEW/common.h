@@ -70,12 +70,34 @@ public:
 #include "../tkn/tkn.h"
 #include "../inc/idcres.h"
 #include "JsScript.h"
+#include "KdNet.h"
 
 #ifdef _WIN64
 #define __stosp __stosq
 #else
 #define __stosp __stosd
 #endif
+
+HMODULE GetNtMod();
+int ShowErrorBox(HWND hwnd, HRESULT dwError, PCWSTR lpCaption, UINT uType = 0);
+void EnableCmd(UINT cmd, BOOL bEnable);
+
+EXTERN_C
+NTSYSCALLAPI
+NTSTATUS
+NTAPI
+NtAlertThreadByThreadId(
+						_In_ HANDLE ThreadId
+						);
+
+EXTERN_C
+NTSYSCALLAPI
+NTSTATUS
+NTAPI
+NtWaitForAlertByThreadId(
+						 _In_ PVOID Address,
+						 _In_opt_ PLARGE_INTEGER Timeout
+						 );
 
 extern volatile const UCHAR guz;
 extern OBJECT_ATTRIBUTES zoa;
@@ -160,16 +182,12 @@ public:
 	~ZMyApp();
 };
 
-class CDbgPipe;
-
 struct GLOBALS_EX : ZGLOBALS
 {
-	GLOBALS_EX();
 	~GLOBALS_EX();
 
-	PWSTR _NtSymbolPath;
-	JsScript* _pScript;
-	CDbgPipe* _pipe;
+	PWSTR _NtSymbolPath = 0;
+	JsScript* _pScript = 0;
 
 	BOOL Init();
 	BOOL SetPath(PCWSTR NtSymbolPath);
@@ -193,6 +211,3 @@ void AddWatch(ZDbgDoc* pDoc);
 NTSTATUS DoIoControl(ULONG code);
 
 NTSTATUS LocatePdb(HANDLE hProcess, PVOID ImageBase, PGUID Signature, PULONG Age, PWSTR* ppdbPath);
-
-void StopDebugPipe(CDbgPipe* p);
-BOOL StartDebugPipe(CDbgPipe** pp);

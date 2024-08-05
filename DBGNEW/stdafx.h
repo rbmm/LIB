@@ -12,6 +12,8 @@
 #include <commoncontrols.h>
 #include <DbgHelp.h>
 #include <DbgEng.h>
+#include <ws2ipdef.h>
+#include <mstcpip.h>
 #include <Uxtheme.h>
 #include <shobjidl_core.h >
 #define NOEXTAPI

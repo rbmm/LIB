@@ -4,8 +4,11 @@
 #include "../winz/Frame.h"
 #include "../winZ/dragptr.h"
 
+class ZDbgDoc;
+
 class ZRegView : public ZWnd, ZFontNotify, ZDragPtr, public CONTEXT
 {
+	ZDbgDoc* _M_pDoc = 0;
 	DWORD _vCaret, _Ticks;
 	int _dxHotspot, _dyHotspot;
 	CHAR _caret;
@@ -32,9 +35,14 @@ class ZRegView : public ZWnd, ZFontNotify, ZDragPtr, public CONTEXT
 public:
 	ZRegView();
 
+	void SetDoc(ZDbgDoc* pDoc)
+	{
+		_M_pDoc = pDoc;
+	}
+
 	void SetContext(CONTEXT* ctx);
 	
-	void SetDisabled() { _bDisabled = TRUE; _Ticks = GetTickCount() + 1000; }
+	void SetDisabled();
 	
 	void TempHide(BOOL bShow);
 

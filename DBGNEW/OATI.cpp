@@ -283,6 +283,146 @@ void FreePM(_In_ PRTL_PROCESS_MODULES mods)
 	VirtualFree(mods, 0, MEM_RELEASE);
 }
 
+NTSTATUS QueryPM_I(_In_ HANDLE hProcess, _Out_ PRTL_PROCESS_MODULES* pmods)
+{
+	NTSTATUS status;
+	PROCESS_EXTENDED_BASIC_INFORMATION pebi = {sizeof(pebi)};
+
+	if (0 <= (status = NtQueryInformationProcess(hProcess, ProcessBasicInformation, &pebi, sizeof(pebi), 0)))
+	{
+		if (pebi.IsProcessDeleting)
+		{
+			status = STATUS_PROCESS_IS_TERMINATING;
+		}
+		else if (pebi.IsFrozen && pebi.IsStronglyNamed)
+		{
+			status = STATUS_INVALID_DEVICE_STATE;
+		}
+		else
+		{
+			enum { secshift = 17, secsize = (1 << secshift) };
+
+#ifdef _WIN64
+			if (!ntdll.funcs[0].pv || !ntdll.funcs[1].pv)
+#endif
+			{
+				pebi.IsWow64Process = 0;
+			}
+
+			LARGE_INTEGER SectionSize = { (pebi.IsWow64Process  ? 2 : 1) << secshift };
+
+			HANDLE hSection;
+
+			if (0 <= (status = NtCreateSection(&hSection, SECTION_ALL_ACCESS, 0, &SectionSize, PAGE_READWRITE, SEC_COMMIT, 0)))
+			{
+				struct QueryBuf 
+				{
+					ULONG NumberOfModules;
+					UCHAR buf[secsize - 2 * sizeof(ULONG)];
+					ULONG ReturnedSize;
+				};
+
+				union {
+					PVOID BaseAddress = 0;
+					PRTL_PROCESS_MODULES mods;
+					QueryBuf* pQb;
+				};
+
+				SIZE_T ViewSize = 0;
+
+				if (0 <= (status = ZwMapViewOfSection(hSection, NtCurrentProcess(), 
+					&BaseAddress, 0, 0, 0, &ViewSize, ViewUnmap, 0, PAGE_READWRITE)))
+				{
+					BOOLEAN ExportSuppression = IsExportSuppressionEnabled(hProcess);
+
+					PVOID RemoteBaseAddress = 0;
+
+					if (0 <= (status = ZwMapViewOfSection(hSection, hProcess, &RemoteBaseAddress, 0, 
+						0, 0, &(ViewSize = 0), ViewUnmap, 0, PAGE_READWRITE)))
+					{
+						DoIoControl(IOCTL_SetProtectedProcess);
+
+						HANDLE hThreads[2]{};
+
+						if (0 <= (status = StartQuery(hProcess, RemoteBaseAddress, 
+							secsize - sizeof(ULONG), ExportSuppression, 
+#ifdef _WIN64
+							FALSE, 
+#endif
+							hThreads)))
+						{
+							ULONG HandleCount = 1;
+
+#ifdef _WIN64
+							if (pebi.IsWow64Process && 0 <= (status = StartQuery(
+								hProcess, RtlOffsetToPointer(RemoteBaseAddress, secsize), 
+								secsize - sizeof(ULONG), 
+								ExportSuppression, TRUE, hThreads + 1)))
+							{
+								HandleCount = 2;
+							}
+#endif
+
+							LARGE_INTEGER Timeout = { (ULONG)-10000000, -1 };
+
+							status = ZwWaitForMultipleObjects(HandleCount, hThreads, WaitAll, TRUE, &Timeout);
+
+							if (status)
+							{
+								ULONG i = HandleCount;
+								do 
+								{
+									ZwTerminateThread(hThreads[--i], 0);
+								} while (i);
+							}
+
+							status = STATUS_UNSUCCESSFUL;
+
+							if (ULONG NumberOfModules = mods->NumberOfModules)
+							{
+								if (pQb->ReturnedSize == __builtin_offsetof(RTL_PROCESS_MODULES, Modules) + NumberOfModules * sizeof(RTL_PROCESS_MODULE_INFORMATION))
+								{
+#ifdef _WIN64
+									if (HandleCount == 2)
+									{
+										union {
+											PRTL_PROCESS_MODULES32 mods32;
+											QueryBuf* pQb32;
+										};
+
+										pQb32 = pQb + 1;
+
+										Add32Modules(mods, mods32, pQb32->ReturnedSize);
+									}
+#endif
+
+									*pmods = mods, BaseAddress = 0, status = STATUS_SUCCESS;
+								}
+							}
+
+							do 
+							{
+								NtClose(hThreads[--HandleCount]);
+							} while (HandleCount);
+
+						}
+
+						DoIoControl(IOCTL_DelProtectedProcess);
+
+						ZwUnmapViewOfSection(hProcess, RemoteBaseAddress);
+					}
+
+					if (BaseAddress) ZwUnmapViewOfSection(NtCurrentProcess(), BaseAddress);
+				}
+
+				NtClose(hSection);
+			}
+		}
+	}
+
+	return status;
+}
+
 NTSTATUS QueryPM(_In_ HANDLE dwProcessId, _Out_ PRTL_PROCESS_MODULES* pmods)
 {
 	HANDLE hProcess;
@@ -293,140 +433,7 @@ NTSTATUS QueryPM(_In_ HANDLE dwProcessId, _Out_ PRTL_PROCESS_MODULES* pmods)
 	
 	if (0 <= status)
 	{
-		PROCESS_EXTENDED_BASIC_INFORMATION pebi = {sizeof(pebi)};
-
-		if (0 <= (status = NtQueryInformationProcess(hProcess, ProcessBasicInformation, &pebi, sizeof(pebi), 0)))
-		{
-			if (pebi.IsProcessDeleting)
-			{
-				status = STATUS_PROCESS_IS_TERMINATING;
-			}
-			else if (pebi.IsFrozen && pebi.IsStronglyNamed)
-			{
-				status = STATUS_INVALID_DEVICE_STATE;
-			}
-			else
-			{
-				enum { secshift = 17, secsize = (1 << secshift) };
-
-#ifdef _WIN64
-				if (!ntdll.funcs[0].pv || !ntdll.funcs[1].pv)
-#endif
-				{
-					pebi.IsWow64Process = 0;
-				}
-
-				LARGE_INTEGER SectionSize = { (pebi.IsWow64Process  ? 2 : 1) << secshift };
-
-				HANDLE hSection;
-
-				if (0 <= (status = NtCreateSection(&hSection, SECTION_ALL_ACCESS, 0, &SectionSize, PAGE_READWRITE, SEC_COMMIT, 0)))
-				{
-					struct QueryBuf 
-					{
-						ULONG NumberOfModules;
-						UCHAR buf[secsize - 2 * sizeof(ULONG)];
-						ULONG ReturnedSize;
-					};
-
-					union {
-						PVOID BaseAddress = 0;
-						PRTL_PROCESS_MODULES mods;
-						QueryBuf* pQb;
-					};
-
-					SIZE_T ViewSize = 0;
-
-					if (0 <= (status = ZwMapViewOfSection(hSection, NtCurrentProcess(), 
-						&BaseAddress, 0, 0, 0, &ViewSize, ViewUnmap, 0, PAGE_READWRITE)))
-					{
-						BOOLEAN ExportSuppression = IsExportSuppressionEnabled(hProcess);
-
-						PVOID RemoteBaseAddress = 0;
-
-						if (0 <= (status = ZwMapViewOfSection(hSection, hProcess, &RemoteBaseAddress, 0, 
-							0, 0, &(ViewSize = 0), ViewUnmap, 0, PAGE_READWRITE)))
-						{
-							DoIoControl(IOCTL_SetProtectedProcess);
-
-							HANDLE hThreads[2]{};
-
-							if (0 <= (status = StartQuery(hProcess, RemoteBaseAddress, 
-								secsize - sizeof(ULONG), ExportSuppression, 
-#ifdef _WIN64
-								FALSE, 
-#endif
-								hThreads)))
-							{
-								ULONG HandleCount = 1;
-
-#ifdef _WIN64
-								if (pebi.IsWow64Process && 0 <= (status = StartQuery(
-									hProcess, RtlOffsetToPointer(RemoteBaseAddress, secsize), 
-									secsize - sizeof(ULONG), 
-									ExportSuppression, TRUE, hThreads + 1)))
-								{
-									HandleCount = 2;
-								}
-#endif
-
-								LARGE_INTEGER Timeout = { (ULONG)-10000000, -1 };
-								
-								status = ZwWaitForMultipleObjects(HandleCount, hThreads, WaitAll, TRUE, &Timeout);
-
-								if (status)
-								{
-									ULONG i = HandleCount;
-									do 
-									{
-										ZwTerminateThread(hThreads[--i], 0);
-									} while (i);
-								}
-
-								status = STATUS_UNSUCCESSFUL;
-								
-								if (ULONG NumberOfModules = mods->NumberOfModules)
-								{
-									if (pQb->ReturnedSize == __builtin_offsetof(RTL_PROCESS_MODULES, Modules) + NumberOfModules * sizeof(RTL_PROCESS_MODULE_INFORMATION))
-									{
-#ifdef _WIN64
-										if (HandleCount == 2)
-										{
-											union {
-												PRTL_PROCESS_MODULES32 mods32;
-												QueryBuf* pQb32;
-											};
-
-											pQb32 = pQb + 1;
-
-											Add32Modules(mods, mods32, pQb32->ReturnedSize);
-										}
-#endif
-
-										*pmods = mods, BaseAddress = 0, status = STATUS_SUCCESS;
-									}
-								}
-
-								do 
-								{
-									NtClose(hThreads[--HandleCount]);
-								} while (HandleCount);
-
-							}
-
-							DoIoControl(IOCTL_DelProtectedProcess);
-
-							ZwUnmapViewOfSection(hProcess, RemoteBaseAddress);
-						}
-
-						if (BaseAddress) ZwUnmapViewOfSection(NtCurrentProcess(), BaseAddress);
-					}
-
-					NtClose(hSection);
-				}
-			}
-		}
-
+		status = QueryPM_I(hProcess, pmods);
 		NtClose(hProcess);
 	}
 

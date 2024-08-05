@@ -2,15 +2,9 @@
 
 #define EXTEND64(Addr) ((ULONG64)(LONG_PTR)(Addr))
 
-#define KDP_MESSAGE_BUFFER_SIZE 4096
-#define PACKET_LEADER_BYTE '0'
-#define CONTROL_PACKET_LEADER_BYTE 'i'
 #define BREAKIN_PACKET_BYTE 'b'
 
-#define SYNC_PACKET_ID 0x800
-#define INITIAL_PACKET_ID 0x80800000
-#define PACKET_MAX_SIZE 0xfa0
-#define PACKET_TRAILING_BYTE 0xaa
+#define PACKET_BYTE_COUNT 0x438
 
 enum PACKET_KD_LEADER : DWORD {
 
@@ -327,144 +321,6 @@ struct _DBGKD_CONTEXT_EX {
 	/*000c*/
 };
 
-struct DBGKD_MANIPULATE_STATE : public DBGKD_HEADER
-{
-	/*0008*/LONG ReturnStatus;
-	/*000C*/LONG pad;
-	/*0010*/
-	union 
-	{
-		/*0000*/_DBGKD_READ_WRITE_MEMORY ReadWriteMemory;
-		/*0000*/_DBGKD_SET_CONTEXT SetContext;
-		/*0000*/_DBGKD_WRITE_BREAKPOINT WriteBreakPoint;
-		/*0000*/_DBGKD_RESTORE_BREAKPOINT RestoreBreakPoint;
-		/*0000*/_DBGKD_CONTINUE Continue;
-		/*0000*/_DBGKD_CONTINUE2 Continue2;
-		/*0000*/_DBGKD_READ_WRITE_IO ReadWriteIo;
-		/*0000*/_DBGKD_READ_WRITE_IO_EXTENDED ReadWriteIoExtended;
-		/*0000*/_DBGKD_QUERY_SPECIAL_CALLS QuerySpecialCalls;
-		/*0000*/_DBGKD_SET_SPECIAL_CALL SetSpecialCall;
-		/*0000*/_DBGKD_SET_INTERNAL_BREAKPOINT SetInternalBreakpoint;
-		/*0000*/_DBGKD_GET_INTERNAL_BREAKPOINT GetInternalBreakpoint;
-		/*0000*/_DBGKD_GET_VERSION GetVersion;
-		/*0000*/_DBGKD_BREAKPOINTEX BreakPointEx;
-		/*0000*/_DBGKD_READ_WRITE_MSR ReadWriteMsr;
-		/*0000*/_DBGKD_SEARCH_MEMORY SearchMemory;
-		/*0000*/_DBGKD_GET_SET_BUS_DATA GetSetBusData;
-		/*0000*/_DBGKD_FILL_MEMORY FillMemory;
-		/*0000*/_DBGKD_QUERY_MEMORY QueryMemory;
-		/*0010*/_DBGKD_CONTEXT_EX GetContextEx;
-		/*0010*/_DBGKD_CONTEXT_EX SetContextEx;
-		/*0000*/_DBGKD_SWITCH_PARTITION SwitchPartition;
-	};
-};
-C_ASSERT(sizeof(DBGKD_MANIPULATE_STATE)==0x38);
-struct _DBGKD_EXCEPTION
-{
-	/*0000*/_EXCEPTION_RECORD64 ExceptionRecord;
-	/*0098*/ULONG FirstChance;
-	/*009C*/ULONG pad;
-};
-
-struct _DBGKD_LOAD_SYMBOLS
-{
-	/*0000*/ULONG PathNameLength;
-	/*0008*/ULONG64 BaseOfDll;
-	/*0010*/ULONG64 ProcessId;
-	/*0018*/ULONG CheckSum;
-	/*001C*/ULONG SizeOfImage;
-	/*0020*/BOOLEAN UnloadSymbols;
-};
-
-struct DBGKD_WAIT_STATE_CHANGE : public DBGKD_HEADER 
-{
-	DWORD NumberProcessors;//8
-	ULONG64 Thread;//10
-	ULONG64 ProgramCounter;//18 eip,rip
-	union
-	{
-		_DBGKD_EXCEPTION Exception;
-		_DBGKD_LOAD_SYMBOLS LoadSymbols;
-	};
-	/*00c0*/ULONG KernelDr6;
-	/*00c4*/ULONG KernelDr7;
-	/*00c8*/WORD wc8;
-	/*00ca*/WORD wca;
-	/*00cc*/BYTE InstructionStream[16];
-	/*00DC*/WORD SegCs;
-	/*00DE*/WORD SegDs;
-	/*00E0*/WORD SegEs;
-	/*00E2*/WORD SegFs;
-	/*00E4*/ULONG EFlags;
-	/*00e8*/DWORD de8;
-	/*00ec*/DWORD dec;
-	/*00f0*/CHAR Name[];
-};
-
-//
-// File I/O Structure
-//
-struct DBGKD_CREATE_FILE
-{
-	ULONG DesiredAccess;
-	ULONG FileAttributes;
-	ULONG ShareAccess;
-	ULONG CreateDisposition;
-	ULONG CreateOptions;
-	ULONG reserved[9];
-	WCHAR Name[];
-};
-
-struct DBGKD_READ_FILE
-{
-	ULONG64 Handle;
-	ULONG64 Offset;
-	ULONG Length;
-};
-
-struct DBGKD_WRITE_FILE
-{
-	ULONG64 Handle;
-	ULONG64 Offset;
-	ULONG Length;
-};
-
-struct DBGKD_CLOSE_FILE
-{
-	ULONG64 Handle;
-};
-
-struct DBGKD_FILE_IO : DBGKD_HEADER
-{
-	union
-	{
-		DBGKD_CREATE_FILE CreateFile;
-		DBGKD_READ_FILE ReadFile;
-		DBGKD_WRITE_FILE WriteFile;
-		DBGKD_CLOSE_FILE CloseFile;
-	};
-};
-
-struct KD_PACKET_EX : public KD_PACKET 
-{
-	union
-	{
-		BYTE m_buffer[PACKET_MAX_SIZE+1];
-		union
-		{
-			DBGKD_HEADER m_hd;
-			DBGKD_WAIT_STATE_CHANGE m_ws;
-			DBGKD_MANIPULATE_STATE m_ms;
-			DBGKD_DEBUG_IO m_io;
-			DBGKD_FILE_IO m_fi;
-		};
-	};
-};
-
-C_ASSERT(sizeof(KD_PACKET_EX)<0xfc0);
-
-ULONG KdpComputeChecksum (PUCHAR Buffer, ULONG Length);
-
 struct DESCRIPTOR64 { 
 	/*0000*/ USHORT Pad[0x3];
 	/*0006*/ USHORT Limit;
@@ -542,4 +398,160 @@ struct KPROCESSOR_STATE_X86 {
 	/*0000*/ WOW64_CONTEXT ContextFrame;
 	/*02cc*/ KSPECIAL_REGISTERS_X86 SpecialRegisters;
 };
+
+enum CONTROL_SPACE_TYPE {
+	AMD64_DEBUG_CONTROL_SPACE_KPCR,
+	AMD64_DEBUG_CONTROL_SPACE_KPRCB,
+	AMD64_DEBUG_CONTROL_SPACE_KSPECIAL,
+	AMD64_DEBUG_CONTROL_SPACE_KTHREAD,
+	X86_DEBUG_CONTROL_SPACE_KSPECIAL = offsetof(KPROCESSOR_STATE_X86, SpecialRegisters),
+};
+
+struct _DBGKD_READ_CONTROL_SPACE
+{
+	CONTROL_SPACE_TYPE Type;
+	ULONG Pad;
+	ULONG ByteCount;
+	ULONG BytesCopied;
+};
+
+struct DBGKD_MANIPULATE_STATE : public DBGKD_HEADER
+{
+	/*0008*/LONG ReturnStatus;
+	/*000C*/LONG pad;
+	/*0010*/
+	union 
+	{
+		/*0000*/_DBGKD_READ_WRITE_MEMORY ReadWriteMemory;
+		/*0010*/_DBGKD_CONTEXT_EX GetContextEx;
+		/*0010*/_DBGKD_CONTEXT_EX SetContextEx;
+		/*0000*/_DBGKD_WRITE_BREAKPOINT WriteBreakPoint;
+		/*0000*/_DBGKD_RESTORE_BREAKPOINT RestoreBreakPoint;
+		/*0000*/_DBGKD_CONTINUE Continue;
+		/*0000*/_DBGKD_CONTINUE2 Continue2;
+		/*0000*/_DBGKD_READ_WRITE_IO ReadWriteIo;
+		/*0000*/_DBGKD_READ_WRITE_IO_EXTENDED ReadWriteIoExtended;
+		/*0000*/_DBGKD_QUERY_SPECIAL_CALLS QuerySpecialCalls;
+		/*0000*/_DBGKD_SET_SPECIAL_CALL SetSpecialCall;
+		/*0000*/_DBGKD_SET_INTERNAL_BREAKPOINT SetInternalBreakpoint;
+		/*0000*/_DBGKD_GET_INTERNAL_BREAKPOINT GetInternalBreakpoint;
+		/*0000*/_DBGKD_GET_VERSION GetVersion;
+		/*0000*/_DBGKD_BREAKPOINTEX BreakPointEx;
+		/*0000*/_DBGKD_READ_WRITE_MSR ReadWriteMsr;
+		/*0000*/_DBGKD_SEARCH_MEMORY SearchMemory;
+		/*0000*/_DBGKD_GET_SET_BUS_DATA GetSetBusData;
+		/*0000*/_DBGKD_FILL_MEMORY FillMemory;
+		/*0000*/_DBGKD_QUERY_MEMORY QueryMemory;
+		/*0000*/_DBGKD_SWITCH_PARTITION SwitchPartition;
+		/*0000*/_DBGKD_READ_CONTROL_SPACE ControlSpace;
+	};
+};
+
+C_ASSERT(sizeof(DBGKD_MANIPULATE_STATE)==0x38);
+
+struct _DBGKD_EXCEPTION
+{
+	/*0000*/_EXCEPTION_RECORD64 ExceptionRecord;
+	/*0098*/ULONG FirstChance;
+	/*009C*/ULONG pad;
+};
+
+struct _DBGKD_LOAD_SYMBOLS
+{
+	/*0000*/ULONG PathNameLength;
+	/*0008*/ULONG64 BaseOfDll;
+	/*0010*/ULONG64 ProcessId;
+	/*0018*/ULONG CheckSum;
+	/*001C*/ULONG SizeOfImage;
+	/*0020*/BOOLEAN UnloadSymbols;
+};
+
+struct DBGKD_WAIT_STATE_CHANGE : public DBGKD_HEADER 
+{
+	DWORD NumberProcessors;//8
+	ULONG64 Thread;//10
+	ULONG64 ProgramCounter;//18 eip,rip
+	union
+	{
+		_DBGKD_EXCEPTION Exception;
+		_DBGKD_LOAD_SYMBOLS LoadSymbols;
+	};
+	/*00c0*/ULONG KernelDr6;
+	/*00c4*/ULONG KernelDr7;
+	/*00c8*/WORD wc8;
+	/*00ca*/WORD wca;
+	/*00cc*/BYTE InstructionStream[16];
+	/*00DC*/WORD SegCs;
+	/*00DE*/WORD SegDs;
+	/*00E0*/WORD SegEs;
+	/*00E2*/WORD SegFs;
+	/*00E4*/ULONG EFlags;
+	/*00e8*/DWORD de8;
+	/*00ec*/DWORD dec;
+	/*00f0*/CHAR Name[ANY_SIZE];
+};
+
+//
+// File I/O Structure
+//
+struct DBGKD_CREATE_FILE
+{
+	ULONG DesiredAccess;
+	ULONG FileAttributes;
+	ULONG ShareAccess;
+	ULONG CreateDisposition;
+	ULONG CreateOptions;
+	ULONG reserved[9];
+	WCHAR Name[];
+};
+
+struct DBGKD_READ_FILE
+{
+	ULONG64 Handle;
+	ULONG64 Offset;
+	ULONG Length;
+};
+
+struct DBGKD_WRITE_FILE
+{
+	ULONG64 Handle;
+	ULONG64 Offset;
+	ULONG Length;
+};
+
+struct DBGKD_CLOSE_FILE
+{
+	ULONG64 Handle;
+};
+
+struct DBGKD_FILE_IO : DBGKD_HEADER
+{
+	union
+	{
+		DBGKD_CREATE_FILE CreateFile;
+		DBGKD_READ_FILE ReadFile;
+		DBGKD_WRITE_FILE WriteFile;
+		DBGKD_CLOSE_FILE CloseFile;
+	};
+};
+
+struct KD_PACKET_EX : public KD_PACKET 
+{
+	union
+	{
+		BYTE m_buffer[PACKET_BYTE_COUNT];
+		union
+		{
+			DBGKD_HEADER m_hd;
+			DBGKD_WAIT_STATE_CHANGE m_ws;
+			DBGKD_MANIPULATE_STATE m_ms;
+			DBGKD_DEBUG_IO m_io;
+			DBGKD_FILE_IO m_fi;
+		};
+	};
+};
+
+C_ASSERT(sizeof(KD_PACKET_EX)==PACKET_BYTE_COUNT+sizeof(KD_PACKET));
+
+ULONG KdpComputeChecksum (PUCHAR Buffer, ULONG Length);
 

@@ -37,18 +37,12 @@ int CALLBACK EnumFontFamExProc(
 
 ZFontDlg::ZFontDlg() : ZFont(FALSE)
 {
-	if (ZToolBar* tb = ZGLOBALS::getMainFrame())
-	{
-		tb->EnableCmd(IDB_BITMAP17, FALSE);
-	}
+	EnableCmd(IDB_BITMAP17, FALSE);
 }
 
 ZFontDlg::~ZFontDlg()
 {
-	if (ZToolBar* tb = ZGLOBALS::getMainFrame())
-	{
-		tb->EnableCmd(IDB_BITMAP17, TRUE);
-	}
+	EnableCmd(IDB_BITMAP17, TRUE);
 }
 
 void ZFontDlg::SetFont()

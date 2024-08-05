@@ -5,7 +5,6 @@
 #include "../winz/cursors.h"
 #include "adresswnd.h"
 #include "eval64.h"
-#include "../inc/rtlframe.h"
 
 BOOL GetValidRange(HANDLE hProcess, INT_PTR Address, INT_PTR& rLo, INT_PTR& rHi);
 void InsertStringLB(HWND hwndList, PCWSTR sz);

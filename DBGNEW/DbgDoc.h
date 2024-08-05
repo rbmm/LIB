@@ -27,6 +27,7 @@ struct ZBreakPoint : LIST_ENTRY
 	DWORD _dllId, _rva;
 	DWORD _HitCount;
 	DWORD _SuspendCount;
+	DWORD _Handle;// for remote dbg
 	BYTE _opcode;
 	BOOLEAN _isActive;
 	BOOLEAN _isUsed;
@@ -52,7 +53,6 @@ struct BOL : LIST_ENTRY
 
 	BOL()
 	{
-
 	}
 
 	BOL(PCWSTR name)
@@ -83,16 +83,40 @@ class ZDbgThread;
 class ZTraceView;
 class ZExceptionFC;
 
+enum { 
+	stInvalid,
+	stASM,
+	stPID,
+	stThread,
+	stPEB, 
+#ifdef _WIN64
+	stWowPEB, 
+#endif
+	stName 
+};
+
+void Show_KDDEBUGGER_DATA(PBYTE pdd);
+
 class __declspec(uuid("AD893927-328E-4d71-B19C-6E90A88E4CBC")) ZDbgDoc : 
 	public ZDocument, 
 	public ZMemoryCache, 
 	ZSignalObject 
 {
 	friend class ZBPDlg;
+	friend struct DbgItf;
 
-	struct RemoteData 
+	struct TB 
 	{
-		PVOID KernBase, PsLoadedModuleList;
+		PVOID Thread;
+		PVOID pbpVa;
+		ULONG state;
+	};
+
+	struct RemoteData : KDDEBUGGER_DATA64
+	{
+		PVOID BpAddress;
+		ULONG iTh;
+		TB thr[16];
 	};
 
 	LIST_ENTRY _dllListHead, _threadListHead, _bpListHead, _notifyListHead, _bolListHead, _srcListHead;
@@ -110,6 +134,7 @@ class __declspec(uuid("AD893927-328E-4d71-B19C-6E90A88E4CBC")) ZDbgDoc :
 	ZRegView* _pReg;
 	ZTabFrame* _pDbgTH;
 	ZDbgThread* _pThread;
+
 	union {
 		ZTraceView* _pTraceView;
 		PVOID _pUdtCtx;// for dump|remote debugger 
@@ -135,7 +160,9 @@ class __declspec(uuid("AD893927-328E-4d71-B19C-6E90A88E4CBC")) ZDbgDoc :
 			ULONG _IsLocalMemory : 1;
 			ULONG _IsUdtTry : 1;
 			ULONG _IsAttached : 1;
-			ULONG _SpareBits : 19;
+			ULONG _IsActive : 1;
+			ULONG _IsRemoteWait : 1;
+			ULONG _SpareBits : 17;
 		};
 	};
 
@@ -146,6 +173,9 @@ class __declspec(uuid("AD893927-328E-4d71-B19C-6E90A88E4CBC")) ZDbgDoc :
 
 	BOOL Create();
 
+	NTSTATUS SetBreakPoint(ZBreakPoint* pbp);
+	NTSTATUS DeleteBreakpoint(ZBreakPoint* pbp);
+
 	~ZDbgDoc();
 
 	BOOL _DbgContinue(CONTEXT& ctx, int key, INT_PTR Va = 0);
@@ -154,8 +184,11 @@ class __declspec(uuid("AD893927-328E-4d71-B19C-6E90A88E4CBC")) ZDbgDoc :
 
 	void Detach();
 
+	void PrintException(DBGKD_WAIT_STATE_CHANGE* pwsc);
 	void PrintException(DWORD dwThreadId, NTSTATUS ExceptionCode, PVOID ExceptionAddress, ULONG NumberParameters, PULONG_PTR ExceptionInformation, PCSTR Chance);
 
+	void RemoteSetThreadState(ZDbgThread* pThread, PVOID BpAddress);
+	TB* RemoteGetThread(ZDbgThread* pThread, BOOL bCreate);
 	void SuspendOrResumeAllThreads(BOOL bSuspend, ZDbgThread* pCurrentThread);
 
 	BOOL SuspendBp(ZBreakPoint* pbp);
@@ -168,17 +201,22 @@ class __declspec(uuid("AD893927-328E-4d71-B19C-6E90A88E4CBC")) ZDbgDoc :
 
 	void SetDbgFlags(ZSDIFrameWnd* pFrame);
 
-	void FormatNameForAddress(ZDll* pDll, PVOID Address, PWSTR buf, ULONG cch, BOOL bReparse = FALSE);
+	void FormatNameForAddress(ZDll* pDll, ULONG dwThreadId, PVOID TebBaseAddress, PVOID Address, PWSTR buf, ULONG cch, BOOL bReparse = FALSE);
 
 public:
 
 	void OnDllParsed(ZDll* pDll);
 
-	void FormatNameForAddress(PVOID Address, PWSTR buf, ULONG cch);
+	void FormatNameForAddress(ULONG dwThreadId, PVOID TebBaseAddress, PVOID Address, PWSTR buf, ULONG cch);
 
 	BOOL InTrace()
 	{
 		return _IsInTrace;
+	}
+
+	BOOL IsRemoteInit()
+	{
+		return _pRemoteData != 0;
 	}
 
 	ULONG GetKernelStackOffset()
@@ -240,6 +278,11 @@ public:
 	{
 		return _IsDump ? _NtSymbolPath : 0;
 	}
+
+	PCWSTR GetAppPath()
+	{
+		return IsListEmpty(&_dllListHead) ? 0 : static_cast<ZDll*>(_dllListHead.Flink)->path();
+	}
 	
 	BOOL GetValidRange(INT_PTR Address, INT_PTR& rLo, INT_PTR& rHi);
 
@@ -259,7 +302,9 @@ public:
 
 	NTSTATUS Attach(DWORD dwProcessId);
 
-	BOOL OnRemoteStart(CDbgPipe* pipe, _DBGKD_GET_VERSION* GetVersion);
+	BOOL OnRemoteStart(KdNetDbg* pipe);
+
+	BOOL OnRemoteConnect(KdNetDbg* pipe, _DBGKD_GET_VERSION* GetVersion);
 	
 	NTSTATUS Create(PCWSTR lpApplicationName, PWSTR lpCommandLine);
 
@@ -286,6 +331,8 @@ public:
 	BOOLEAN IsRemoteDebugger() { return _IsRemoteDebugger; }
 
 	BOOLEAN IsDump() { return _IsDump; }
+
+	PVOID GetThreadData();
 
 	static ZDbgDoc* find(DWORD dwProcessId);
 
@@ -359,7 +406,7 @@ public:
 	
 	void OnDbgPrint(SIZE_T cch, PVOID pv, BOOL bWideChar);
 
-	BOOL Load(PDBGKM_LOAD_DLL LoadDll, BOOL bExe);
+	BOOL Load(PDBGKM_LOAD_DLL LoadDll, BOOL bExe, PWSTR lpRemoteIp = 0);
 
 	void OnUnloadDll(PVOID lpBaseOfDll);
 
@@ -492,6 +539,23 @@ public:
 	void LoadKernelModulesWow();
 	void BuildProcessListWow(ULONG SizeEProcess);
 #endif
+
+	void OnIdle();
+
+	void ShowDbgData()
+	{
+		if (_IsRemoteDebugger && _pRemoteData)
+		{
+			Show_KDDEBUGGER_DATA((PBYTE)static_cast<KDDEBUGGER_DATA64*>(_pRemoteData));
+		}
+	}
+
+	PVOID EXT(PVOID Address)
+	{
+		return _IsWow64Process ? (PVOID)EXTEND64((LONG)(ULONG_PTR)Address) : Address;
+	}
+
+	NTSTATUS FormatFromAddress(PWSTR buf, ULONG cch);
 };
 
 #define GetDbgDoc() ((ZDbgDoc*)_pDocument)

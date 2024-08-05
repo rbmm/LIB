@@ -3,6 +3,7 @@
 _NT_BEGIN
 
 #include <ntlsa.h>
+HMODULE GetNtMod();
 
 void SetEditText(HWND hwnd, PVOID txt)
 {
@@ -90,9 +91,7 @@ public:
 			dwError &= ~FACILITY_NT_BIT;
 			dwFlags = FORMAT_MESSAGE_FROM_HMODULE|FORMAT_MESSAGE_IGNORE_INSERTS;
 
-			static HMODULE ghnt;
-			if (!ghnt && !(ghnt = GetModuleHandle(L"ntdll"))) return *this;
-			lpSource = ghnt;
+			lpSource = GetNtMod();
 		}
 
 		if (dwFlags = FormatMessageW(dwFlags, lpSource, dwError, 0, _buf(), _cch(), 0))

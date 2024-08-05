@@ -11,6 +11,7 @@ void CopyContext(HANDLE dwThreadId);
 #include "udt.h"
 
 ZType* FindType(PVOID UdtCtx, PCSTR name);
+void ZWatch_Create(ZDbgDoc* pDoc, ULONG_PTR Address, ULONG_PTR Type);
 
 ZMember* Find(ZType* type, PCSTR name)
 {
@@ -327,6 +328,15 @@ LRESULT ZTabFrame::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam
 								break;
 							case ID_3_WINDOWS:
 								ShowThreadWindows((DWORD)item.lParam);
+								break;
+							case ID_3_TEB:
+								if (ZDbgThread* pThread = _pDoc->getThreadById((DWORD)item.lParam))
+								{
+									if (ZType* type = FindType(_pDoc->getUdtCtx(), "_TEB"))
+									{
+										ZWatch_Create(_pDoc, (ULONG_PTR)pThread->GetThreadLocalBase(), (ULONG_PTR)type);
+									}
+								}
 								break;
 							case ID_3_KERNELSTACK:
 								if (ZDbgThread* pThread = _pDoc->getThreadById((DWORD)item.lParam))

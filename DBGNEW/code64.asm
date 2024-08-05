@@ -1,4 +1,5 @@
-public ?help_begin@NT@@3PADA, ?help_end@NT@@3PADA
+public ?help_begin@NT@@3QBDB, ?help_end@NT@@3QBDB
+public ?kdd_begin@NT@@3QBDB, ?kdd_end@NT@@3QBDB
 
 .CODE
 
@@ -18,12 +19,14 @@ public ?help_begin@NT@@3PADA, ?help_end@NT@@3PADA
 	ret
 ?strnlen@NT@@YA_K_KPEBD@Z endp
 
-_TEXT ENDS
-
 .CONST
 
-?help_begin@NT@@3PADA:
+?help_begin@NT@@3QBDB:
 INCLUDE <js_help.asm>
-?help_end@NT@@3PADA:
+?help_end@NT@@3QBDB:
+
+?kdd_begin@NT@@3QBDB:
+INCLUDE <kdd.asm>
+?kdd_end@NT@@3QBDB:
 
 END

@@ -4,7 +4,6 @@ _NT_BEGIN
 
 #include "common.h"
 #include "log.h"
-#include "DbgPipe.h"
 
 NTSTATUS MySetContextThread ( IN HANDLE ThreadHandle, IN _CONTEXT* Context )
 {
@@ -13,14 +12,14 @@ NTSTATUS MySetContextThread ( IN HANDLE ThreadHandle, IN _CONTEXT* Context )
 	return ZwSetContextThread(ThreadHandle, Context);
 }
 
-NTSTATUS RemoteSetContextThread (CDbgPipe* _pipe, WORD Processor, IN _CONTEXT* Context )
+NTSTATUS RemoteSetContextThread (KdNetDbg* _pipe, WORD Processor, IN _CONTEXT* Context )
 {
 	Context->Dr7 |= 0x100;
 	Context->Dr6 = 0;
 	NTSTATUS status = _pipe->SetContext(Processor, Context);
 	if (0 <= status)
 	{
-		status = _pipe->WriteReadControlSpace(Processor, Context);
+		status = _pipe->WriteControlSpace(Processor, Context);
 	}
 	return status;
 }
@@ -236,7 +235,7 @@ void ZDbgDoc::DeleteAllBps()
 
 		if (pbp->_isActive)
 		{
-			Write(pbp->_Va, pbp->_opcode);
+			DeleteBreakpoint(pbp);
 		}
 
 		InvalidateVa((INT_PTR)pbp->_Va, ZAsmView::BpRemoved);
@@ -247,6 +246,16 @@ void ZDbgDoc::DeleteAllBps()
 	}
 
 	InitializeListHead(head);
+}
+
+NTSTATUS ZDbgDoc::SetBreakPoint(ZBreakPoint* pbp)
+{
+	return _IsRemoteDebugger ? _pipe->SetBreakPoint(pbp->_Va, &pbp->_Handle) : Write(pbp->_Va, 0xcc);
+}
+
+NTSTATUS ZDbgDoc::DeleteBreakpoint(ZBreakPoint* pbp)
+{
+	return _IsRemoteDebugger ? _pipe->DeleteBreakpoint(pbp->_Handle) : Write(pbp->_Va, pbp->_opcode);
 }
 
 BOOL ZDbgDoc::DelBp(PVOID Va)
@@ -267,7 +276,7 @@ BOOL ZDbgDoc::DelBp(ZBreakPoint* pbp)
 
 	if (pbp->_isActive)
 	{
-		Write(Va, pbp->_opcode);
+		DeleteBreakpoint(pbp);
 	}
 
 	delete pbp;
@@ -288,7 +297,7 @@ BOOL ZDbgDoc::AddBp(PVOID Va)
 {
 	if (!_IsDebugger || ((INT_PTR)Va <= 0 && !_IsRemoteDebugger)) return FALSE;
 	
-	UCHAR opcode;
+	UCHAR opcode = 0xcc;
 
 	if (0 > Read(Va, &opcode, sizeof(UCHAR)) || opcode == 0xcc) return FALSE;
 
@@ -296,6 +305,7 @@ BOOL ZDbgDoc::AddBp(PVOID Va)
 	{
 		pbp->_Va = Va;
 		pbp->_expression = 0;
+		pbp->_Handle = 0;
 		pbp->_opcode = opcode;
 		pbp->_isActive = TRUE;
 		pbp->_isUsed = TRUE;
@@ -313,7 +323,7 @@ BOOL ZDbgDoc::AddBp(PVOID Va)
 
 		InsertHeadList(&_bpListHead, pbp);
 
-		if (0 <= Write(Va, 0xcc))
+		if (0 <= SetBreakPoint(pbp))
 		{
 			InvalidateVa((INT_PTR)Va, ZAsmView::BpAdded);
 
@@ -330,7 +340,6 @@ BOOL ZDbgDoc::AddBp(PVOID Va)
 		RemoveEntryList(pbp);
 
 		delete pbp;
-
 	}
 
 	return FALSE;
@@ -338,6 +347,14 @@ BOOL ZDbgDoc::AddBp(PVOID Va)
 
 BOOL ZDbgDoc::ToggleBp(PVOID Va)
 {
+	if (_pRemoteData) // [8/2/2024 Harry]
+	{
+		if (Va == _pRemoteData->BpAddress)
+		{
+			_pRemoteData->BpAddress = 0;
+		}
+	}
+
 	return _IsDebugger && (DelBp(Va) || AddBp(Va));
 }
 
@@ -363,7 +380,7 @@ void ZDbgDoc::OnLoadUnload(PVOID DllBase, DWORD id, DWORD size, BOOL bLoad)
 					pbp->_isUsed = TRUE;
 					if (pbp->_isActive)
 					{
-						if (0 > Read(Va, &pbp->_opcode, sizeof(UCHAR)) || 0 > Write(Va, 0xcc))
+						if (0 > Read(Va, &pbp->_opcode, sizeof(UCHAR)) || 0 > SetBreakPoint(pbp))
 						{
 							RemoveEntryList(pbp);
 							delete pbp;
@@ -387,13 +404,6 @@ void ZDbgDoc::OnLoadUnload(PVOID DllBase, DWORD id, DWORD size, BOOL bLoad)
 	}
 }
 
-//BOOL ZDbgDoc::EnableBp(PVOID Va, BOOL bEnable)
-//{
-//	ZBreakPoint *pbp = getBpByVa(Va);
-//
-//	return pbp ? EnableBp(pbp, bEnable) : FALSE;
-//}
-
 BOOL ZDbgDoc::EnableBp(ZBreakPoint* pbp, BOOL bEnable, BOOL bSendNotify)
 {
 	BOOL f = FALSE;
@@ -404,7 +414,7 @@ BOOL ZDbgDoc::EnableBp(ZBreakPoint* pbp, BOOL bEnable, BOOL bSendNotify)
 		{
 			if (!pbp->_isActive)
 			{
-				if (0 <= Read(Va, &pbp->_opcode, sizeof(UCHAR)) && 0 <= Write(Va, 0xcc))
+				if (0 <= Read(Va, &pbp->_opcode, sizeof(UCHAR)) && 0 <= SetBreakPoint(pbp))
 				{
 					pbp->_isActive = TRUE;
 					f = TRUE;
@@ -415,7 +425,7 @@ BOOL ZDbgDoc::EnableBp(ZBreakPoint* pbp, BOOL bEnable, BOOL bSendNotify)
 		{
 			if (pbp->_isActive)
 			{
-				if (0 <= Write(Va, pbp->_opcode))
+				if (0 <= DeleteBreakpoint(pbp))
 				{
 					pbp->_isActive = FALSE;
 					f = TRUE;
@@ -462,7 +472,7 @@ void ZDbgDoc::SuspendAllBps(BOOL bSuspend)
 			{
 				if (pbp->_isActive)
 				{
-					if (0 <= Write(Va, pbp->_opcode))
+					if (0 <= DeleteBreakpoint(pbp))
 					{
 						pbp->_isActive = FALSE;
 						pbp->_isSuspended = TRUE;
@@ -473,7 +483,7 @@ void ZDbgDoc::SuspendAllBps(BOOL bSuspend)
 			{
 				if (pbp->_isSuspended)
 				{
-					if (0 <= Read(Va, &pbp->_opcode, sizeof(UCHAR)) && 0 <= Write(Va, 0xcc))
+					if (0 <= Read(Va, &pbp->_opcode, sizeof(UCHAR)) && 0 <= SetBreakPoint(pbp))
 					{
 						pbp->_isActive = TRUE;
 					}
@@ -679,7 +689,7 @@ void ZDbgDoc::SaveBps()
 
 		if (!IsTerminated && pbp->_isActive && pbp->_Va)
 		{
-			Write(pbp->_Va, pbp->_opcode);
+			DeleteBreakpoint(pbp);
 		}
 	}
 
@@ -1132,8 +1142,7 @@ void ZDbgDoc::UpdateThreads(PSYSTEM_PROCESS_INFORMATION pspi)
 								pThread->_StartAddress = Win32StartAddress;
 
 								WCHAR buf[0x100];
-								FormatNameForAddress(Win32StartAddress, buf, _countof(buf));
-
+								FormatNameForAddress(dwThreadId, TH->TebAddress, Win32StartAddress, buf, _countof(buf));
 
 								_pDbgTH->AddThread(dwThreadId, TH->TebAddress, Win32StartAddress, buf);
 							}
@@ -1155,6 +1164,8 @@ void ZDbgDoc::UpdateThreads(PSYSTEM_PROCESS_INFORMATION pspi)
 				entry = entry->Flink;
 				if (pThread->_state == ZDbgThread::stF4)
 				{
+					printf(prThread, L"thread %x exit\r\n", pThread->_dwThreadId);
+
 					_pDbgTH->DelThread(pThread->_dwThreadId);
 					delete pThread;
 				}
@@ -1177,13 +1188,21 @@ void ZDbgDoc::DestroyDbgTH()
 
 void ZDbgDoc::Detach()
 {
+	if (_IsDetachCalled)
+	{
+		return ;
+	}
+
 	_IsDetachCalled = TRUE;
 
 	if (_IsDebugger) 
 	{
-		SaveBOL();
-		deleteBOL();
-		SaveBps();
+		if (_hKey)
+		{
+			SaveBOL();
+			deleteBOL();
+			SaveBps();
+		}
 
 		if (!_IsTerminated && !_IsRemoteDebugger) 
 		{
@@ -1331,7 +1350,6 @@ void ZDbgDoc::Detach()
 	{
 		if (_pipe)
 		{
-			_pipe->Disconnect();
 			_pipe->Release();
 			_pipe = 0;
 		}
@@ -1380,8 +1398,21 @@ ZDbgThread* ZDbgDoc::getThreadById(DWORD dwThreadId)
 	return 0;
 }
 
-void ZDbgDoc::FormatNameForAddress(ZDll* pDll, PVOID Address, PWSTR buf, ULONG cch, BOOL bReparse /*= FALSE*/)
+void ZDbgDoc::FormatNameForAddress(ZDll* pDll, 
+								   ULONG dwThreadId, 
+								   PVOID TebBaseAddress, 
+								   PVOID Address, 
+								   PWSTR buf, 
+								   ULONG cch, 
+								   BOOL bReparse /*= FALSE*/)
 {
+	printf(prThread, L"create thread %x at %p, teb=%p\r\n", dwThreadId, Address, TebBaseAddress);
+	
+	if (!pDll)
+	{
+		return;
+	}
+
 	char sz[256];
 	PCSTR Name = 0;
 	INT_PTR NameVa = 0;
@@ -1427,16 +1458,13 @@ void ZDbgDoc::FormatNameForAddress(ZDll* pDll, PVOID Address, PWSTR buf, ULONG c
 	}
 }
 
-void ZDbgDoc::FormatNameForAddress(PVOID Address, PWSTR buf, ULONG cch)
+void ZDbgDoc::FormatNameForAddress(ULONG dwThreadId, PVOID TebBaseAddress, PVOID Address, PWSTR buf, ULONG cch)
 {
 	if (buf)
 	{
 		*buf = 0;
 	}
-	if (ZDll* pDll = getDllByVaNoRef(Address, FALSE))
-	{
-		FormatNameForAddress(pDll, Address, buf, cch);
-	}
+	FormatNameForAddress(getDllByVaNoRef(Address, FALSE), dwThreadId, TebBaseAddress, Address, buf, cch);
 }
 
 void ZDbgDoc::OnDllParsed(ZDll* pDll)
@@ -1457,7 +1485,7 @@ void ZDbgDoc::OnDllParsed(ZDll* pDll)
 			{
 				*buf = 0;
 				_StartAddress = StartAddress;
-				FormatNameForAddress(pDll, StartAddress, buf, _countof(buf), TRUE);
+				FormatNameForAddress(pDll, pThread->_dwThreadId, pThread->_lpThreadLocalBase, StartAddress, buf, _countof(buf), TRUE);
 			}
 			_pDbgTH->UpdateThread(pThread->_dwThreadId, buf);
 		}
@@ -1481,10 +1509,8 @@ void ZDbgDoc::OnCreateThread(DWORD dwThreadId, PDBGUI_CREATE_THREAD CreateThread
 			&CreateThreadInfo->NewThread.StartAddress, sizeof(CreateThreadInfo->NewThread.StartAddress), 0);
 	}
 
-	printf(prThread, L"create thread %x at %p, teb=%p\r\n", dwThreadId, CreateThreadInfo->NewThread.StartAddress, tbi.TebBaseAddress);
-
 	WCHAR buf[0x100];
-	FormatNameForAddress(CreateThreadInfo->NewThread.StartAddress, buf, _countof(buf));
+	FormatNameForAddress(dwThreadId, tbi.TebBaseAddress, CreateThreadInfo->NewThread.StartAddress, buf, _countof(buf));
 
 	_pDbgTH->AddThread(dwThreadId, tbi.TebBaseAddress, CreateThreadInfo->NewThread.StartAddress, buf);
 
@@ -1656,15 +1682,21 @@ PVOID ZDbgDoc::getUdtCtxEx()
 		return 0;
 	}
 
-	if (!_IsUdtTry)
+	if (_pRemoteData)
 	{
-		_IsUdtTry = 1;
-
-		if (_pRemoteData)
+		if (PVOID KernBase = (PVOID)_pRemoteData->KernBase)
 		{
-			if (GLOBALS_EX* globals = static_cast<GLOBALS_EX*>(ZGLOBALS::get()))
+			if (IsRemoteWait())
 			{
-				CreatePrivateUDTContext(this, globals->_NtSymbolPath, _pRemoteData->KernBase, &_pUdtCtx);
+				if (!_IsUdtTry)
+				{
+					_IsUdtTry = 1;
+
+					if (GLOBALS_EX* globals = static_cast<GLOBALS_EX*>(ZGLOBALS::get()))
+					{
+						CreatePrivateUDTContext(this, globals->_NtSymbolPath, KernBase, &_pUdtCtx);
+					}
+				}
 			}
 		}
 	}
@@ -1919,7 +1951,7 @@ void ZDbgDoc::OnUnloadDll(PVOID lpBaseOfDll)
 
 STATIC_UNICODE_STRING_(BreakOnLoad);
 
-BOOL ZDbgDoc::Load(PDBGKM_LOAD_DLL LoadDll, BOOL bExe)
+BOOL ZDbgDoc::Load(PDBGKM_LOAD_DLL LoadDll, BOOL bExe, PWSTR lpRemoteIp)
 {
 	BOOL bBreak = FALSE;
 
@@ -1927,17 +1959,24 @@ BOOL ZDbgDoc::Load(PDBGKM_LOAD_DLL LoadDll, BOOL bExe)
 
 	PVOID EntryPoint = 0;
 
-	if (bExe && lpImageName)
+	if (bExe && (lpImageName || lpRemoteIp))
 	{
 		UNICODE_STRING us;
 
-		if (us.Buffer = wcsrchr(lpImageName, '\\'))
+		if (lpRemoteIp)
 		{
-			us.Buffer++;
+			us.Buffer = lpRemoteIp;
 		}
 		else
 		{
-			us.Buffer = lpImageName;
+			if (us.Buffer = wcsrchr(lpImageName, '\\'))
+			{
+				us.Buffer++;
+			}
+			else
+			{
+				us.Buffer = lpImageName;
+			}
 		}
 
 		RtlInitUnicodeString(&us, us.Buffer);
@@ -2174,39 +2213,118 @@ void ZDbgDoc::OnSignal()
 	Rundown();
 }
 
+PVOID ZDbgDoc::GetThreadData()
+{
+	return _pThread ? _pThread->_lpThreadLocalBase : 0;
+}
+
+NTSTATUS ZDbgDoc::FormatFromAddress(PWSTR buf, ULONG cch)
+{
+	if (_IsRemoteDebugger && _pRemoteData)
+	{
+		if (ZDbgThread* pThread = _pThread)
+		{
+			int len = swprintf_s(buf, cch, L"Thread=%p ", pThread->_lpThreadLocalBase);
+			if (0 < len)
+			{
+				buf += len, cch -= len;
+			}
+		}
+
+		return _pipe->FormatFromAddress( buf,  cch);
+	}
+
+	return STATUS_NOT_IMPLEMENTED;
+}
+
+void ZDbgDoc::OnIdle()
+{
+#ifdef _WIN64
+	if (_IsRemoteDebugger && _pipe)
+	{
+		ZSDIFrameWnd* pFrame = ZGLOBALS::getMainFrame();
+
+		BOOL IsWait = IsRemoteWait() != 0;
+		PCWSTR pcszStatus = IsWait ? L"suspended" : L"Running...";
+
+		if (_IsRemoteWait ^ IsWait)
+		{
+			_IsRemoteWait = IsWait;
+
+			pFrame->SetStatusText(stPID, pcszStatus);
+		}
+
+		if (_IsActive)
+		{
+			ULONG BytesRecv, BytesSend;
+			_pipe->GetNetStat(BytesRecv, BytesSend);
+
+			WCHAR sz[64];
+			if (0 < swprintf_s(sz, _countof(sz), L"%c %u %c %u", 0x2193, BytesRecv, 0x2191, BytesSend))
+			{
+				pFrame->SetStatusText(stWowPEB, sz);
+			}
+		}
+	}
+#endif
+}
+
 void ZDbgDoc::OnActivate(BOOL bActivate)
 {
-	ZSDIFrameWnd* pFrame = ZGLOBALS::getMainFrame();
+	_IsActive = bActivate != 0;
 
-#ifdef _WIN64
-#define PATH_INDEX 6
-#else
-#define PATH_INDEX 5
-#endif
+	ZSDIFrameWnd* pFrame = ZGLOBALS::getMainFrame();
 
 	if (bActivate)
 	{
 		if (_pAsm) _pAsm->ShowTarget();
 
+		WCHAR sz[64];
 		if (_IsDump)
 		{
-			pFrame->SetStatusText(PATH_INDEX, _NtSymbolPath);
+			pFrame->SetStatusText(stName, _NtSymbolPath);
 		}
-		else
+		else if (_IsRemoteDebugger)
 		{
-			if (!IsListEmpty(&_dllListHead))
+			if (_pipe && _pRemoteData)
 			{
-				pFrame->SetStatusText(PATH_INDEX, static_cast<ZDll*>(_dllListHead.Flink)->path());
-			}
+				_pipe->FormatFromAddress(sz, _countof(sz));
+				pFrame->SetStatusText(stName, sz);
 
-			WCHAR sz[64];
-			swprintf(sz, L"PID=%X(%u)", _dwProcessId, _dwProcessId);
-			pFrame->SetStatusText(2, sz);
-			swprintf(sz, L"peb=%p", _PebBaseAddress);
-			pFrame->SetStatusText(4, sz);
+				if (ZDbgThread* pThread = _pThread)
+				{
+					swprintf_s(sz, _countof(sz), L"Thread=%p", pThread->_lpThreadLocalBase);
+					pFrame->SetStatusText(stThread, sz);
+					swprintf_s(sz, _countof(sz), L"CPU=%x", pThread->_dwThreadId);
+					pFrame->SetStatusText(stPEB, sz);
+				}
+			}
+		}
+		else if (_IsLocalMemory)
+		{
+			pFrame->SetStatusText(stName, GetAppPath());
+
+			swprintf_s(sz, _countof(sz), L"PID=%x(%u)", _dwProcessId, _dwProcessId);
+			pFrame->SetStatusText(stPID, sz);
+
+			if (_pThread)
+			{
+				swprintf_s(sz, _countof(sz), L"TID=%X", _pThread->_dwThreadId);
+				pFrame->SetStatusText(stThread, sz);
+			}
+			swprintf_s(sz, _countof(sz), L"PEB=%p", _PebBaseAddress);
+			pFrame->SetStatusText(stPEB, sz);
+
 #ifdef _WIN64
-			swprintf(sz, L"wow=%p", _wowPeb);
-			pFrame->SetStatusText(5, sz);
+			if (_IsRemoteDebugger)
+			{
+				OnIdle();
+			}
+			else
+			{
+				swprintf_s(sz, _countof(sz), L"WOW=%p", _wowPeb);
+				pFrame->SetStatusText(stWowPEB, sz);
+			}
 #endif
 		}
 
@@ -2214,13 +2332,14 @@ void ZDbgDoc::OnActivate(BOOL bActivate)
 	}
 	else
 	{
-		pFrame->SetStatusText(1, L"");
-		pFrame->SetStatusText(2, L"");
-		pFrame->SetStatusText(4, L"");
+		pFrame->SetStatusText(stASM, L"");
+		pFrame->SetStatusText(stPID, L"");
+		pFrame->SetStatusText(stThread, L"");
+		pFrame->SetStatusText(stPEB, L"");
 #ifdef _WIN64
-		pFrame->SetStatusText(5, L"");
+		pFrame->SetStatusText(stWowPEB, L"");
 #endif
-		pFrame->SetStatusText(PATH_INDEX, L"");
+		pFrame->SetStatusText(stName, L"");
 	}
 
 	if (_pReg && IsWaitContinue())
@@ -2261,7 +2380,9 @@ LRESULT ZDbgDoc::OnCmdMsg(WPARAM wParam, LPARAM lParam)
 			}
 		}
 		break;
+
 	case ID_KILL:
+		if (_IsDebugger & !_IsRemoteDebugger)
 		{
 			PCWSTR name = 0;
 			if (!IsListEmpty(&_dllListHead))
@@ -2274,7 +2395,7 @@ LRESULT ZDbgDoc::OnCmdMsg(WPARAM wParam, LPARAM lParam)
 				NTSTATUS status = ZwTerminateProcess(_hProcess, STATUS_ABANDONED);
 				if (0 > status)
 				{
-					ShowNTStatus(ZGLOBALS::getMainHWND(), status, L"Terminate Process Fail");
+					ShowErrorBox(0, status, L"Terminate Process Fail");
 				}
 				else 
 				{
@@ -2285,11 +2406,20 @@ LRESULT ZDbgDoc::OnCmdMsg(WPARAM wParam, LPARAM lParam)
 		break;
 
 	case ID_DETACH:
+		if (_IsRemoteDebugger && _pRemoteData)
+		{
+			if (MessageBoxW(ZGLOBALS::getMainHWND(), L"KDNET", L"Detach Kernel ?", MB_ICONQUESTION|MB_YESNO|MB_DEFBUTTON2) != IDYES)
+			{
+				break;
+			}
+		}
 		Rundown();
 		break;
+
 	case ID_MEMMAP:
 		ShowProcessMemory(_hProcess, _dwProcessId);
 		break;
+
 	case ID_MODULES:
 		if (!_hwndDLLs)
 		{
@@ -2519,6 +2649,36 @@ void ZDbgDoc::SuspendOrResumeAllThreads(BOOL bSuspend, ZDbgThread* pCurrentThrea
 	}
 }
 
+ZDbgDoc::TB* ZDbgDoc::RemoteGetThread(ZDbgThread* pThread, BOOL bCreate)
+{
+	PVOID Thread = pThread->_lpThreadLocalBase;
+	TB* thr = _pRemoteData->thr;
+	ULONG n = _countof(RemoteData::thr);
+	do 
+	{
+		if (thr->Thread == Thread)
+		{
+			return thr;
+		}
+	} while (thr++, --n);
+
+	if (bCreate)
+	{
+		thr = &_pRemoteData->thr[_pRemoteData->iTh++ & (_countof(RemoteData::thr) - 1)];
+		thr->Thread = Thread;
+		return thr;
+	}
+
+	return 0;
+}
+
+void ZDbgDoc::RemoteSetThreadState(ZDbgThread* pThread, PVOID BpAddress)
+{
+	TB* thr = RemoteGetThread(pThread, TRUE);
+	thr->pbpVa = (PVOID)(ULONG_PTR)BpAddress;
+	thr->state = pThread->_state;
+}
+
 BOOL ZDbgDoc::_DbgContinue(CONTEXT& ctx, int key, INT_PTR Va)
 {
 	ZDbgThread* pThread = _pThread;
@@ -2573,20 +2733,53 @@ BOOL ZDbgDoc::_DbgContinue(CONTEXT& ctx, int key, INT_PTR Va)
 	ctx.Dr6 = 0;
 	ctx.EFlags |= RESUME_FLAG;
 
+	PVOID BpAddress = 0; // [8/2/2024 Harry]
+	
+	if (_pRemoteData)
+	{
+		BpAddress = _pRemoteData->BpAddress;
+		_pRemoteData->BpAddress = 0;
+	}
+
 	if (ZBreakPoint* pbp = getBpByVa((PVOID)ctx.Xip))
 	{
-		if (pbp->_isActive)
+		if (pbp->_isActive || BpAddress == (PVOID)ctx.Xip)
 		{
 			if (SuspendBp(pbp))
 			{
+				if (BpAddress == (PVOID)(ULONG_PTR)ctx.Xip)
+				{
+					pbp->_isActive = TRUE;
+				}
+				// if (BpAddress == (PVOID)ctx.Xip) breakpoint auto removed, nothing need todo
 				ctx.EFlags |= TRACE_FLAG;
 				_bittestandset(&pThread->_flags, ZDbgThread::stBP);
 				pThread->_pbpVa = (PVOID)ctx.Xip;
-				SuspendOrResumeAllThreads(TRUE, pThread);
+
+				if (_pRemoteData)
+				{
+					RemoteSetThreadState(pThread, (PVOID)ctx.Xip);
+				}
+				else
+				{
+					SuspendOrResumeAllThreads(TRUE, pThread);
+				}
 			}
 			else
 			{
 				return FALSE;
+			}
+		}
+	}
+
+	if (BpAddress && BpAddress != (PVOID)ctx.Xip)
+	{
+		// we change ctx.Xip, need ser bp again
+		if (ZBreakPoint* pbp = getBpByVa(BpAddress))
+		{
+			if (0 <= _pipe->SetBreakPoint(pbp->_Va, &pbp->_Handle))
+			{
+				pbp->_isActive = TRUE;
 			}
 		}
 	}
@@ -2666,15 +2859,31 @@ void ZDbgDoc::setPC(INT_PTR Va)
 
 void ZDbgDoc::PrintException(DWORD dwThreadId, NTSTATUS ExceptionCode, PVOID ExceptionAddress, ULONG NumberParameters, PULONG_PTR ExceptionInformation, PCSTR Chance)
 {
-	WCHAR buf[256], *sz;
-	sz = buf + swprintf(buf, L"%x>OnException %x(%S) at %p [", dwThreadId, ExceptionCode, Chance, ExceptionAddress);
-	if (NumberParameters)
+	if (NumberParameters > EXCEPTION_MAXIMUM_PARAMETERS)
 	{
-		do 
+		NumberParameters = EXCEPTION_MAXIMUM_PARAMETERS;
+	}
+	WCHAR buf[256], *sz = buf;
+	ULONG cch = _countof(buf) - 4;
+
+	int len = swprintf_s(sz, cch, L"%x>OnException %x(%S) at %p [", dwThreadId, ExceptionCode, Chance, ExceptionAddress);
+
+	if (0 < len)
+	{
+		sz = sz + len, cch -= len;
+		if (NumberParameters)
 		{
-			sz += swprintf(sz, L" %p,", (void*)*ExceptionInformation++);
-		} while (--NumberParameters);
-		sz--;
+			do 
+			{
+				len = swprintf_s(sz, cch, L" %p,", (void*)*ExceptionInformation++);
+				if (0 >= len)
+				{
+					break;
+				}
+				sz = buf + len, cch -= len;
+			} while (--NumberParameters);
+			sz--;
+		}
 	}
 
 	sz[0] = ']', sz[1] = '\r', sz[2] = '\n', sz[3] = 0;
@@ -2734,6 +2943,16 @@ BOOL ZDbgDoc::SuspendBp(ZBreakPoint* pbp)
 	return FALSE;
 }
 
+void ZDbgDoc::PrintException(DBGKD_WAIT_STATE_CHANGE* pwsc)
+{
+	PrintException(pwsc->Processor, 
+		pwsc->Exception.ExceptionRecord.ExceptionCode, 
+		(PVOID)(ULONG_PTR)pwsc->Exception.ExceptionRecord.ExceptionAddress, 
+		pwsc->Exception.ExceptionRecord.NumberParameters, 
+		(PULONG_PTR)pwsc->Exception.ExceptionRecord.ExceptionInformation, 
+		pwsc->Exception.FirstChance ? "First" : "Last");
+}
+
 NTSTATUS ZDbgDoc::OnRemoteException(ZDbgThread* pThread, DBGKD_WAIT_STATE_CHANGE* pwsc, CONTEXT& ctx)
 {
 	if (!Is64BitProcess())
@@ -2746,7 +2965,8 @@ NTSTATUS ZDbgDoc::OnRemoteException(ZDbgThread* pThread, DBGKD_WAIT_STATE_CHANGE
 	NTSTATUS status = RemoteGetContext(Processor, &ctx);
 	if (0 > status)
 	{
-		return status;
+		PrintException(pwsc);
+		return DBG_EXCEPTION_NOT_HANDLED;
 	}
 
 	ZBreakPoint* bp;
@@ -2758,10 +2978,8 @@ NTSTATUS ZDbgDoc::OnRemoteException(ZDbgThread* pThread, DBGKD_WAIT_STATE_CHANGE
 	switch (ExceptionCode)
 	{
 	default:
-		PrintException(pwsc->Processor, ExceptionCode, 
-			ExceptionAddress, pwsc->Exception.ExceptionRecord.NumberParameters, 
-			(PULONG_PTR)pwsc->Exception.ExceptionRecord.ExceptionInformation, 
-			pwsc->Exception.FirstChance ? "First" : "Last");
+		PrintException(pwsc);
+		break;
 
 	case STATUS_BREAKPOINT:
 		if (bp = getBpByVa(ExceptionAddress))
@@ -2772,6 +2990,8 @@ NTSTATUS ZDbgDoc::OnRemoteException(ZDbgThread* pThread, DBGKD_WAIT_STATE_CHANGE
 				return DBG_CONTINUE;
 			}
 
+			_pRemoteData->BpAddress = ExceptionAddress;
+			bp->_isActive = FALSE; // [8/2/2024 Harry] bp already removed
 			bp->_HitCount++;
 
 			if (bp->_expression && state == ZDbgThread::stF5)
@@ -2783,11 +3003,15 @@ NTSTATUS ZDbgDoc::OnRemoteException(ZDbgThread* pThread, DBGKD_WAIT_STATE_CHANGE
 					return 0;
 				}
 
-				if (!b && SuspendBp(bp))
+				if (!b/* && SuspendBp(bp)*/) // [8/2/2024 Harry] bp already removed
 				{
 					ctx.EFlags |= TRACE_FLAG;
 					pThread->_pbpVa = bp->_Va;
 					_bittestandset(&pThread->_flags, ZDbgThread::stBP);
+					bp->_isActive = TRUE;
+					bp->_SuspendCount++;
+
+					RemoteSetThreadState(pThread, ExceptionAddress);
 					if (0 > RemoteSetContextThread(_pipe, Processor, &ctx))
 					{
 						return OnFatal(_hProcess);
@@ -2831,22 +3055,27 @@ NTSTATUS ZDbgDoc::OnRemoteException(ZDbgThread* pThread, DBGKD_WAIT_STATE_CHANGE
 
 		if (_bittest(Dr6, 14))
 		{
-			if (_bittestandreset(&pThread->_flags, ZDbgThread::stBP))
-			{
-				if (bp = getBpByVa(pThread->_pbpVa))
-				{
-					ResumeBp(bp);
-				}
+			PVOID pbpVa = 0;
 
-				if (state == ZDbgThread::stF5)
-				{
-					return DBG_CONTINUE;
-				}
-			}
-			if (state == ZDbgThread::stF11)
+			if (TB* thr = RemoteGetThread(pThread, FALSE))
 			{
+				state = (ZDbgThread::STATE)(thr->state);
+				pbpVa = thr->pbpVa;
+				thr->pbpVa = 0;
+			}
+
+			if (!pbpVa)
+			{
+				// stop 
 				return 0;
 			}
+
+			if (bp = getBpByVa(pbpVa))
+			{
+				ResumeBp(bp);
+			}
+
+			return state == ZDbgThread::stF5 ? DBG_CONTINUE : 0;
 		}
 		else
 		{
@@ -2889,17 +3118,12 @@ NTSTATUS ZDbgDoc::RemoteGetContext(WORD Processor, CONTEXT* ctx)
 		return status;
 	}
 
-	return _pipe->ReadReadControlSpace(Processor, ctx);
+	return _pipe->ReadControlSpace(Processor, ctx);
 }
 
 NTSTATUS ZDbgDoc::OnRemoteLoadUnload(DBGKD_WAIT_STATE_CHANGE* pwsc, CONTEXT& ctx)
 {
 	ULONG_PTR BaseOfDll = (ULONG_PTR)pwsc->LoadSymbols.BaseOfDll;
-
-	if (!Is64BitProcess())
-	{
-		BaseOfDll &= MAXDWORD;
-	}
 
 	if (pwsc->LoadSymbols.UnloadSymbols)
 	{
@@ -2917,9 +3141,19 @@ NTSTATUS ZDbgDoc::OnRemoteLoadUnload(DBGKD_WAIT_STATE_CHANGE* pwsc, CONTEXT& ctx
 	MultiByteToWideChar(CP_UTF8, 0, pwsc->Name, pwsc->LoadSymbols.PathNameLength, 
 		(PWSTR)lddi.NamePointer, pwsc->LoadSymbols.PathNameLength);
 
-	if (!Load(&lddi, _pRemoteData->KernBase == (PVOID)BaseOfDll))
+	WCHAR sz[64], *psz = 0;
+	BOOL bExe = _pRemoteData->KernBase == (ULONG64)EXT((PVOID)BaseOfDll);
+
+	if (bExe && 0 <= _pipe->FormatFromAddress(sz, _countof(sz)))
 	{
-		return DBG_CONTINUE;// break on load
+		psz = sz;
+
+		ZGLOBALS::getMainFrame()->SetStatusText(stName, sz);
+	}
+	
+	if (!Load(&lddi, bExe, psz))
+	{
+		return DBG_CONTINUE;
 	}
 
 	NTSTATUS status = RemoteGetContext(pwsc->Processor, &ctx);
@@ -2932,12 +3166,6 @@ NTSTATUS ZDbgDoc::OnRemoteLoadUnload(DBGKD_WAIT_STATE_CHANGE* pwsc, CONTEXT& ctx
 
 NTSTATUS ZDbgDoc::OnWaitStateChange(DBGKD_WAIT_STATE_CHANGE* pwsc)
 {
-	if (!Is64BitProcess())
-	{
-		pwsc->Thread &= MAXDWORD;
-		pwsc->ProgramCounter &= MAXDWORD;
-	}
-
 	WORD Processor = pwsc->Processor;
 
 	ZDbgThread* pThread = getThreadById(Processor);
@@ -2958,6 +3186,8 @@ NTSTATUS ZDbgDoc::OnWaitStateChange(DBGKD_WAIT_STATE_CHANGE* pwsc)
 
 	pThread->_lpThreadLocalBase = (PVOID)(ULONG_PTR)pwsc->Thread;
 
+	OnIdle();
+
 	CONTEXT ctx{};
 
 	NTSTATUS status = DBG_CONTINUE;
@@ -2977,10 +3207,12 @@ NTSTATUS ZDbgDoc::OnWaitStateChange(DBGKD_WAIT_STATE_CHANGE* pwsc)
 		return status;
 	}
 
-	WCHAR sz[16];
-	swprintf(sz, L"TID=%I64x", pwsc->Thread);
 	_ZGLOBALS* globals = ZGLOBALS::get();
+	WCHAR sz[32];
+	swprintf_s(sz, _countof(sz), L"Thread=%I64x", pwsc->Thread);
 	globals->MainFrame->SetStatusText(3, sz);
+	swprintf_s(sz, _countof(sz), L"CPU=%x", Processor);
+	globals->MainFrame->SetStatusText(4, sz);
 	SetForegroundWindow(globals->hwndMain);
 
 	_pThread = pThread;
@@ -3270,9 +3502,9 @@ void ZDbgDoc::OnDebugEvent(DBGUI_WAIT_STATE_CHANGE& StateChange)
 #endif
 
 		WCHAR sz[16];
-		swprintf(sz, L"TID=%x", dwThreadId);
+		swprintf_s(sz, _countof(sz), L"TID=%x", dwThreadId);
 		_ZGLOBALS* globals = ZGLOBALS::get();
-		globals->MainFrame->SetStatusText(3, sz);
+		globals->MainFrame->SetStatusText(stThread, sz);
 		SetForegroundWindow(globals->hwndMain);
 
 		ctx.Dr7 &= 0xfff0fffc;
@@ -3357,7 +3589,7 @@ BOOL ZDbgDoc::Create()
 	return ZMemoryCache::Create() && (_hwndLog = CreateLogView(this, _dwProcessId)) &&
 		CreateAsmWindow(this) && _pAsm && _pAsm->SetTarget(
 #ifdef _WIN64
-		_IsWow64Process ? DIS::ia32 : DIS::amd64
+		_IsRemoteDebugger ? DIS::invalid : (_IsWow64Process ? DIS::ia32 : DIS::amd64)
 #else
 		DIS::ia32
 #endif
@@ -3628,6 +3860,7 @@ NTSTATUS ZDbgDoc::OpenDumpComplete()
 
 void FreePM(_In_ PRTL_PROCESS_MODULES mods);
 NTSTATUS QueryPM(_In_ HANDLE dwProcessId, _Out_ PRTL_PROCESS_MODULES* pmods);
+NTSTATUS QueryPM_I(_In_ HANDLE hProcess, _Out_ PRTL_PROCESS_MODULES* pmods);
 
 NTSTATUS ZDbgDoc::Attach(DWORD dwProcessId)
 {
@@ -3660,7 +3893,7 @@ NTSTATUS ZDbgDoc::Attach(DWORD dwProcessId)
 
 	PRTL_PROCESS_MODULES psmi;
 
-	if (0 <= (status = QueryPM(cid.UniqueProcess, &psmi)))
+	if (0 <= (status = QueryPM_I(_hProcess, &psmi)))
 	{
 		if (DWORD Num = psmi->NumberOfModules)
 		{
@@ -3709,7 +3942,7 @@ NTSTATUS ZDbgDoc::Attach(DWORD dwProcessId)
 	return status;
 }
 
-BOOL ZDbgDoc::OnRemoteStart(CDbgPipe* pipe, _DBGKD_GET_VERSION* GetVersion)
+BOOL ZDbgDoc::OnRemoteStart(KdNetDbg* pipe)
 {
 	_IsRemoteDebugger = TRUE;
 
@@ -3717,13 +3950,43 @@ BOOL ZDbgDoc::OnRemoteStart(CDbgPipe* pipe, _DBGKD_GET_VERSION* GetVersion)
 	_wowPeb = 0;
 #endif
 
+	_pipe = pipe, pipe->AddRef();
+
+	static LONG sid;
+	
+	_dwProcessId = InterlockedIncrement(&sid);
+
+	return Create();
+}
+
+BOOL ZDbgDoc::OnRemoteConnect(KdNetDbg* pipe, _DBGKD_GET_VERSION* GetVersion)
+{
+	if (_pRemoteData)
+	{
+		return FALSE;
+	}
+
+	WCHAR sz[64];
+
+	if (0 <= pipe->FormatFromAddress(sz, _countof(sz)))
+	{
+		printf(prGen, L"client ip = %ls\r\n", sz);
+	}
+
+	DIS::DIST dd = DIS::invalid;
+
+	PCWSTR pszMachineType = 0;
 	switch (GetVersion->MachineType)
 	{
-	case IMAGE_FILE_MACHINE_I386:
-#ifdef _WIN64
-		_IsWow64Process = 1;
 	case IMAGE_FILE_MACHINE_AMD64:
-#endif
+		_IsWow64Process = FALSE;
+		pszMachineType = L"AMD64";
+		dd = DIS::amd64;
+		break;
+	case IMAGE_FILE_MACHINE_I386:
+		_IsWow64Process = TRUE;
+		pszMachineType = L"I386";
+		dd = DIS::ia32;
 		break;
 	default:
 		return FALSE;
@@ -3731,28 +3994,24 @@ BOOL ZDbgDoc::OnRemoteStart(CDbgPipe* pipe, _DBGKD_GET_VERSION* GetVersion)
 
 	if (_pRemoteData = new RemoteData)
 	{
-		_pRemoteData->KernBase = (PVOID)(ULONG_PTR)GetVersion->KernBase;
-		_pRemoteData->PsLoadedModuleList = (PVOID)(ULONG_PTR)GetVersion->PsLoadedModuleList;
+		RtlZeroMemory(_pRemoteData, sizeof(RemoteData));
 	}
 	else
 	{
 		return FALSE;
 	}
 
-	_pipe = pipe, pipe->AddRef();
-
-	static LONG sid;
-	
-	_dwProcessId = InterlockedIncrement(&sid);
-
-	if (!Create())
-	{
-		return FALSE;
-	}
-
-	printf(prGen, L"GetVersionApi(%x.%x m=%x kb=%I64x pslml=%I64x)\r\n", 
-		GetVersion->MajorVersion, GetVersion->MinorVersion, GetVersion->MachineType,
-		GetVersion->KernBase, GetVersion->PsLoadedModuleList);
+	printf(prGen, L"Version: %u.%u [%x] %s\r\n"
+		"KernBase=%I64x\r\n"
+		"PsLoadedModuleList=%I64x\r\n"
+		"DebuggerDataList=%I64x\r\n", 
+		GetVersion->MajorVersion, 
+		GetVersion->MinorVersion, 
+		GetVersion->ProtocolVersion,
+		pszMachineType,
+		GetVersion->KernBase, 
+		GetVersion->PsLoadedModuleList,
+		GetVersion->DebuggerDataList);
 
 	union {
 		LIST_ENTRY64 le64;
@@ -3764,19 +4023,35 @@ BOOL ZDbgDoc::OnRemoteStart(CDbgPipe* pipe, _DBGKD_GET_VERSION* GetVersion)
 		return FALSE;
 	}
 
-	KDDEBUGGER_DATA64 dbgdata;
-	if (0 > pipe->ReadRemote(_IsWow64Process ? (PBYTE)le32.Flink : (PBYTE)le64.Flink, (PBYTE)&dbgdata, sizeof(dbgdata)))
+	ULONG64 pb = _IsWow64Process ? le32.Flink : le64.Flink;
+
+	if (0 > pipe->ReadRemote((PBYTE)pb, (PBYTE)static_cast<KDDEBUGGER_DATA64*>(_pRemoteData), sizeof(KDDEBUGGER_DATA64)))
 	{
 		return FALSE;
 	}
 
+	_pReg->SetDoc(this);
+
 	printf(prGen, 
-		L"PsLoadedModuleList=%p\r\n"
-		L"PsActiveProcessHead=%p\r\n"
-		L"NtBuildLab=%p\r\n"
-		L"KiProcessorBlock=%p\r\n", 
-		dbgdata.PsLoadedModuleList, dbgdata.PsActiveProcessHead, dbgdata.NtBuildLab, dbgdata.KiProcessorBlock);
-	return TRUE;
+		L"\r\nKDDEBUGGER_DATA64=%I64x\r\n"
+		L"PsLoadedModuleList=%I64x\r\n"
+		L"PsActiveProcessHead=%I64x\r\n"
+		L"NtBuildLab=%I64x\r\n"
+		L"KiProcessorBlock=%I64x\r\n", 
+		pb, _pRemoteData->PsLoadedModuleList, 
+		_pRemoteData->PsActiveProcessHead, 
+		_pRemoteData->NtBuildLab, 
+		_pRemoteData->KiProcessorBlock);
+
+	if (GetVersion->KernBase != (ULONG64)EXT((PVOID)_pRemoteData->KernBase) ||
+		GetVersion->PsLoadedModuleList != (ULONG64)EXT((PVOID)_pRemoteData->PsLoadedModuleList))
+	{
+		return FALSE;
+	}
+
+	_pRemoteData->KernBase = GetVersion->KernBase;
+	_pRemoteData->PsLoadedModuleList = GetVersion->PsLoadedModuleList;
+	return _pAsm->SetTarget(dd);
 }
 
 HRESULT ZDbgDoc::QI(REFIID riid, void **ppvObject)

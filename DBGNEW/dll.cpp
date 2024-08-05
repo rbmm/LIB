@@ -442,7 +442,7 @@ void ZDll::Parse(ZDbgDoc* pDoc)
 
 			LoadPublicSymbols(&pdb, pdb.getPublicSymbolsStreamIndex(), expLen);
 
-			if (_hmod_nt == _BaseOfDll)
+			if (GetNtMod() == _BaseOfDll)
 			{
 				if (!LdrpDispatchUserCallTarget)
 				{

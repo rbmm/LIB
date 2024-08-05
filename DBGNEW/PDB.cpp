@@ -586,16 +586,7 @@ __loop:
 		ZwUnmapViewOfSection(NtCurrentProcess(), BaseAddress);
 		_PdbBase = 0, _bUnmap = FALSE;
 
-		PWSTR psz = 0;
-		if (!FormatMessageW(
-			FORMAT_MESSAGE_ALLOCATE_BUFFER|FORMAT_MESSAGE_FROM_HMODULE|FORMAT_MESSAGE_IGNORE_INSERTS, 
-			GetModuleHandle(L"ntdll"), status, 0, (PWSTR)&psz, 0, 0))
-		{
-			psz = 0;
-		}
-		int i = MessageBoxW(0, psz, L"PDB file mismatch", MB_ICONWARNING|MB_RETRYCANCEL);
-		LocalFree(psz);
-		if (i == IDRETRY)
+		if (IDRETRY == ShowErrorBox(0, status, L"PDB file mismatch", MB_ICONWARNING|MB_RETRYCANCEL))
 		{
 			goto __loop;
 		}

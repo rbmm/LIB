@@ -2,7 +2,7 @@
 
 #include "memdump.h"
 
-class CDbgPipe;
+class KdNetDbg;
 
 class ZMemoryCache
 {
@@ -14,7 +14,7 @@ protected:
 	union {
 		HANDLE _hProcess;// local debugger
 		IMemoryDump* _pDump; // dump
-		CDbgPipe* _pipe;// remote  debugger
+		KdNetDbg* _pipe;// remote  debugger
 	};
 private:
 	typedef BYTE (*CHUNK)[chunk_size];

@@ -3,6 +3,7 @@
 _NT_BEGIN
 
 #include "regview.h"
+#include "DbgDoc.h"
 #pragma warning(disable : 4477)
 #ifdef _WIN64
 #define N_REG 41
@@ -598,6 +599,10 @@ __f:
 				ShowWindow(GetParent(hwnd), SW_HIDE);
 			}
 		}
+		if (_M_pDoc)
+		{
+			_M_pDoc->OnIdle();
+		}
 		return IDCANCEL;
 
 	case WM_CREATE:
@@ -615,6 +620,11 @@ __f:
 		break;
 	}
 	return ZWnd::WindowProc(hwnd, uMsg, wParam, lParam);
+}
+
+void ZRegView::SetDisabled() 
+{ 
+	_bDisabled = TRUE; _Ticks = GetTickCount() + (_M_pDoc && _M_pDoc->IsRemoteDebugger() ? 2000 : 1000); 
 }
 
 void DrawDiff(HDC hdc, int x, int y, int cx, int cy, PWSTR sz, PWSTR wz, DWORD n)

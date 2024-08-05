@@ -8,16 +8,8 @@ _NT_BEGIN
 #include "../inc/idcres.h"
 #include "DbgDoc.h"
 #include "undname.h"
-#include "../inc/rtlframe.h"
 #include "common.h"
 #include "types.h"
-
-#define FormatStatus(err, module, status) FormatMessage(\
-	FORMAT_MESSAGE_IGNORE_INSERTS|FORMAT_MESSAGE_FROM_HMODULE,\
-	GetModuleHandleW(L ## # module),status, 0, err, RTL_NUMBER_OF(err), 0)
-
-#define FormatWin32Status(err, status) FormatStatus(err, kernel32.dll, status)
-#define FormatNTStatus(err, status) FormatStatus(err, ntdll.dll, status)
 
 //////////////////////////////////////////////////////////////////////////
 // ZPDBPathDlg
@@ -108,7 +100,7 @@ BOOL ZPDBPathDlg::OnOk(HWND hwndDlg)
 				status = NtOpenFile(_hFile, FILE_GENERIC_READ, &oa, &iosb, FILE_SHARE_VALID_FLAGS, FILE_SYNCHRONOUS_IO_NONALERT);
 				if (0 > status)
 				{
-					ShowNTStatus(hwndDlg, status, sz);
+					ShowErrorBox(hwndDlg, status, sz);
 				}
 			}
 			RtlFreeUnicodeString(&ObjectName);
@@ -225,7 +217,7 @@ BOOL ZSrcPathDlg::OnOk(HWND hwndDlg)
 				status = ZwQueryAttributesFile(&oa, &fbi);
 				if (0 > status)
 				{
-					ShowNTStatus(hwndDlg, status, sz);
+					ShowErrorBox(hwndDlg, status, sz);
 				}
 				else
 				{
@@ -315,9 +307,8 @@ BOOL CSymbolsDlg::OnOK(HWND hwnd)
 					globals->SetPath(sz + 4);
 					return TRUE;
 				}
-				WCHAR err[256];
-				FormatNTStatus(err, status);
-				MessageBox(0, err, L"Invalid Path", MB_ICONWARNING);
+
+				ShowErrorBox(0, status, L"Invalid Path", MB_ICONWARNING);
 			}
 			else
 			{
@@ -330,8 +321,6 @@ BOOL CSymbolsDlg::OnOK(HWND hwnd)
 
 INT_PTR CSymbolsDlg::DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
-	ZToolBar* tb;
-
 	switch (uMsg)
 	{
 	case WM_SIZE:
@@ -344,17 +333,11 @@ INT_PTR CSymbolsDlg::DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM l
 		{
 			SetDlgItemText(hwndDlg, IDC_EDIT1, globals->getPath());
 		}
-		if (tb = ZGLOBALS::getMainFrame())
-		{
-			tb->EnableCmd(ID_PATH, FALSE);
-		}
+		EnableCmd(ID_PATH, FALSE);
 		break;
 
 	case WM_NCDESTROY:
-		if (tb = ZGLOBALS::getMainFrame())
-		{
-			tb->EnableCmd(ID_PATH, TRUE);
-		}
+		EnableCmd(ID_PATH, TRUE);
 		break;
 	case WM_NCHITTEST:
 		{
@@ -451,7 +434,7 @@ void CTokenDlg::OnOk(HWND hwndDlg)
 
 	if (status)
 	{
-		ShowNTStatus(hwndDlg, status, L"Duplicate Token");
+		ShowErrorBox(hwndDlg, status, L"Duplicate Token");
 	}
 }
 
@@ -767,13 +750,7 @@ INT_PTR CFileInUseDlg::DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM
 
 						if (0 > status)
 						{
-							if (FormatMessageW(
-								FORMAT_MESSAGE_ALLOCATE_BUFFER|FORMAT_MESSAGE_FROM_HMODULE|FORMAT_MESSAGE_IGNORE_INSERTS, 
-								GetModuleHandle(L"ntdll"), status, 0, (PWSTR)&buf, 0, 0))
-							{
-								ShowText(FileName, buf);
-								LocalFree(buf);
-							}
+							ShowErrorBox(0, status, FileName);
 						}
 						else
 						{
@@ -1080,16 +1057,9 @@ __error:
 	
 	NTSTATUS status = RvaToOfs(FileName, Rva, &Ofs, _bRvaToOfs, Characteristics, Name);
 
-	PWSTR buf;
 	if (0 > status)
 	{
-		if (FormatMessageW(
-			FORMAT_MESSAGE_ALLOCATE_BUFFER|FORMAT_MESSAGE_FROM_HMODULE|FORMAT_MESSAGE_IGNORE_INSERTS, 
-			GetModuleHandle(L"ntdll"), status, 0, (PWSTR)&buf, 0, 0))
-		{
-			MessageBox(hwndDlg, buf, FileName, 0);
-			LocalFree(buf);
-		}
+		ShowErrorBox(hwndDlg, status, FileName);
 	}
 	else
 	{
@@ -1263,7 +1233,7 @@ INT_PTR CRvaToOfs::DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lPa
 
 //////////////////////////////////////////////////////////////////////////
 // ZBpExp
-extern CHAR help_begin[], help_end[];
+extern const CHAR help_begin[], help_end[];
 
 void SetEditText(HWND hwnd, PVOID txt);
 
@@ -3668,7 +3638,7 @@ BOOL ZExecDlg::OnOk(HWND hwndDlg)
 
 				if (0 > status)
 				{
-					ShowNTStatus(hwndDlg, status, L"NT_SYMBOL_PATH invalid !");
+					ShowErrorBox(hwndDlg, status, L"NT_SYMBOL_PATH invalid !");
 					workDir = 0;
 				}
 				else
@@ -3695,7 +3665,7 @@ BOOL ZExecDlg::OnOk(HWND hwndDlg)
 
 		if (0 > status)
 		{
-			ShowNTStatus(hwndDlg, status, L"Atach to Process Fail");
+			ShowErrorBox(hwndDlg, status, L"Atach to Process Fail");
 			return FALSE;
 		}
 
@@ -3729,6 +3699,9 @@ BOOL ZExecDlg::OnOk(HWND hwndDlg)
 	STARTUPINFOEXW si = { {sizeof(si) } };
 
 	NTSTATUS status;
+	BOOL nTryProtect = FALSE;
+
+__0:
 
 	if ((ULONG_PTR)cid.UniqueProcess == (ULONG_PTR)GetCurrentProcessId())
 	{
@@ -3752,10 +3725,22 @@ BOOL ZExecDlg::OnOk(HWND hwndDlg)
 			CREATE_PRESERVE_CODE_AUTHZ_LEVEL|DEBUG_PROCESS|EXTENDED_STARTUPINFO_PRESENT, 
 			workDir, &si, &pi);
 	}
+
+	if (nTryProtect) DoIoControl(IOCTL_DelProtectedProcess);
+	
+	if (STATUS_PROCESS_IS_PROTECTED == status)
+	{
+		if (!nTryProtect)
+		{
+			nTryProtect = TRUE;
+			DoIoControl(IOCTL_SetProtectedProcess);
+			goto __0;
+		}
+	}
 	
 	if (0 > status)
 	{
-		ShowNTStatus(hwndDlg, status, L"Fail create Process");
+		ShowErrorBox(hwndDlg, status, L"Fail create Process");
 		return FALSE;
 	}
 	else
@@ -4027,18 +4012,12 @@ ZExceptionDlg::ZExceptionDlg()
 	_bits = p->get(&n, _status + RTL_NUMBER_OF(st));
 	_N = n + RTL_NUMBER_OF(st);
 
-	if (ZToolBar* tb = globals->MainFrame)
-	{
-		tb->EnableCmd(IDB_BITMAP1, FALSE);
-	}
+	EnableCmd(IDB_BITMAP1, FALSE);
 }
 
 ZExceptionDlg::~ZExceptionDlg()
 {
-	if (ZToolBar* tb = ZGLOBALS::getMainFrame())
-	{
-		tb->EnableCmd(IDB_BITMAP1, TRUE);
-	}
+	EnableCmd(IDB_BITMAP1, TRUE);
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -4301,18 +4280,12 @@ INT_PTR ZPrintFilter::DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM 
 
 ZPrintFilter::ZPrintFilter()
 {
-	if (ZToolBar* tb = ZGLOBALS::getMainFrame())
-	{
-		tb->EnableCmd(ID_PRFLT, FALSE);
-	}
+	EnableCmd(ID_PRFLT, FALSE);
 }
 
 ZPrintFilter::~ZPrintFilter()
 {
-	if (ZToolBar* tb = ZGLOBALS::getMainFrame())
-	{
-		tb->EnableCmd(ID_PRFLT, TRUE);
-	}
+	EnableCmd(ID_PRFLT, TRUE);
 }
 
 //////////////////////////////////////////////////////////////////////////
