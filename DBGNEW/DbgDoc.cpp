@@ -2880,7 +2880,7 @@ void ZDbgDoc::PrintException(DWORD dwThreadId, NTSTATUS ExceptionCode, PVOID Exc
 				{
 					break;
 				}
-				sz = buf + len, cch -= len;
+				sz += len, cch -= len;
 			} while (--NumberParameters);
 			sz--;
 		}
