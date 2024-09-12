@@ -19,10 +19,7 @@ class CSocketObject : public IO_OBJECT_TIMEOUT
 {
 	friend class CTcpEndpoint;
 
-	virtual void IOCompletionRoutine(CDataPacket* , DWORD , NTSTATUS , ULONG_PTR , PVOID )
-	{
-		__debugbreak();
-	}
+	virtual void IOCompletionRoutine(CDataPacket* , DWORD , NTSTATUS , ULONG_PTR , PVOID );
 protected:
 
 	virtual void CloseObjectHandle(HANDLE hFile);
@@ -82,6 +79,7 @@ class __declspec(novtable) CTcpEndpoint : public CSocketObject
 {
 	friend class CDnsSocket;
 	friend class TestSocket;
+	friend class CSocketObject;
 
 protected:
 
@@ -101,7 +99,7 @@ protected:
 #ifdef __WS2BTH__H
 		SOCKADDR_BTH	m_bthAddr;
 #endif
-		UCHAR			m_addr[32];
+		UCHAR			m_addr[0x20];
 	};
 
 	enum {
@@ -142,8 +140,9 @@ protected:
 	{
 	}
 
-	virtual void OnEmptyRecv()
+	virtual BOOL OnEmptyRecv()
 	{
+		return FALSE;
 	}
 	/************************************************************************/
 	virtual void CloseObjectHandle(HANDLE hFile);

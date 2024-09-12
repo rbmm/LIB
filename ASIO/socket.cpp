@@ -442,6 +442,13 @@ void CTcpEndpoint::GetSockaddrs(PVOID buf)
 	}
 }
 
+struct ALEB 
+{
+	UCHAR addr[2*0x30];
+	CTcpEndpoint* pEndp;
+	PVOID Buffer;
+};
+
 ULONG CTcpEndpoint::Listen(ULONG dwReceiveDataLength)
 {
 	PVOID buf;
@@ -453,11 +460,12 @@ ULONG CTcpEndpoint::Listen(ULONG dwReceiveDataLength)
 		return ERROR_INSUFFICIENT_BUFFER;
 	}
 
-	ULONG cb = wb->len, cbNeed = 2*(sizeof(sockaddr_in6) + 16) + dwReceiveDataLength;
+	PSTR psz = wb->buf;
+	ALEB* pp = (ALEB*)((ULONG_PTR)(psz + dwReceiveDataLength + __alignof(ALEB) - 1) & ~(__alignof(ALEB) - 1));
 
-	if (cb < cbNeed || cbNeed < dwReceiveDataLength)
+	if (psz + wb->len < (PSTR)(pp + 1))
 	{
-		return ERROR_INVALID_PARAMETER;
+		return ERROR_BUFFER_OVERFLOW;
 	}
 
 	if (InterlockedBitTestAndSetNoFence(&m_flags, flListenActive))
@@ -465,8 +473,12 @@ ULONG CTcpEndpoint::Listen(ULONG dwReceiveDataLength)
 		return ERROR_BAD_PIPE;
 	}
 
-	if (IO_IRP* Irp = new IO_IRP(this, lstn, m_packet, buf))
+	if (IO_IRP* Irp = new IO_IRP(m_pAddress, lstn, m_packet, pp))
 	{
+		AddRef();
+		pp->pEndp = this;
+		pp->Buffer = buf;
+
 		DWORD dwBytes;
 		m_dwReceiveDataLength = dwReceiveDataLength;
 
@@ -487,7 +499,7 @@ ULONG CTcpEndpoint::Listen(ULONG dwReceiveDataLength)
 			UnlockSocket();
 		}
 
-		return Irp->CheckErrorCode(this, err), NOERROR;
+		return Irp->CheckErrorCode(m_pAddress, err), NOERROR;
 	}
 
 	// if fail begin IO, direct call with error
@@ -760,6 +772,23 @@ ULONG CTcpEndpoint::vRecv(SOCKET socket, WSABUF* lpBuffers, DWORD dwBufferCount,
 	return WSA_ERROR(WSARecv(socket, lpBuffers, dwBufferCount, &dwBytes, &Flags, Irp, 0));
 }
 
+void CSocketObject::IOCompletionRoutine(CDataPacket* packet, DWORD Code, NTSTATUS dwError, ULONG_PTR dwNumberOfBytesTransfered, PVOID Pointer)
+{
+	switch (Code)
+	{
+	default: __debugbreak();
+	case CTcpEndpoint::lstn:
+		ALEB* pp = (ALEB*)Pointer;
+		Pointer = pp->Buffer;
+		CTcpEndpoint* pEndp = pp->pEndp;
+
+		if (!dwError) pEndp->GetSockaddrs(Pointer);
+		pEndp->IOCompletionRoutine(packet, CTcpEndpoint::lstn, dwError, dwNumberOfBytesTransfered, Pointer);
+		pEndp->Release();
+		break;
+	}
+}
+
 void CTcpEndpoint::IOCompletionRoutine(CDataPacket* packet, DWORD Code, NTSTATUS dwError, ULONG_PTR dwNumberOfBytesTransfered, PVOID Pointer)
 {
 	BOOL f;
@@ -773,9 +802,9 @@ void CTcpEndpoint::IOCompletionRoutine(CDataPacket* packet, DWORD Code, NTSTATUS
 	{
 	default: __debugbreak();
 	case recv:
-		if (!dwError && !dwNumberOfBytesTransfered)
+		if (!dwError && !dwNumberOfBytesTransfered && OnEmptyRecv())
 		{
-			OnEmptyRecv();
+			break;
 		}
 		dwNumberOfBytesTransfered && (f = OnRecv((PSTR)Pointer, (ULONG)dwNumberOfBytesTransfered))
 			? 0 < f && Recv() : (Disconnect(dwError),0);
@@ -805,7 +834,6 @@ void CTcpEndpoint::IOCompletionRoutine(CDataPacket* packet, DWORD Code, NTSTATUS
 		break;
 
 	case lstn:
-		if (!dwError) GetSockaddrs(Pointer);
 	case cnct:
 		if (dwError)
 		{
@@ -822,13 +850,14 @@ void CTcpEndpoint::IOCompletionRoutine(CDataPacket* packet, DWORD Code, NTSTATUS
 		{
 			if (dwNumberOfBytesTransfered)
 			{
-				if (cnct == Code)
+				switch (Code)
 				{
+				case cnct:
 					OnSend(packet);
-				}
-				else
-				{
+					break;
+				case lstn:
 					f = OnRecv((PSTR)Pointer, (ULONG)dwNumberOfBytesTransfered);
+					break;
 				}
 			}
 
