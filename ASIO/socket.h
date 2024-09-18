@@ -22,6 +22,10 @@ class CSocketObject : public IO_OBJECT_TIMEOUT
 	virtual void IOCompletionRoutine(CDataPacket* , DWORD , NTSTATUS , ULONG_PTR , PVOID );
 protected:
 
+	virtual ~CSocketObject()
+	{
+		Close();
+	}
 	virtual void CloseObjectHandle(HANDLE hFile);
 
 public:
