@@ -111,9 +111,11 @@ VOID IO_IRP::OnIoComplete(PVOID Context, PIO_STATUS_BLOCK IoSB)
 {
 	CPP_FUNCTION;
 	BOOL bDelete = Pointer != this;
-	reinterpret_cast<IO_OBJECT*>(Context)->IOCompletionRoutine(m_packet, m_Code, IoSB->Status, IoSB->Information, Pointer);
+	CDataPacket* packet = m_packet;
+	m_packet = 0;
+	reinterpret_cast<IO_OBJECT*>(Context)->IOCompletionRoutine(packet, m_Code, IoSB->Status, IoSB->Information, Pointer);
 	reinterpret_cast<IO_OBJECT*>(Context)->Release();
-	if (m_packet) m_packet->Release(), m_packet = 0;
+	if (packet) packet->Release(); 
 	if (bDelete) delete this;
 }
 
@@ -242,9 +244,11 @@ VOID NT_IRP::OnIoComplete(
 {
 	CPP_FUNCTION;
 	BOOL bDelete = Pointer != this;
-	reinterpret_cast<IO_OBJECT*>(Context)->IOCompletionRoutine(m_packet, m_Code, IoSB->Status, IoSB->Information, Pointer);
+	CDataPacket* packet = m_packet;
+	m_packet = 0;
+	reinterpret_cast<IO_OBJECT*>(Context)->IOCompletionRoutine(packet, m_Code, IoSB->Status, IoSB->Information, Pointer);
 	reinterpret_cast<IO_OBJECT*>(Context)->Release();
-	if (m_packet) m_packet->Release(), m_packet = 0;
+	if (packet) packet->Release();
 	if (bDelete) delete this;
 }
 

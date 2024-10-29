@@ -59,6 +59,11 @@ class __declspec(novtable) IO_OBJECT
 
 protected:
 
+	PTP_IO GetAsyncIo()
+	{
+		return m_Io;
+	}
+
 	IO_OBJECT()
 	{
 		ReferenceDll();
