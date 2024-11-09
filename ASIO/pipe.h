@@ -87,6 +87,11 @@ protected:
 
 	virtual ULONG GetReadBuffer(void** ppv);
 
+	void SetConnected()
+	{
+		m_connectionLock.Init();
+	}
+
 public:
 
 	NTSTATUS Assign(HANDLE hFile);

@@ -6,13 +6,14 @@ typedef struct USER_SESSION_KEY {
 	UCHAR data[16];
 }* PUSER_SESSION_KEY;
 
+
 typedef struct NETLOGON_VALIDATION_SAM_INFO4 {
-	OLD_LARGE_INTEGER LogonTime;
-	OLD_LARGE_INTEGER LogoffTime;
-	OLD_LARGE_INTEGER KickOffTime;
-	OLD_LARGE_INTEGER PasswordLastSet;
-	OLD_LARGE_INTEGER PasswordCanChange;
-	OLD_LARGE_INTEGER PasswordMustChange;
+	FILETIME LogonTime;
+	FILETIME LogoffTime;
+	FILETIME KickOffTime;
+	FILETIME PasswordLastSet;
+	FILETIME PasswordCanChange;
+	FILETIME PasswordMustChange;
 	UNICODE_STRING EffectiveName;
 	UNICODE_STRING FullName;
 	UNICODE_STRING LogonScript;
@@ -33,8 +34,8 @@ typedef struct NETLOGON_VALIDATION_SAM_INFO4 {
 	UCHAR LMKey[8];
 	ULONG UserAccountControl;
 	ULONG SubAuthStatus;
-	OLD_LARGE_INTEGER LastSuccessfulILogon;
-	OLD_LARGE_INTEGER LastFailedILogon;
+	FILETIME LastSuccessfulILogon;
+	FILETIME LastFailedILogon;
 	ULONG FailedILogonCount;
 	ULONG Reserved4;
 	ULONG SidCount;

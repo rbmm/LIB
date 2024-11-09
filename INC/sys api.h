@@ -1008,7 +1008,13 @@ NTDLL_(ULONG) RtlGetNtGlobalFlags();
 typedef void (CALLBACK * DO_CHECK)(LPVOID Context, LPCSTR ImportDllName);
 NTDLL LdrVerifyImageMatchesChecksum(HANDLE hFile, DO_CHECK pfn, LPVOID Context, PWORD pCharacteristics);
 
-NTDLL LdrGetDllHandle(LPCWSTR szPath, int, PCUNICODE_STRING DllName, HMODULE* phmod);
+NTDLL
+LdrGetDllHandle(
+				  _In_opt_ PWSTR DllPath,
+				  _In_opt_ PULONG DllCharacteristics,
+				  _In_ PUNICODE_STRING DllName,
+				  _Out_opt_ HMODULE *DllHandle
+				  );
 
 #define LDR_GET_DLL_HANDLE_EX_UNCHANGED_REFCOUNT 0x00000001
 #define LDR_GET_DLL_HANDLE_EX_PIN 0x00000002
