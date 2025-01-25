@@ -127,6 +127,11 @@ struct CID : CLIENT_ID
 		UniqueThread = _UniqueThread;
 		UniqueProcess = _UniqueProcess;
 	}
+
+	CLIENT_ID* operator&()
+	{
+		return this;
+	}
 };
 
 ///////////////////////////////////////////////////////////////
