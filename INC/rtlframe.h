@@ -28,7 +28,8 @@ struct _RTL_FRAME : TEB_ACTIVE_FRAME
 	}
 };
 
-template<typename C> struct RTL_FRAME : public _RTL_FRAME, public C 
+template<typename Base> 
+struct RTL_FRAME : public _RTL_FRAME, public Base 
 {
 	static const TEB_ACTIVE_FRAME_CONTEXT* getContext()
 	{
@@ -36,11 +37,12 @@ template<typename C> struct RTL_FRAME : public _RTL_FRAME, public C
 		return &s;
 	}
 
-	RTL_FRAME() : _RTL_FRAME(getContext())
+	template<typename... Types> 
+	RTL_FRAME(Types... args) : Base(args...), _RTL_FRAME(getContext())
 	{
 	}
 
-	static C* get()
+	static Base* get()
 	{
 #ifdef _PRINT_CPP_NAMES_
 		__pragma(message("; " __FUNCSIG__ "\r\nextern " __FUNCDNAME__ " : PROC"))

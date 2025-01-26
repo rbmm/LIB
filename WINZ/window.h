@@ -17,6 +17,8 @@ class WINZ_API Z_INTERFACE("8E9D9C1D-763E-4ad0-8C68-C2D6F232BB45") ZWnd : public
 {
 	friend ZFrameWnd;
 
+	static BOOL Register();
+
 	LRESULT WrapperWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
 	static LRESULT CALLBACK _WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)ASM_FUNCTION;
@@ -46,6 +48,19 @@ public:
 
 	virtual HRESULT QI(REFIID riid, void **ppvObject);
 
+	HWND MdiChildCreate(
+		DWORD dwExStyle,
+		PCWSTR lpWindowName,
+		DWORD dwStyle,
+		int x,
+		int y,
+		int nWidth,
+		int nHeight,
+		HWND hWndParent,
+		HMENU hMenu,
+		PVOID lpParam = 0
+		);
+
 	HWND Create(
 		DWORD dwExStyle,
 		PCWSTR lpWindowName,
@@ -56,7 +71,7 @@ public:
 		int nHeight,
 		HWND hWndParent,
 		HMENU hMenu,
-		PVOID lpParam
+		PVOID lpParam = 0
 		);
 
 	HWND getHWND(){ return _hWnd; }
@@ -103,9 +118,9 @@ public:
 
 	virtual HRESULT QI(REFIID riid, void **ppvObject);
 
-	HWND Create(HINSTANCE hInstance, LPCWSTR lpTemplateName, HWND hWndParent, LPARAM dwInitParam);
+	HWND Create(HINSTANCE hInstance, LPCWSTR lpTemplateName, HWND hWndParent, LPARAM dwInitParam = 0);
 
-	INT_PTR DoModal(HINSTANCE hInstance, LPCWSTR lpTemplateName, HWND hWndParent, LPARAM dwInitParam);
+	INT_PTR DoModal(HINSTANCE hInstance, LPCWSTR lpTemplateName, HWND hWndParent, LPARAM dwInitParam = 0);
 
 	HWND getHWND(){ return _hWnd; }
 

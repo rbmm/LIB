@@ -169,18 +169,17 @@ public:
 
 struct WINZ_API _ZGLOBALS
 {
-	LIST_ENTRY _fontListHead, _docListHead;
+	LIST_ENTRY _fontListHead = { &_fontListHead, &_fontListHead }, _docListHead = { &_docListHead, &_docListHead };
 	union
 	{
-		ZApp* App;
+		ZApp* App = 0;
 		ZAppEx* AppEx;
 	};
-	class ZSDIFrameWnd* MainFrame;
-	ZRegistry* Reg;
-	ZFont* Font;
-	HWND hwndMain;
+	class ZSDIFrameWnd* MainFrame = 0;
+	ZRegistry* Reg = 0;
+	ZFont* Font = 0;
+	HWND hwndMain = 0;
 
-	_ZGLOBALS();
 	~_ZGLOBALS();
 
 	static ZAppEx* getApp();
@@ -190,7 +189,7 @@ struct WINZ_API _ZGLOBALS
 	static ZRegistry* getRegistry();
 };
 
-typedef RTL_FRAME<_ZGLOBALS> ZGLOBALS;
+using ZGLOBALS = RTL_FRAME<_ZGLOBALS>;
 
 inline BOOL IsRegSz(PKEY_VALUE_PARTIAL_INFORMATION pkvpi)
 {

@@ -78,69 +78,68 @@ namespace {
 			}
 		}
 	}
-
-	LONG gdwTlsIndex = TLS_OUT_OF_INDEXES;
-
-	void __cdecl freeTlsIndex()
-	{
-		TlsFree(gdwTlsIndex);
-	}
-
-	ULONG getTlsIndex()
-	{
-		if (gdwTlsIndex == TLS_OUT_OF_INDEXES)
-		{
-			ULONG dwTlsIndex = TlsAlloc();
-
-			if (dwTlsIndex != TLS_OUT_OF_INDEXES)
-			{
-				if (InterlockedCompareExchangeNoFence(&gdwTlsIndex, dwTlsIndex, TLS_OUT_OF_INDEXES) == (LONG)TLS_OUT_OF_INDEXES)
-				{
-					atexit(freeTlsIndex);
-
-					return dwTlsIndex;
-				}
-
-				TlsFree(dwTlsIndex);
-			}
-		}
-
-		return gdwTlsIndex;
-	}
-
-	BOOL SetThis(PVOID pv)
-	{
-		ULONG dwTlsIndex = getTlsIndex();
-
-		if (dwTlsIndex == TLS_OUT_OF_INDEXES)
-		{
-			return FALSE;
-		}
-
-		return TlsSetValue(dwTlsIndex, pv);
-	}
 };
 
-LRESULT ZWnd::MStartWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+struct Y_CREATE_PARAMS 
 {
-	SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR)this);
-	SetWindowLongPtr(hwnd, GWLP_WNDPROC, (LONG_PTR)_WindowProc);
-	AddRef();
-	_dwCallCount = 1 << 31;
-	_hWnd = hwnd;
-	return WrapperWindowProc(hwnd, uMsg, wParam, lParam);
-}
+	union {
+		ZDlg* ThisDlg;
+		ZWnd* ThisWnd;
+	};
+	union {
+		LPARAM lParam;
+		PVOID pvParam;
+	};
 
-LRESULT CALLBACK ZWnd::StartWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+	BOOL bMdi;
+};
+
+ZWnd* FixCreateParams(_Inout_ CREATESTRUCT* lpcs, _Out_ LPARAM** pplParam, _Out_ LPARAM* plParam)
 {
-	return reinterpret_cast<ZWnd*>(TlsGetValue(getTlsIndex()))->MStartWindowProc(hwnd, uMsg, wParam, lParam);
+	if (MDICREATESTRUCT* mcs = reinterpret_cast<MDICREATESTRUCT*>(lpcs->lpCreateParams))
+	{
+		Y_CREATE_PARAMS* params = reinterpret_cast<Y_CREATE_PARAMS*>(mcs->lParam);
+
+		LPARAM lParam = params->lParam;
+
+		if (params->bMdi)
+		{
+			*plParam = (LPARAM)params;
+			*pplParam = &mcs->lParam;
+			mcs->lParam = lParam;
+		}
+		else
+		{
+			*plParam = (LPARAM)mcs;
+			*pplParam = (LPARAM*)&lpcs->lpCreateParams;
+			lpcs->lpCreateParams = (PVOID)lParam;
+		}
+
+		return params->ThisWnd;
+	}
+	
+	return 0;
 }
 
 LRESULT ZWnd::WrapperWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
 	CPP_FUNCTION;
 	_dwCallCount++;
+
+	if (WM_CREATE == uMsg) _UNLIKELY
+	{
+		LPARAM *ppl, pl;
+		if (ZWnd* This = FixCreateParams(reinterpret_cast<CREATESTRUCT*>(lParam), &ppl, &pl))
+		{
+			if (this != This)
+			{
+				__debugbreak();
+			}
+		}
+	}
+
 	lParam = WindowProc(hwnd, uMsg, wParam, lParam);
+
 	if (!--_dwCallCount)
 	{
 		_hWnd = 0;
@@ -154,6 +153,29 @@ LRESULT ZWnd::WrapperWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 //{
 //	return reinterpret_cast<ZWnd*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA))->WrapperWindowProc(hwnd, uMsg, wParam, lParam);
 //}
+
+LRESULT ZWnd::MStartWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+{
+	SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR)this);
+	SetWindowLongPtr(hwnd, GWLP_WNDPROC, (LONG_PTR)_WindowProc);
+	AddRef();
+	_dwCallCount = 1 << 31;
+	_hWnd = hwnd;
+	return WrapperWindowProc(hwnd, uMsg, wParam, lParam);
+}
+
+LRESULT CALLBACK ZWnd::StartWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+{
+	if (WM_NCCREATE == uMsg)
+	{
+		LPARAM *ppl, pl;
+		lParam = FixCreateParams(reinterpret_cast<CREATESTRUCT*>(lParam), &ppl, &pl)->MStartWindowProc(hwnd, uMsg, wParam, lParam);
+		*ppl = pl;
+		return lParam;
+	}
+
+	return DefWindowProcW(hwnd, uMsg, wParam, lParam);
+}
 
 LRESULT ZWnd::DefWinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
@@ -178,11 +200,13 @@ LRESULT ZWnd::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 	return DefWinProc(hwnd, uMsg, wParam, lParam);
 }
 
-HWND ZWnd::Create( DWORD dwExStyle, PCWSTR lpWindowName, DWORD dwStyle, int x, int y, int nWidth, int nHeight, HWND hWndParent, HMENU hMenu, PVOID lpParam)
+BOOL ZWnd::Register()
 {
 	if (!ga)
 	{
-		WNDCLASS wndcls = { 0, StartWindowProc, 0, 0, (HINSTANCE)&__ImageBase, 0, CCursorCashe::GetCursor(CCursorCashe::ARROW), 0, 0, szwndcls };
+		WNDCLASS wndcls = { 
+			0, StartWindowProc, 0, 0, (HINSTANCE)&__ImageBase, 0, CCursorCashe::GetCursor(CCursorCashe::ARROW), 0, 0, szwndcls 
+		};
 		if (ATOM a = RegisterClass(&wndcls))
 		{
 			ga = a;
@@ -190,12 +214,61 @@ HWND ZWnd::Create( DWORD dwExStyle, PCWSTR lpWindowName, DWORD dwStyle, int x, i
 		}
 		else if (GetLastError() != ERROR_CLASS_ALREADY_EXISTS)
 		{
-			return NULL;
+			return FALSE;
 		}
 	}
 
-	return SetThis(this) ? CreateWindowExW(dwExStyle, szwndcls, lpWindowName, dwStyle, x, y, nWidth, nHeight, 
-		hWndParent, hMenu, (HINSTANCE)&__ImageBase, lpParam) : NULL;
+	return TRUE;
+}
+
+HWND ZWnd::Create(DWORD dwExStyle, 
+				  PCWSTR lpWindowName, 
+				  DWORD dwStyle, 
+				  int x, 
+				  int y, 
+				  int nWidth, 
+				  int nHeight, 
+				  HWND hWndParent, 
+				  HMENU hMenu, 
+				  PVOID lpParam)
+{
+	if (!Register())
+	{
+		return 0;
+	}
+
+	Y_CREATE_PARAMS params;
+	params.ThisWnd = this;
+	params.pvParam = lpParam;
+	params.bMdi = FALSE;
+	MDICREATESTRUCT mcs = {};
+	mcs.lParam = (LPARAM)&params;
+	return CreateWindowExW(dwExStyle, szwndcls, lpWindowName, dwStyle, x, y, nWidth, nHeight, 
+		hWndParent, hMenu, (HINSTANCE)&__ImageBase, &mcs);
+}
+
+HWND ZWnd::MdiChildCreate(DWORD dwExStyle, 
+						  PCWSTR lpWindowName, 
+						  DWORD dwStyle, 
+						  int x, 
+						  int y, 
+						  int nWidth, 
+						  int nHeight, 
+						  HWND hWndParent, 
+						  HMENU hMenu, 
+						  PVOID lpParam)
+{
+	if (!Register())
+	{
+		return 0;
+	}
+
+	Y_CREATE_PARAMS params;
+	params.ThisWnd = this;
+	params.pvParam = lpParam;
+	params.bMdi = TRUE;
+	return CreateWindowExW(dwExStyle, szwndcls, lpWindowName, dwStyle, x, y, nWidth, nHeight, 
+		hWndParent, hMenu, (HINSTANCE)&__ImageBase, &params);
 }
 
 ZWnd* ZWnd::FromHWND(HWND hwnd)
@@ -248,7 +321,13 @@ INT_PTR ZDlg::MStartDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lP
 
 INT_PTR CALLBACK ZDlg::StartDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
-	return reinterpret_cast<ZDlg*>(TlsGetValue(getTlsIndex()))->MStartDialogProc(hwndDlg, uMsg, wParam, lParam);
+	if (WM_INITDIALOG == uMsg)
+	{
+		Y_CREATE_PARAMS* params = reinterpret_cast<Y_CREATE_PARAMS*>(lParam);
+
+		return params->ThisDlg->MStartDialogProc(hwndDlg, uMsg, wParam, params->lParam);
+	}
+	return 0;
 }
 
 INT_PTR ZDlg::WrapperDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
@@ -284,12 +363,16 @@ INT_PTR ZDlg::DialogProc(HWND /*hwndDlg*/, UINT uMsg, WPARAM /*wParam*/, LPARAM 
 
 HWND ZDlg::Create(HINSTANCE hInstance, LPCWSTR lpTemplateName, HWND hWndParent, LPARAM dwInitParam)
 {
-	return SetThis(this) ? CreateDialogParam(hInstance, lpTemplateName, hWndParent, StartDialogProc, dwInitParam) : NULL;
+	Y_CREATE_PARAMS params = { this, dwInitParam };
+
+	return CreateDialogParam(hInstance, lpTemplateName, hWndParent, StartDialogProc, (LPARAM)&params);
 }
 
 INT_PTR ZDlg::DoModal(HINSTANCE hInstance, LPCWSTR lpTemplateName, HWND hWndParent, LPARAM dwInitParam)
 {
-	return SetThis(this) ? DialogBoxParam(hInstance, lpTemplateName, hWndParent, StartDialogProc, dwInitParam) : -1;
+	Y_CREATE_PARAMS params = { this, dwInitParam };
+
+	return DialogBoxParam(hInstance, lpTemplateName, hWndParent, StartDialogProc, (LPARAM)&params);
 }
 
 BOOL ZDlg::IsDialog(HWND hwnd)
@@ -325,15 +408,15 @@ HRESULT ZDlg::QI(REFIID riid, void **ppvObject)
 
 BOOL IsDialogMessageEx(PMSG lpMsg)
 {
-	HWND hwnd = lpMsg->hwnd;
-
-	while (hwnd)
+	if (HWND hwnd = lpMsg->hwnd)
 	{
-		if (GetClassLongW(hwnd, GCW_ATOM) == (ULONG)(ULONG_PTR)WC_DIALOG)
+		do 
 		{
-			return IsDialogMessage(hwnd, lpMsg);
-		}
-		hwnd = GetParent(hwnd);
+			if (GetClassLongW(hwnd, GCW_ATOM) == (ULONG)(ULONG_PTR)WC_DIALOG)
+			{
+				return IsDialogMessage(hwnd, lpMsg);
+			}
+		} while (hwnd = GetParent(hwnd));
 	}
 
 	return FALSE;

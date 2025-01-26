@@ -210,10 +210,10 @@ BOOL ZApp::IsIdleMessage(UINT uMsg)
 	case WM_MOUSEHOVER:
 	case WM_NCMOUSELEAVE:
 	case WM_NCMOUSEHOVER:
-		return FALSE;
+		return TRUE;
 	}
 
-	return TRUE;
+	return FALSE;
 }
 
 void ZApp::OnIdle()
@@ -238,20 +238,20 @@ WPARAM ZApp::Run()
 
 		if (r == nCount)
 		{
-			BOOL bIdle = FALSE;
+			BOOL bIdle = TRUE;
 
 			MSG msg;
 
 			while (PeekMessage(&msg, 0, 0, 0, PM_REMOVE))
 			{
-				if (!bIdle)
+				if (bIdle)
 				{
 					bIdle = IsIdleMessage(msg.message);
 				}
 
 				if (PreTranslateMessage(&msg)) continue;
 
-				if (msg.message == WM_QUIT) 
+				if (WM_QUIT == msg.message) 
 				{
 					return msg.wParam;
 				}
@@ -731,13 +731,6 @@ BOOL ZFont::SetNewFont(PLOGFONT plf, BOOL bSave)
 
 //////////////////////////////////////////////////////////////////////////
 // ZGLOBALS
-
-_ZGLOBALS::_ZGLOBALS()
-{
-	InitializeListHead(&_docListHead);
-	InitializeListHead(&_fontListHead);
-	App = 0, Reg = 0, MainFrame = 0, hwndMain = 0, Font = 0;
-}
 
 _ZGLOBALS::~_ZGLOBALS()
 {
