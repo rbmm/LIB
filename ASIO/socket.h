@@ -34,12 +34,12 @@ public:
 	{
 	}
 	
-	virtual void OnIp(PSOCKADDR Address, DWORD /*AddressLength*/)
+	virtual void OnIp(PSOCKADDR Address, DWORD /*AddressLength*/, PVOID /*param*/)
 	{
 		OnIp(Address && Address->sa_family == AF_INET ? reinterpret_cast<sockaddr_in*>(Address)->sin_addr.S_un.S_addr : 0);
 	}
 
-	void DnsToIp(_In_ PCSTR Dns, _In_ USHORT QueryType = DNS_RTYPE_A, _In_ LONG QueryOptions = DNS_QUERY_STANDARD);
+	void DnsToIp(_In_ PCSTR Dns, _In_ USHORT QueryType = DNS_RTYPE_A, _In_ LONG QueryOptions = DNS_QUERY_STANDARD, _In_opt_ PVOID param = 0);
 
 	ULONG GetLocalAddr(PSOCKET_ADDRESS LocalAddr );
 	ULONG GetPort(PUSHORT Port);

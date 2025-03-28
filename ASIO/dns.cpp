@@ -175,6 +175,7 @@ struct DCD
 class CDnsSocket : public CUdpEndpoint
 {
 	CSocketObject* _pEndp;
+	PVOID _param;
 	ULONG _crc;
 	LONG _waitCount = 1;
 	ULONG _dwError = ERROR_TIMEOUT;
@@ -192,7 +193,7 @@ class CDnsSocket : public CUdpEndpoint
 			Close();
 			StopTimeout();
 			if (!Address) SetLastError(_dwError);
-			pEndp->OnIp(Address, AddressLength);
+			pEndp->OnIp(Address, AddressLength, _param);
 			pEndp->Release();
 		}
 	}
@@ -226,7 +227,7 @@ class CDnsSocket : public CUdpEndpoint
 	}
 public:
 
-	CDnsSocket(CSocketObject* pEndp) : _pEndp(pEndp)
+	CDnsSocket(CSocketObject* pEndp, _In_opt_ PVOID param) : _pEndp(pEndp), _param(param)
 	{
 		DbgPrint("%s<%p>\n", __FUNCTION__, this);
 		_pEndp->AddRef();
@@ -581,12 +582,15 @@ void CDnsSocket::OnRecv(PSTR Buffer, ULONG cbTransferred, CDataPacket* packet, [
 
 //////////////////////////////////////////////////////////////////////////
 
-void CSocketObject::DnsToIp(_In_ PCSTR Dns, _In_ USHORT QueryType/* = DNS_RTYPE_A*/, _In_ LONG QueryOptions /*= DNS_QUERY_STANDARD*/)
+void CSocketObject::DnsToIp(_In_ PCSTR Dns, 
+							_In_ USHORT QueryType/* = DNS_RTYPE_A*/, 
+							_In_ LONG QueryOptions /*= DNS_QUERY_STANDARD*/, 
+							_In_opt_ PVOID param /*= 0*/)
 {
 	if (strlen(Dns) > DNS_MAX_TEXT_STRING_LENGTH)
 	{
 		SetLastError(DNS_ERROR_NON_RFC_NAME);
-		OnIp(0, 0);
+		OnIp(0, 0, param);
 		return;
 	}
 
@@ -602,7 +606,7 @@ void CSocketObject::DnsToIp(_In_ PCSTR Dns, _In_ USHORT QueryType/* = DNS_RTYPE_
 			(si.Ipv4.sin_addr.S_un.S_addr = DnsCache::get(crc)))
 		{
 			si.Ipv4.sin_family = AF_INET;
-			OnIp((PSOCKADDR)&si.Ipv4, sizeof(si.Ipv4));
+			OnIp((PSOCKADDR)&si.Ipv4, sizeof(si.Ipv4), param);
 			return;
 		}
 		break;
@@ -610,13 +614,13 @@ void CSocketObject::DnsToIp(_In_ PCSTR Dns, _In_ USHORT QueryType/* = DNS_RTYPE_
 		if (0 <= RtlIpv6StringToAddressA(Dns, &c, &si.Ipv6.sin6_addr))
 		{
 			si.Ipv6.sin6_family = AF_INET6;
-			OnIp((PSOCKADDR)&si.Ipv6, sizeof(si.Ipv6));
+			OnIp((PSOCKADDR)&si.Ipv6, sizeof(si.Ipv6), param);
 			return;
 		}
 		break;
 	}
 
-	if (CDnsSocket* pDns = new CDnsSocket(this))
+	if (CDnsSocket* pDns = new CDnsSocket(this, param))
 	{
 		pDns->DnsToIp(Dns, crc, QueryType, QueryOptions);
 		pDns->Release();
@@ -624,7 +628,7 @@ void CSocketObject::DnsToIp(_In_ PCSTR Dns, _In_ USHORT QueryType/* = DNS_RTYPE_
 	else
 	{
 		SetLastError(ERROR_OUTOFMEMORY);
-		OnIp(0, 0);
+		OnIp(0, 0, param);
 	}
 }
 
