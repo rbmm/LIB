@@ -162,11 +162,12 @@ void IO_IRP::CheckErrorCode(IO_OBJECT* pObj, DWORD dwErrorCode, BOOL bSkippedOnS
 		if (!bSkippedOnSynchronous)
 		{
 	case ERROR_IO_PENDING:
-			return ;
+	case HRESULT_FROM_WIN32(ERROR_IO_PENDING):
+		return ;
 		}
 	}
 
-	TpCancelAsyncIoOperation(pObj->m_Io);
+	pObj->CancelIo();
 	Internal = dwErrorCode;
 	OnIoComplete(pObj, reinterpret_cast<PIO_STATUS_BLOCK>(this));
 }
@@ -185,7 +186,7 @@ void NT_IRP::CheckNtStatus(IO_OBJECT* pObj, NTSTATUS status, BOOL bSkippedOnSync
 
 	if (NT_ERROR(status) || bSkippedOnSynchronous)
 	{
-		TpCancelAsyncIoOperation(pObj->m_Io);
+		pObj->CancelIo();
 		Status = status;
 		OnIoComplete(pObj, this);
 	}

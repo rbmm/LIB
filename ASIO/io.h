@@ -54,7 +54,13 @@ class __declspec(novtable) IO_OBJECT
 	void StartIo()
 	{
 		AddRef();
-		if (m_Io) TpStartAsyncIoOperation(m_Io);
+		if (PTP_IO Io = m_Io) TpStartAsyncIoOperation(Io);
+	}
+
+	void CancelIo()
+	{
+		// Release() will be called from IO_IRP::OnIoComplete
+		if (PTP_IO Io = m_Io) TpCancelAsyncIoOperation(Io);
 	}
 
 protected:
