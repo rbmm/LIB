@@ -676,6 +676,43 @@ ULONG CTcpEndpoint::Send(const void* Buffer, ULONG cb)
 	return dwError;
 }
 
+ULONG CTcpEndpoint::SendV(PCSTR format, ...)
+{
+	CDataPacket* packet = 0;
+	PSTR buf = 0;
+	int len = 0;
+	ULONG dwErr = ERROR_INTERNAL_ERROR;
+	
+	va_list ap;
+	va_start(ap, format);
+
+	while (0 < (len = _vsnprintf(buf, len, format, ap)))
+	{
+		if (buf)
+		{
+			packet->setDataSize(len);
+			dwErr = Send(packet);
+			break;
+		}
+
+		if (!(packet = new (len) CDataPacket))
+		{
+			break;
+		}
+
+		buf = packet->getData();
+	}
+
+	va_end(ap);
+
+	if (packet)
+	{
+		packet->Release();
+	}
+
+	return dwErr;
+}
+
 ULONG CTcpEndpoint::Send(CDataPacket* packet)
 {
 	ULONG pad = packet->getPad();

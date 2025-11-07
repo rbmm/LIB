@@ -166,6 +166,7 @@ public:
 	void Close();
 	ULONG Send(CDataPacket* packet);	
 	ULONG Send(const void* Buffer, ULONG cb);	
+	ULONG SendV(PCSTR format, ...);	
 	CDataPacket* getDataPacket() { return m_packet; };
 
 	ULONG SendFile(HANDLE hFile,
