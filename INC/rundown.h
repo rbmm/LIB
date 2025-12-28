@@ -24,18 +24,15 @@ public:
 
 	_NODISCARD BOOL Acquire()
 	{
-		LONG Value, NewValue;
+		LONG Value = v_init, NewValue;
 
-		if (0 > (Value = _Value))
+		do 
 		{
-			do 
-			{
-				NewValue = InterlockedCompareExchangeNoFence(&_Value, Value + 1, Value);
+			NewValue = InterlockedCompareExchangeNoFence(&_Value, Value + 1, Value);
 
-				if (NewValue == Value) return TRUE;
+			if (NewValue == Value) return TRUE;
 
-			} while (0 > (Value = NewValue));
-		}
+		} while (0 > (Value = NewValue));
 
 		return FALSE;
 	}
