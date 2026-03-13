@@ -7,6 +7,8 @@ _NT_BEGIN
 #define LockSocket(socket) LockHandle((HANDLE&)socket)
 #define UnlockSocket() UnlockHandle()
 
+#define DbgPrint /##/
+
 #include "socket.h"
 
 ULONG WSA_ERROR(int i) 
@@ -335,6 +337,8 @@ void CTcpEndpoint::Close()
 
 void CTcpEndpoint::Disconnect(DWORD dwErrorReason)
 {
+	DbgPrint("%hs<%p>(%x)\r\n", __FUNCTION__, this, dwErrorReason);
+	//if (STATUS_MORE_PROCESSING_REQUIRED == dwErrorReason)return ;
 	if (LockConnection())
 	{
 		// no more new read/write/disconnect
@@ -349,6 +353,7 @@ void CTcpEndpoint::Disconnect(DWORD dwErrorReason)
 		case WSAEDISCON:
 		case ERROR_CONNECTION_ABORTED:
 			// we already disconnected
+			DbgPrint("%hs<%p> already\r\n", __FUNCTION__, this);
 			UnlockConnection();
 			return ;
 		}
@@ -356,20 +361,23 @@ void CTcpEndpoint::Disconnect(DWORD dwErrorReason)
 		// only once
 		if (InterlockedBitTestAndSetNoFence(&m_flags, flDisconectActive))
 		{
+			DbgPrint("%hs<%p> once\r\n", __FUNCTION__, this);
 			UnlockConnection();
 			return ;
 		}
 
 		if (IO_IRP* Irp = new IO_IRP(this, disc, 0))
 		{
-			ULONG err = ERROR_INVALID_HANDLE;
+			dwErrorReason = ERROR_INVALID_HANDLE;
 			SOCKET socket;
 			if (LockSocket(socket))
 			{
-				err = BOOL_TO_ERR(lpfnDisconnectEx(socket, Irp, TF_REUSE_SOCKET, 0));
+				dwErrorReason = BOOL_TO_ERR(lpfnDisconnectEx(socket, Irp, TF_REUSE_SOCKET, 0));
 				UnlockSocket();
 			}
-			Irp->CheckErrorCode(this, err);
+			DbgPrint("%hs<%p> = %x\r\n", __FUNCTION__, this, dwErrorReason);
+
+			Irp->CheckErrorCode(this, dwErrorReason);
 			return;
 		}
 
@@ -826,8 +834,24 @@ void CSocketObject::IOCompletionRoutine(CDataPacket* packet, DWORD Code, NTSTATU
 	}
 }
 
+BOOL CTcpEndpoint::OnConnect(ULONG dwError, PSTR Buffer, ULONG cbTransferred)
+{
+	if (OnConnect(dwError) && !dwError)
+	{
+		if (cbTransferred && Buffer)
+		{
+			return OnRecv(Buffer, cbTransferred);
+		}
+
+		return TRUE;
+	}
+
+	return FALSE;
+}
+
 void CTcpEndpoint::IOCompletionRoutine(CDataPacket* packet, DWORD Code, NTSTATUS dwError, ULONG_PTR dwNumberOfBytesTransfered, PVOID Pointer)
 {
+	DbgPrint("%hs<%p>(%.4hs %x %x %p)\r\n", __FUNCTION__, this, &Code, dwError, dwNumberOfBytesTransfered, Pointer);
 	BOOL f;
 
 	if (dwError)
@@ -838,13 +862,26 @@ void CTcpEndpoint::IOCompletionRoutine(CDataPacket* packet, DWORD Code, NTSTATUS
 	switch(Code) 
 	{
 	default: __debugbreak();
+
 	case recv:
 		if (!dwError && !dwNumberOfBytesTransfered && OnEmptyRecv())
 		{
 			break;
 		}
-		dwNumberOfBytesTransfered && (f = OnRecv((PSTR)Pointer, (ULONG)dwNumberOfBytesTransfered))
-			? 0 < f && Recv() : (Disconnect(dwError),0);
+
+		if (dwNumberOfBytesTransfered)
+		{
+			if (f = OnRecv((PSTR)Pointer, (ULONG)dwNumberOfBytesTransfered))
+			{
+				if (0 < f)
+				{
+					Recv();
+				}
+
+				break;
+			}
+		}
+		Disconnect(dwError);
 		break;
 
 	case send:
@@ -881,24 +918,19 @@ void CTcpEndpoint::IOCompletionRoutine(CDataPacket* packet, DWORD Code, NTSTATUS
 			m_connectionLock.Init();
 		}
 
-		f = OnConnect(dwError);
-
-		if (!dwError)
+		if (f = OnConnect(dwError, (PSTR)Pointer, (ULONG)dwNumberOfBytesTransfered))
 		{
-			if (dwNumberOfBytesTransfered)
+			if (0 < f)
 			{
-				switch (Code)
-				{
-				case cnct:
-					OnSend(packet);
-					break;
-				case lstn:
-					f = OnRecv((PSTR)Pointer, (ULONG)dwNumberOfBytesTransfered);
-					break;
-				}
+				Recv();
 			}
-
-			f ? 0 < f && Recv() : (Disconnect(),0);
+		}
+		else
+		{
+			if (!dwError)
+			{
+				Disconnect();
+			}
 		}
 
 		return;

@@ -108,10 +108,8 @@ protected:
 
 	enum {
 		flBind, flListenActive, flDisconectActive, flMaxFlag,
-		lstn = 'llll', cnct = 'cccc', recv = 'rrrr', send = 'ssss', disc = 'dddd'
+		lstn = 'llll', cnct = 'cccc', recv = 'rrrr', send = 'ssss', disc = 'dddd', rcds = 'rrdd'
 	};
-
-	CTcpEndpoint(CSocketObject*	pAddress = 0);
 
 	virtual ~CTcpEndpoint();
 
@@ -122,6 +120,7 @@ protected:
 	/************************************************************************/
 	/* implement this ! */
 
+	virtual BOOL OnConnect(ULONG dwError, PSTR Buffer, ULONG cbTransferred);	
 	virtual BOOL OnConnect(ULONG dwError) = 0;	
 
 	virtual void OnDisconnect() = 0;
@@ -150,8 +149,8 @@ protected:
 	}
 	/************************************************************************/
 	virtual void CloseObjectHandle(HANDLE hFile);
-
 public:
+	CTcpEndpoint(CSocketObject*	pAddress = 0);
 
 	ULONG Recv();// usually not call it direct !
 	ULONG Recv(WSABUF* lpBuffers, DWORD dwBufferCount, PVOID buf);// usually not call it direct !

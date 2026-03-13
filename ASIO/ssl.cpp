@@ -19,7 +19,39 @@ __pragma(message(" !! __DBG__ !! "))
 
 SECURITY_STATUS SharedCred::Acquire(ULONG fCredentialUse, PCCERT_CONTEXT pCertContext, ULONG dwFlags, ULONG grbitEnabledProtocols)
 { 
-	SCHANNEL_CRED sc { SCHANNEL_CRED_VERSION };
+	union {
+		SCH_CREDENTIALS scn = {};
+		SCHANNEL_CRED sc;
+	};
+
+	SECURITY_STATUS ss;
+
+#if 0
+	scn.dwVersion = SCH_CREDENTIALS_VERSION;
+
+	if (pCertContext)
+	{
+		scn.paCred = &pCertContext;
+		scn.cCreds = 1;
+	}
+
+	scn.dwFlags = dwFlags;
+
+	CRYPTO_SETTINGS cs = {};
+	RtlInitUnicodeString(&cs.strCngAlgId, BCRYPT_DH_ALGORITHM);
+
+	TLS_PARAMETERS tlp = { 0, 0, ~(SP_PROT_TLS1_3_CLIENT|SP_PROT_TLS1_2_CLIENT), 1, &cs };
+	scn.pTlsParameters = &tlp;
+	scn.cTlsParameters = 1;
+
+	SECURITY_STATUS ss = AcquireCredentialsHandleW(0, const_cast<PWSTR>(SCHANNEL_NAME), fCredentialUse, 0, &scn, 0, 0, &m_hCred, 0);
+
+	if (S_OK == ss)
+	{
+		return S_OK;
+	}
+#endif
+	sc.dwVersion = SCHANNEL_CRED_VERSION;
 
 	if (pCertContext)
 	{
@@ -30,7 +62,7 @@ SECURITY_STATUS SharedCred::Acquire(ULONG fCredentialUse, PCCERT_CONTEXT pCertCo
 	sc.dwFlags = dwFlags;
 	sc.grbitEnabledProtocols = grbitEnabledProtocols;
 
-	SECURITY_STATUS ss = AcquireCredentialsHandleW(0, const_cast<PWSTR>(SCHANNEL_NAME), fCredentialUse, 0, &sc, 0, 0, &m_hCred, 0);
+	ss = AcquireCredentialsHandleW(0, const_cast<PWSTR>(SCHANNEL_NAME), fCredentialUse, 0, &sc, 0, 0, &m_hCred, 0);
 
 	if (0 > ss) 
 	{
