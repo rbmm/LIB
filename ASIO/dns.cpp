@@ -277,7 +277,7 @@ void CDnsSocket::DnsToIp(_In_ PCSTR Dns, _In_ ULONG crc, _In_ USHORT QueryType, 
 
 	qsort(DnsServerAddresses, i, sizeof(ULONG), compareDWORD);
 
-	if (ULONG dwError = Create(0))
+	if (ULONG dwError = Create((WORD)0, (ULONG)0))
 	{
 		_dwError = dwError;
 		return ;

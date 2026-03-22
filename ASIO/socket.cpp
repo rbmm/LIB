@@ -161,6 +161,42 @@ ULONG CUdpEndpoint::Create(WORD port, ULONG ip)
 	return Create((sockaddr*)&asi, sizeof(asi));
 }
 
+ULONG CUdpEndpoint::Create(PSOCKADDR_INET psi)
+{
+	switch (psi->si_family)
+	{
+	case AF_INET:
+		return Create((PSOCKADDR)&psi->Ipv4, sizeof(psi->Ipv4));
+	case AF_INET6:
+		return Create((PSOCKADDR)&psi->Ipv6, sizeof(psi->Ipv6));
+	}
+	return ERROR_INVALID_PARAMETER;
+}
+
+ULONG CUdpEndpoint::SendTo(PSOCKADDR_INET psi, CDataPacket* packet)
+{
+	switch (psi->si_family)
+	{
+	case AF_INET:
+		return SendTo((PSOCKADDR)&psi->Ipv4, sizeof(psi->Ipv4), packet);
+	case AF_INET6:
+		return SendTo((PSOCKADDR)&psi->Ipv6, sizeof(psi->Ipv6), packet);
+	}
+	return ERROR_INVALID_PARAMETER;
+}
+
+ULONG CUdpEndpoint::SendTo(PSOCKADDR_INET psi, const void* lpData, DWORD cbData)
+{
+	switch (psi->si_family)
+	{
+	case AF_INET:
+		return SendTo((PSOCKADDR)&psi->Ipv4, sizeof(psi->Ipv4), lpData, cbData);
+	case AF_INET6:
+		return SendTo((PSOCKADDR)&psi->Ipv6, sizeof(psi->Ipv6), lpData, cbData);
+	}
+	return ERROR_INVALID_PARAMETER;
+}
+
 ULONG CUdpEndpoint::Create(PSOCKADDR Address, DWORD AddressLength)
 {
 	ULONG err = CSocketObject::Create(Address->sa_family, SOCK_DGRAM, IPPROTO_UDP);
@@ -535,6 +571,18 @@ ULONG CTcpEndpoint::GetConnectData(void** ppSendBuffer)
 
 	*ppSendBuffer = pSendBuffer;
 	return dwSendDataLength;
+}
+
+ULONG CTcpEndpoint::Connect(PSOCKADDR_INET psi)
+{
+	switch (psi->si_family)
+	{
+	case AF_INET:
+		return Connect((PSOCKADDR)&psi->Ipv4, sizeof(psi->Ipv4));
+	case AF_INET6:
+		return Connect((PSOCKADDR)&psi->Ipv6, sizeof(psi->Ipv6));
+	}
+	return ERROR_INVALID_PARAMETER;
 }
 
 ULONG CTcpEndpoint::Connect(ULONG IpAddr, USHORT Port)

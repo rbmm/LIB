@@ -72,7 +72,10 @@ public:
 
 	ULONG Create(WORD Port, ULONG ip = 0);
 	ULONG Create(PSOCKADDR Address, DWORD AddressLength);
+	ULONG Create(PSOCKADDR_INET psi);
 	ULONG RecvFrom(CDataPacket* packet);
+	ULONG SendTo(PSOCKADDR_INET psi, CDataPacket* packet);	
+	ULONG SendTo(PSOCKADDR_INET psi, const void* lpData, DWORD cbData);	
 	ULONG SendTo(PSOCKADDR Address, DWORD AddressLength, CDataPacket* packet);	
 	ULONG SendTo(PSOCKADDR Address, DWORD AddressLength, const void* lpData, DWORD cbData);	
 	ULONG SendTo(ULONG IpAddr, USHORT Port, CDataPacket* packet);	
@@ -160,6 +163,7 @@ public:
 	
 	ULONG Connect(ULONG IpAddr, USHORT Port);
 	ULONG Connect(PSOCKADDR RemoteAddress, DWORD RemoteAddressLength);
+	ULONG Connect(PSOCKADDR_INET psi);
 
 	void Disconnect(ULONG dwErrorReason = NOERROR);
 	void Close();
