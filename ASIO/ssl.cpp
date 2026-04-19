@@ -17,7 +17,11 @@ __pragma(message(" !! __DBG__ !! "))
 #define DumpBytes /##/
 #endif
 
-SECURITY_STATUS SharedCred::Acquire(ULONG fCredentialUse, PCCERT_CONTEXT pCertContext, ULONG dwFlags, ULONG grbitEnabledProtocols)
+SECURITY_STATUS SharedCred::Acquire(_In_ ULONG fCredentialUse, 
+									_In_opt_ PCCERT_CONTEXT pCertContext, 
+									_In_opt_ ULONG dwFlags, 
+									_In_opt_ ULONG grbitEnabledProtocols,
+									_In_opt_ HCERTSTORE hRootStore)
 { 
 	union {
 		SCH_CREDENTIALS scn = {};
@@ -61,13 +65,14 @@ SECURITY_STATUS SharedCred::Acquire(ULONG fCredentialUse, PCCERT_CONTEXT pCertCo
 
 	sc.dwFlags = dwFlags;
 	sc.grbitEnabledProtocols = grbitEnabledProtocols;
+	sc.hRootStore = hRootStore;
 
 	ss = AcquireCredentialsHandleW(0, const_cast<PWSTR>(SCHANNEL_NAME), fCredentialUse, 0, &sc, 0, 0, &m_hCred, 0);
 
 	if (0 > ss) 
 	{
 		m_hCred.dwLower = 0, m_hCred.dwUpper = 0;
-		DbgPrint("\r\n%p>%s(%p)=%x\r\n", this, __FUNCTION__, pCertContext, ss);
+		DbgPrint("\r\n%p>%hs(%p)=%x\r\n", this, __FUNCTION__, pCertContext, ss);
 	}
 
 	return ss;
@@ -623,7 +628,7 @@ SECURITY_STATUS CSSLStream::Shutdown()
 	ULONG dw = SCHANNEL_SHUTDOWN;
 	SecBuffer sb = { sizeof(dw), SECBUFFER_TOKEN, &dw };
 	SecBufferDesc sbd = { SECBUFFER_VERSION, 1, &sb };
-	SECURITY_STATUS ss = ::ApplyControlToken(this, &sbd);
+	SECURITY_STATUS ss = ApplyControlToken(this, &sbd);
 
 	if (ss != SEC_E_OK)
 	{

@@ -5,65 +5,9 @@ _NT_BEGIN
 
 #include "pipe.h"
 
-NTSTATUS CreatePipeAnonymousPairPre7(PHANDLE phServerPipe, PHANDLE phClientPipe, ULONG Flags, DWORD nInBufferSize)
-{
-	IO_STATUS_BLOCK iosb;
-
-	static LONG s;
-	if (!s)
-	{
-		ULONG seed = GetTickCount();
-		InterlockedCompareExchange(&s, RtlRandomEx(&seed), 0);
-	}
-
-	WCHAR name[64];
-
-	swprintf(name, L"\\Device\\NamedPipe\\Win32Pipes.%08x.%08x", GetCurrentProcessId(), InterlockedIncrement(&s));
-
-	UNICODE_STRING ObjectName;
-	RtlInitUnicodeString(&ObjectName, name);
-
-	OBJECT_ATTRIBUTES oa = { 
-		sizeof(oa), 0, &ObjectName, 
-		Flags & FLAG_PIPE_SERVER_INHERIT ? OBJ_CASE_INSENSITIVE | OBJ_INHERIT : OBJ_CASE_INSENSITIVE
-	};
-
-	NTSTATUS status;
-
-	static LARGE_INTEGER timeout = { 0, MINLONG };
-
-	if (0 <= (status = ZwCreateNamedPipeFile(phServerPipe,
-		FILE_READ_ATTRIBUTES|FILE_READ_DATA|
-		FILE_WRITE_ATTRIBUTES|FILE_WRITE_DATA|
-		FILE_CREATE_PIPE_INSTANCE, 
-		&oa, &iosb, FILE_SHARE_READ|FILE_SHARE_WRITE,
-		FILE_CREATE, 
-		Flags & FLAG_PIPE_SERVER_SYNCHRONOUS ? FILE_SYNCHRONOUS_IO_NONALERT : 0, 
-		FILE_PIPE_BYTE_STREAM_TYPE, FILE_PIPE_BYTE_STREAM_MODE,
-		FILE_PIPE_QUEUE_OPERATION, 1, nInBufferSize, nInBufferSize, &timeout)))
-	{
-		oa.Attributes = (Flags & FLAG_PIPE_CLIENT_INHERIT) ? OBJ_CASE_INSENSITIVE | OBJ_INHERIT : OBJ_CASE_INSENSITIVE;
-
-		if (0 > (status = NtOpenFile(phClientPipe, SYNCHRONIZE|FILE_READ_ATTRIBUTES|FILE_READ_DATA|
-			FILE_WRITE_ATTRIBUTES|FILE_WRITE_DATA, &oa, &iosb, FILE_SHARE_VALID_FLAGS, 
-			Flags & FLAG_PIPE_CLIENT_SYNCHRONOUS ? FILE_SYNCHRONOUS_IO_NONALERT : 0)))
-		{
-			NtClose(*phServerPipe);
-			*phServerPipe = 0;
-		}
-	}
-
-	return status;
-}
-
 // win7+
 NTSTATUS CreatePipeAnonymousPair(PHANDLE phServerPipe, PHANDLE phClientPipe, ULONG Flags, DWORD nInBufferSize)
 {
-	if (g_nt_ver.Version < _WIN32_WINNT_WIN7)
-	{
-		return CreatePipeAnonymousPairPre7(phServerPipe, phClientPipe, Flags, nInBufferSize);
-	}
-
 	HANDLE hFile;
 
 	IO_STATUS_BLOCK iosb;
@@ -84,6 +28,13 @@ NTSTATUS CreatePipeAnonymousPair(PHANDLE phServerPipe, PHANDLE phClientPipe, ULO
 		oa.Attributes = (Flags & FLAG_PIPE_SERVER_INHERIT) ? OBJ_INHERIT : 0;
 		oa.ObjectName = &empty;
 
+		ULONG NamedPipeType = FILE_PIPE_BYTE_STREAM_TYPE, ReadMode = FILE_PIPE_BYTE_STREAM_MODE;
+
+		if (FLAG_PIPE_SERVER_MESSAGE_MODE & Flags)
+		{
+			NamedPipeType = FILE_PIPE_MESSAGE_TYPE, ReadMode = FILE_PIPE_MESSAGE_MODE;
+		}
+
 		if (0 <= (status = ZwCreateNamedPipeFile(phServerPipe,
 			FILE_READ_ATTRIBUTES|FILE_READ_DATA|
 			FILE_WRITE_ATTRIBUTES|FILE_WRITE_DATA|
@@ -91,7 +42,7 @@ NTSTATUS CreatePipeAnonymousPair(PHANDLE phServerPipe, PHANDLE phClientPipe, ULO
 			&oa, &iosb, FILE_SHARE_READ|FILE_SHARE_WRITE,
 			FILE_CREATE, 
 			Flags & FLAG_PIPE_SERVER_SYNCHRONOUS ? FILE_SYNCHRONOUS_IO_NONALERT : 0, 
-			FILE_PIPE_BYTE_STREAM_TYPE, FILE_PIPE_BYTE_STREAM_MODE,
+			NamedPipeType, ReadMode,
 			FILE_PIPE_QUEUE_OPERATION, 1, nInBufferSize, nInBufferSize, &timeout)))
 		{
 			oa.RootDirectory = *phServerPipe;
@@ -101,8 +52,20 @@ NTSTATUS CreatePipeAnonymousPair(PHANDLE phServerPipe, PHANDLE phClientPipe, ULO
 				FILE_WRITE_ATTRIBUTES|FILE_WRITE_DATA, &oa, &iosb, FILE_SHARE_VALID_FLAGS, 
 				Flags & FLAG_PIPE_CLIENT_SYNCHRONOUS ? FILE_SYNCHRONOUS_IO_NONALERT : 0)))
 			{
-				NtClose(oa.RootDirectory);
-				*phServerPipe = 0;
+__0:
+				NtClose(oa.RootDirectory), *phServerPipe = 0;
+			}
+			else
+			{
+				if (FLAG_PIPE_CLIENT_MESSAGE_MODE & Flags)
+				{
+					FILE_PIPE_INFORMATION fpi = { FILE_PIPE_MESSAGE_MODE, FILE_PIPE_QUEUE_OPERATION };
+					if (0 > (status = NtSetInformationFile(*phClientPipe, &iosb, &fpi, sizeof(fpi), FilePipeInformation)))
+					{
+						NtClose(*phClientPipe), *phClientPipe = 0;
+						goto __0;
+					}
+				}
 			}
 		}
 
@@ -140,7 +103,7 @@ NTSTATUS CPipeEnd::Assign(HANDLE hFile)
 	return STATUS_SUCCESS;
 }
 
-NTSTATUS CPipeEnd::Create(POBJECT_ATTRIBUTES poa, ULONG InBufferSize, DWORD nMaxInstances)
+NTSTATUS CPipeEnd::Create(POBJECT_ATTRIBUTES poa, ULONG InBufferSize, DWORD nMaxInstances, ULONG PipeType)
 {
 	HANDLE hFile;
 	IO_STATUS_BLOCK iosb;
@@ -153,13 +116,23 @@ NTSTATUS CPipeEnd::Create(POBJECT_ATTRIBUTES poa, ULONG InBufferSize, DWORD nMax
 		FILE_WRITE_ATTRIBUTES|FILE_WRITE_DATA|
 		FILE_CREATE_PIPE_INSTANCE, 
 		poa, &iosb, FILE_SHARE_READ|FILE_SHARE_WRITE,
-		FILE_OPEN_IF, 0, FILE_PIPE_BYTE_STREAM_TYPE, FILE_PIPE_BYTE_STREAM_MODE,
+		FILE_OPEN_IF, 0, PipeType, 
+		FILE_PIPE_BYTE_STREAM_TYPE == PipeType ? FILE_PIPE_BYTE_STREAM_MODE : FILE_PIPE_MESSAGE_MODE,
 		FILE_PIPE_QUEUE_OPERATION, nMaxInstances, InBufferSize, InBufferSize, &timeout)
 		:
 		NtOpenFile(&hFile, 
 		FILE_READ_ATTRIBUTES|FILE_READ_DATA|
 		FILE_WRITE_ATTRIBUTES|FILE_WRITE_DATA,
 		poa, &iosb, FILE_SHARE_READ|FILE_SHARE_WRITE, 0);
+
+	if (FILE_PIPE_BYTE_STREAM_TYPE != PipeType && !IsServer())
+	{
+		FILE_PIPE_INFORMATION fpi = { FILE_PIPE_MESSAGE_MODE, FILE_PIPE_QUEUE_OPERATION };
+		if (0 > (status = NtSetInformationFile(hFile, &iosb, &fpi, sizeof(fpi), FilePipeInformation)))
+		{
+			NtClose(hFile);
+		}
+	}
 
 	return 0 > status ? status : Assign(hFile);
 }
@@ -198,9 +171,14 @@ NTSTATUS CPipeEnd::Read(PVOID pv, ULONG cb)
 			HANDLE hPipe;
 			if (LockHandle(hPipe))
 			{
-				status = UseApcCompletion() ? 
-					NtReadFile(hPipe, 0, NT_IRP::ApcRoutine, this, Irp, pv, cb, 0, 0):
-					NtReadFile(hPipe, 0,                  0,  Irp, Irp, pv, cb, 0, 0);
+				PIO_APC_ROUTINE ApcRoutine = 0;
+				PVOID ApcContext = Irp;
+				if (UseApcCompletion())
+				{
+					ApcRoutine = NT_IRP::ApcRoutine;
+					ApcContext = this;
+				}
+				status = NtReadFile(hPipe, 0, ApcRoutine, ApcContext, Irp, pv, cb, 0, 0);
 				UnlockHandle();
 			}
 			return Irp->CheckNtStatus(this, status), 0;
@@ -231,10 +209,15 @@ NTSTATUS CPipeEnd::Write(CDataPacket* packet)
 			{
 				PVOID pv = packet->getData() + pad;
 				ULONG cb = packet->getDataSize() - pad;
+				PIO_APC_ROUTINE ApcRoutine = 0;
+				PVOID ApcContext = Irp;
+				if (UseApcCompletion())
+				{
+					ApcRoutine = NT_IRP::ApcRoutine;
+					ApcContext = this;
+				}
 
-				status = UseApcCompletion() ?
-					NtWriteFile(hPipe, 0, NT_IRP::ApcRoutine, this, Irp, pv, cb, 0, 0):
-					NtWriteFile(hPipe, 0,                  0,  Irp, Irp, pv, cb, 0, 0);
+				status = NtWriteFile(hPipe, 0, ApcRoutine, ApcContext, Irp, pv, cb, 0, 0);
 
 				UnlockHandle();
 			}
@@ -262,6 +245,55 @@ NTSTATUS CPipeEnd::Write(const void* lpData, DWORD cbData)
 	return STATUS_INSUFFICIENT_RESOURCES;
 }
 
+NTSTATUS CPipeEnd::Transact(_In_ PVOID pv, _In_ ULONG cb, _In_ ULONG cbMaxOut, _In_opt_ PVOID ctx/* = 0*/)
+{
+	NTSTATUS status = STATUS_INVALID_PIPE_STATE;
+
+	if (LockConnection())
+	{
+		status = STATUS_INSUFFICIENT_RESOURCES;
+
+		if (CDataPacket* packet = new(__max(cb, cbMaxOut)) CDataPacket)
+		{
+			PSTR buf = packet->getData();
+			
+			if (cb) memcpy(buf, pv, cb);
+
+			NT_IRP* Irp = new NT_IRP(this, op_transact, packet, ctx);
+
+			packet->Release();
+
+			if (Irp)
+			{
+				status = STATUS_INVALID_HANDLE;
+
+				HANDLE hPipe;
+				if (LockHandle(hPipe))
+				{
+					PIO_APC_ROUTINE ApcRoutine = 0;
+					PVOID ApcContext = Irp;
+					if (UseApcCompletion())
+					{
+						ApcRoutine = NT_IRP::ApcRoutine;
+						ApcContext = this;
+					}
+
+					status = NtFsControlFile(hPipe, 0, ApcRoutine, ApcContext, 
+						Irp, FSCTL_PIPE_TRANSCEIVE, buf, cb, buf, cbMaxOut);
+
+					UnlockHandle();
+				}
+
+				return Irp->CheckNtStatus(this, status), 0;
+			}
+		}
+
+		UnlockConnection();
+	}
+
+	return status;
+}
+
 NTSTATUS CPipeEnd::Listen()
 {
 	if (InterlockedBitTestAndSetNoFence(&m_flags, flListenActive))
@@ -276,9 +308,14 @@ NTSTATUS CPipeEnd::Listen()
 		HANDLE hPipe;
 		if (LockHandle(hPipe))
 		{
-			status = UseApcCompletion() ?
-				NtFsControlFile(hPipe, 0, NT_IRP::ApcRoutine, this, Irp, FSCTL_PIPE_LISTEN, 0, 0, 0, 0):
-				NtFsControlFile(hPipe, 0,                  0,  Irp, Irp, FSCTL_PIPE_LISTEN, 0, 0, 0, 0);
+			PIO_APC_ROUTINE ApcRoutine = 0;
+			PVOID ApcContext = Irp;
+			if (UseApcCompletion())
+			{
+				ApcRoutine = NT_IRP::ApcRoutine;
+				ApcContext = this;
+			}
+			status = NtFsControlFile(hPipe, 0, ApcRoutine, ApcContext, Irp, FSCTL_PIPE_LISTEN, 0, 0, 0, 0);
 			UnlockHandle();
 		}
 		return Irp->CheckNtStatus(this, status), 0;
@@ -327,9 +364,14 @@ void CPipeEnd::Disconnect()
 			HANDLE hPipe;
 			if (LockHandle(hPipe))
 			{
-				status = UseApcCompletion() ?
-					NtFsControlFile(hPipe, 0, NT_IRP::ApcRoutine, this, Irp, FSCTL_PIPE_DISCONNECT, 0, 0, 0, 0):
-					NtFsControlFile(hPipe, 0,                  0,  Irp, Irp, FSCTL_PIPE_DISCONNECT, 0, 0, 0, 0);
+				PIO_APC_ROUTINE ApcRoutine = 0;
+				PVOID ApcContext = Irp;
+				if (UseApcCompletion())
+				{
+					ApcRoutine = NT_IRP::ApcRoutine;
+					ApcContext = this;
+				}
+				status = NtFsControlFile(hPipe, 0, ApcRoutine, ApcContext, Irp, FSCTL_PIPE_DISCONNECT, 0, 0, 0, 0);
 				UnlockHandle();
 			}
 
@@ -392,6 +434,10 @@ void CPipeEnd::IOCompletionRoutine(CDataPacket* packet, DWORD Code, NTSTATUS sta
 		}
 		break;
 
+	case op_transact:
+		OnTransact(Pointer, status, packet->getData(), dwNumberOfBytesTransfered);
+		break;
+
 	case op_disconnect:
 
 		switch (status)
@@ -430,7 +476,7 @@ void CPipeEnd::IOCompletionRoutine(CDataPacket* packet, DWORD Code, NTSTATUS sta
 		OnUnknownCode(packet, Code, status, dwNumberOfBytesTransfered, Pointer);
 	}
 
-	// DISCONNECT, WRITE, READ
+	// DISCONNECT, WRITE, READ, TRANSACT
 	UnlockConnection();
 }
 

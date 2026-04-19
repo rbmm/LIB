@@ -38,7 +38,11 @@ public:
 
 	// SCHANNEL_CRED::dwFlags
 	// SCHANNEL_CRED::grbitEnabledProtocols
-	SECURITY_STATUS Acquire(ULONG fCredentialUse, PCCERT_CONTEXT pCertContext = 0, ULONG dwFlags = 0, ULONG grbitEnabledProtocols = 0);
+	SECURITY_STATUS Acquire(_In_ ULONG fCredentialUse, 
+		_In_opt_ PCCERT_CONTEXT pCertContext = 0, 
+		_In_opt_ ULONG dwFlags = 0, 
+		_In_opt_ ULONG grbitEnabledProtocols = 0,
+		_In_opt_ HCERTSTORE hRootStore = 0);
 };
 
 class __declspec(novtable) CSSLStream : CtxtHandle, SecPkgContext_StreamSizes

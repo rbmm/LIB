@@ -15,7 +15,7 @@ class ENDPOINT_ENTRY : LIST_ENTRY
 	friend Port;
 
 protected:
-	Port* _Port;
+	Port* _Port = 0;
 	LONG _DisconnectTime;
 
 	void CheckTimeout(CTcpEndpoint* pSocket, ULONG time);
@@ -25,6 +25,7 @@ protected:
 	ENDPOINT_ENTRY()
 	{
 		_DisconnectTime = MAXULONG;
+		InitializeListHead(this);
 	}
 
 	~ENDPOINT_ENTRY();

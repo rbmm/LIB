@@ -342,7 +342,10 @@ ULONG Port::Create(_In_reads_bytes_(namelen) const sockaddr * name, _In_ int nam
 
 ENDPOINT_ENTRY::~ENDPOINT_ENTRY()
 {
-	_Port->Remove(this);
+	if (_Port)
+	{
+		_Port->Remove(this);
+	}
 }
 
 void ENDPOINT_ENTRY::CheckTimeout(CTcpEndpoint* pSocket, ULONG time)

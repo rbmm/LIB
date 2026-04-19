@@ -7,6 +7,8 @@ enum {
 	FLAG_PIPE_CLIENT_INHERIT = 0x02,
 	FLAG_PIPE_SERVER_SYNCHRONOUS = 0x04,
 	FLAG_PIPE_SERVER_INHERIT = 0x8,
+	FLAG_PIPE_SERVER_MESSAGE_MODE = 0x10,
+	FLAG_PIPE_CLIENT_MESSAGE_MODE = 0x18,
 };
 NTSTATUS CreatePipeAnonymousPair(
 								 PHANDLE phServerPipe, 
@@ -30,7 +32,7 @@ protected:
 private:
 
 	enum OC {
-		op_listen, op_read, op_write, op_disconnect
+		op_listen = 'llll', op_read = 'rrrr', op_write = 'wwww', op_disconnect = 'dddd', op_transact = 'tttt'
 	};
 
 	virtual VOID IOCompletionRoutine(CDataPacket* packet, DWORD Code, NTSTATUS status, ULONG_PTR dwNumberOfBytesTransfered, PVOID Pointer);
@@ -78,6 +80,12 @@ protected:
 	{
 	}
 
+#pragma warning(suppress:4100)
+	virtual void OnTransact(PVOID context, NTSTATUS status, PSTR buf, ULONG_PTR dwNumberOfBytesTransfered)
+	{
+
+	}
+
 	virtual BOOL UseApcCompletion()
 	{
 		return FALSE;
@@ -96,9 +104,15 @@ public:
 
 	NTSTATUS Assign(HANDLE hFile);
 	NTSTATUS SetBuffer(ULONG InBufferSize);
-	NTSTATUS Create(POBJECT_ATTRIBUTES poa, ULONG InBufferSize = 0, DWORD nMaxInstances = PIPE_UNLIMITED_INSTANCES);
+	NTSTATUS Create(_In_ POBJECT_ATTRIBUTES poa, 
+		_In_ ULONG InBufferSize = 0, 
+		_In_ ULONG nMaxInstances = PIPE_UNLIMITED_INSTANCES, 
+		_In_opt_ ULONG PipeType = FILE_PIPE_BYTE_STREAM_TYPE);
+
 	NTSTATUS Write(CDataPacket* packet);
 	NTSTATUS Write(const void* lpData, DWORD cbData);
+
+	NTSTATUS Transact(_In_ PVOID pv, _In_ ULONG cb, _In_ ULONG cbMaxOut, _In_opt_ PVOID ctx = 0);
 
 	void Disconnect();
 	void Close();
